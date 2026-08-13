@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import math
 import random
@@ -10,11 +11,14 @@ from typing import Any, Callable, Optional
 import pandas as pd
 
 from app.core.config import settings
+from app.services.market_context import build_perspectives
+from app.services.stock_code import base_stock_code
 
 
 CHART_ROWS = 180
 MINIMUM_DAILY_ROWS = 65
 MINIMUM_HOURLY_ROWS = 30
+POSITION_STATUSES = {"not_holding", "holding"}
 
 
 def _safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
@@ -32,17 +36,7 @@ def _safe_int(value: Any, default: int = 0) -> int:
 
 
 def _normalize_code(stock_code: str) -> str:
-    code = str(stock_code).strip().upper()
-
-    if code.endswith(".TWO"):
-        code = code[:-4]
-    elif code.endswith(".TW"):
-        code = code[:-3]
-
-    if not code:
-        raise ValueError("股票代號不能空白。")
-
-    return code
+    return base_stock_code(stock_code)
 
 
 def _score_level(score: Any) -> str:
@@ -58,6 +52,96 @@ def _score_level(score: Any) -> str:
         return "偏弱"
 
     return "弱勢"
+
+
+def _normalize_position_status(value: str) -> str:
+    normalized = str(value or "not_holding").strip().lower()
+
+    if normalized not in POSITION_STATUSES:
+        raise ValueError("持股狀態只接受 not_holding 或 holding。")
+
+    return normalized
+
+
+def _indicator_snapshot(latest: pd.Series) -> dict[str, Optional[float]]:
+    return {
+        "ema20": _safe_float(latest.get("EMA20")),
+        "ema60": _safe_float(latest.get("EMA60")),
+        "rsi": _safe_float(latest.get("RSI")),
+        "macd": _safe_float(latest.get("MACD")),
+        "macd_signal": _safe_float(latest.get("Signal")),
+        "macd_histogram": _safe_float(latest.get("MACD_Hist")),
+        "k": _safe_float(latest.get("K")),
+        "d": _safe_float(latest.get("D")),
+        "atr": _safe_float(latest.get("ATR")),
+        "atr_percent": _safe_float(latest.get("ATRPercent")),
+        "adx": _safe_float(latest.get("ADX")),
+        "volume_ratio": _safe_float(latest.get("VolumeRatio")),
+    }
+
+
+def _build_recommendation(
+    *,
+    result: Any,
+    current_price: float,
+    position_status: str,
+) -> dict[str, Any]:
+    score = _safe_float(result.total_score, 0.0) or 0.0
+    direction = str(result.direction or "").upper()
+    stop_price = _safe_float(result.stop_price)
+    trade_eligible = bool(result.trade_eligible)
+
+    if position_status == "holding":
+        label = "已持有"
+
+        if stop_price is not None and current_price <= stop_price:
+            action = "REVIEW_RISK"
+            title = "風險條件已觸發"
+            summary = "現價已到達系統風險線，應優先重新檢查原持有理由與可承受損失。"
+            tone = "risk"
+        elif score >= 70 and direction == "LONG":
+            action = "HOLD_WATCH"
+            title = "續抱觀察"
+            summary = "中期方向與量化分數仍偏正向，持續觀察停損線與趨勢是否改變。"
+            tone = "positive"
+        elif score >= 55:
+            action = "HOLD_CAUTION"
+            title = "續抱但提高警戒"
+            summary = "訊號未明顯轉壞，但強度不足；避免因短線波動擴大原定風險。"
+            tone = "neutral"
+        else:
+            action = "REVIEW_POSITION"
+            title = "重新檢查持股"
+            summary = "量化分數偏弱，請對照停損線、持有期限與原本買進理由重新評估。"
+            tone = "risk"
+    else:
+        label = "尚未持有"
+
+        if trade_eligible and score >= 75 and direction == "LONG":
+            action = "WATCH_ENTRY"
+            title = "進入候選觀察"
+            summary = "條件接近系統門檻，但仍應等待觸發價確認並控制單筆風險。"
+            tone = "positive"
+        elif score >= 60 and direction == "LONG":
+            action = "WAIT_CONFIRMATION"
+            title = "等待訊號確認"
+            summary = "方向偏多但條件尚未完整，不宜只因上漲或單一指標追價。"
+            tone = "neutral"
+        else:
+            action = "NO_ENTRY"
+            title = "目前不列入進場"
+            summary = "分數或風險條件尚未通過，先等待更完整的趨勢與觸發訊號。"
+            tone = "risk"
+
+    return {
+        "position_status": position_status,
+        "position_label": label,
+        "action": action,
+        "title": title,
+        "summary": summary,
+        "tone": tone,
+        "disclaimer": "此結果是量化決策支援，不保證獲利，也不是自動下單指令。",
+    }
 
 
 def _format_time(value: Any, include_clock: bool = False) -> str:
@@ -247,7 +331,7 @@ def _moving_average(candles: list[dict], period: int) -> list[dict]:
     return output
 
 
-def _demo_response(stock_code: str) -> dict:
+def _demo_response(stock_code: str, position_status: str) -> dict:
     code = _normalize_code(stock_code)
     candles = _demo_candles(sum(ord(char) for char in code))
     latest = candles[-1]
@@ -274,6 +358,7 @@ def _demo_response(stock_code: str) -> dict:
             "best_ask": None,
         },
         "analysis": {
+            "technical_score": 72.0,
             "total_score": 72.0,
             "score_level": "偏強",
             "direction": "偏多",
@@ -303,6 +388,63 @@ def _demo_response(stock_code: str) -> dict:
             "veto_reasons": ["Demo 模式不具備正式交易資格。"],
             "historical_similarity": None,
             "historical_sample_size": 0,
+            "indicators": {
+                "ema20": None,
+                "ema60": None,
+                "rsi": None,
+                "macd": None,
+                "macd_signal": None,
+                "macd_histogram": None,
+                "k": None,
+                "d": None,
+                "atr": None,
+                "atr_percent": None,
+                "adx": None,
+                "volume_ratio": None,
+            },
+            "recommendation": {
+                "position_status": position_status,
+                "position_label": "已持有" if position_status == "holding" else "尚未持有",
+                "action": "DEMO",
+                "title": "Demo 模式不提供正式判斷",
+                "summary": "請切換到真實資料後重新分析。",
+                "tone": "neutral",
+                "disclaimer": "此結果是量化決策支援，不保證獲利，也不是自動下單指令。",
+            },
+            "perspectives": {
+                "technical": {
+                    "available": True,
+                    "score": 72.0,
+                    "label": "Score Engine V2",
+                    "summary": "依趨勢、位置、觸發、風險與量價環境計算。",
+                },
+                "fundamental": {
+                    "available": False,
+                    "score": None,
+                    "label": "Demo 不提供估值",
+                    "summary": "切換到真實資料後，會讀取交易所每日估值資料。",
+                    "pe_ratio": None,
+                    "pb_ratio": None,
+                    "dividend_yield": None,
+                    "as_of": None,
+                    "source": "Demo",
+                },
+                "news": {
+                    "available": False,
+                    "score": None,
+                    "label": "Demo 不提供新聞",
+                    "summary": "切換到真實資料後，會讀取近期新聞標題。",
+                    "positive_hits": 0,
+                    "negative_hits": 0,
+                    "articles": [],
+                    "source": "Demo",
+                },
+                "composite": {
+                    "score": 72.0,
+                    "available_axes": 1,
+                    "method": "可用面向等權平均；缺少的面向不計入。",
+                },
+            },
         },
         "chart": {
             "candles": candles,
@@ -325,7 +467,7 @@ def _demo_response(stock_code: str) -> dict:
     }
 
 
-def _real_response(stock_code: str) -> dict:
+def _real_response(stock_code: str, position_status: str) -> dict:
     try:
         from indicators import add_indicators
         from realtime import get_realtime_price
@@ -342,23 +484,44 @@ def _real_response(stock_code: str) -> dict:
         download_hourly_stock = None
 
     code = _normalize_code(stock_code)
-    daily_df = _validate_daily_dataframe(add_indicators(download_stock(code)))
-    hourly_df = _prepare_hourly_dataframe(
-        download_hourly_stock=download_hourly_stock,
-        add_indicators=add_indicators,
-        stock_code=code,
-    )
+
+    # 官方歷史資料與即時行情互不相依，同時取得可避免兩段網路等待
+    # 疊加。六個月日線已足夠 EMA60 與目前圖表／評分使用。
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        daily_future = executor.submit(
+            download_stock,
+            code,
+            prefer_official=True,
+            official_months=6,
+        )
+        realtime_future = executor.submit(get_realtime_price, code)
+
+        raw_daily_df = daily_future.result()
+
+        try:
+            realtime = realtime_future.result()
+        except Exception:
+            realtime = None
+
+    daily_source = str(raw_daily_df.attrs.get("source", ""))
+    daily_df = _validate_daily_dataframe(add_indicators(raw_daily_df))
+
+    # 官方月報提供穩定的免費日線，但不提供60分鐘K線。避免在已知
+    # Yahoo 被限流時又等待兩次無效的盤中下載；介面會明確標示此狀態。
+    if daily_source == "Yahoo Finance":
+        hourly_df = _prepare_hourly_dataframe(
+            download_hourly_stock=download_hourly_stock,
+            add_indicators=add_indicators,
+            stock_code=code,
+        )
+    else:
+        hourly_df = None
 
     latest = daily_df.iloc[-1]
     historical_close = _safe_float(latest.get("Close"))
 
     if historical_close is None or historical_close <= 0:
         raise ValueError("無法取得有效的最新日線收盤價。")
-
-    try:
-        realtime = get_realtime_price(code)
-    except Exception:
-        realtime = None
 
     current_price, price_source, is_realtime_trade = _pick_current_price(
         realtime=realtime,
@@ -402,16 +565,26 @@ def _real_response(stock_code: str) -> dict:
         _safe_int(latest.get("Volume")),
     )
 
+    stock_name = str(realtime_dict.get("name", "")).strip()
+    stock_market = str(
+        realtime_dict.get(
+            "market",
+            daily_df.attrs.get("market", "台股"),
+        )
+    )
+    technical_score = _safe_float(result.total_score, 0.0) or 0.0
+    perspectives = build_perspectives(
+        technical_score=technical_score,
+        stock_code=code,
+        market=stock_market,
+        stock_name=stock_name,
+    )
+
     return {
         "stock": {
             "code": code,
-            "name": str(realtime_dict.get("name", "")).strip(),
-            "market": str(
-                realtime_dict.get(
-                    "market",
-                    daily_df.attrs.get("market", "台股"),
-                )
-            ),
+            "name": stock_name,
+            "market": stock_market,
             "price": current_price,
             "change": round(change, 4),
             "change_percent": round(change_percent, 4),
@@ -426,7 +599,8 @@ def _real_response(stock_code: str) -> dict:
             "best_ask": _safe_float(realtime_dict.get("best_ask")),
         },
         "analysis": {
-            "total_score": _safe_float(result.total_score, 0.0),
+            "technical_score": technical_score,
+            "total_score": technical_score,
             "score_level": _score_level(result.total_score),
             "direction": str(result.direction),
             "stage": str(result.stage),
@@ -454,6 +628,13 @@ def _real_response(stock_code: str) -> dict:
             "historical_sample_size": _safe_int(
                 getattr(result, "historical_sample_size", 0)
             ),
+            "indicators": _indicator_snapshot(latest),
+            "recommendation": _build_recommendation(
+                result=result,
+                current_price=current_price,
+                position_status=position_status,
+            ),
+            "perspectives": perspectives,
         },
         "chart": {
             "candles": _series_to_candles(daily_df),
@@ -466,13 +647,16 @@ def _real_response(stock_code: str) -> dict:
             "hourly_rows": len(hourly_df) if hourly_df is not None else 0,
             "hourly_available": hourly_df is not None and not hourly_df.empty,
             "analysis_engine": "Score Engine V2",
+            "daily_source": daily_source or "未知",
         },
         "demo": False,
     }
 
 
-def analyze_stock(stock_code: str) -> dict:
-    if settings.use_demo_data:
-        return _demo_response(stock_code)
+def analyze_stock(stock_code: str, position_status: str = "not_holding") -> dict:
+    normalized_position = _normalize_position_status(position_status)
 
-    return _real_response(stock_code)
+    if settings.use_demo_data:
+        return _demo_response(stock_code, normalized_position)
+
+    return _real_response(stock_code, normalized_position)

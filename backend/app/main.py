@@ -10,8 +10,12 @@ from app.core.config import settings
 
 app = FastAPI(
     title="AI 台股分析 API",
-    version="0.2.0",
+    version="0.1.0",
 )
+
+# =========================
+# CORS
+# =========================
 
 origins = [
     origin.strip()
@@ -27,16 +31,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# =========================
+# Router
+# =========================
+
 app.include_router(
     stocks_router,
     prefix="/api/stocks",
     tags=["stocks"],
 )
+
 app.include_router(
     competition_router,
     prefix="/api/competition",
     tags=["competition"],
 )
+
+# =========================
+# API
+# =========================
 
 @app.get("/")
 def root() -> dict[str, str]:
@@ -44,6 +57,7 @@ def root() -> dict[str, str]:
         "name": "AI 台股分析 API",
         "docs": "/docs",
     }
+
 
 @app.get("/health")
 def health() -> dict[str, object]:

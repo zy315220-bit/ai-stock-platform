@@ -20,6 +20,50 @@ export type WatchItem = {
   score: number;
 };
 
+export type PositionStatus = "not_holding" | "holding";
+
+export type NewsArticle = {
+  title: string;
+  url: string;
+  source: string;
+  published_at: string;
+};
+
+export type AnalysisPerspectives = {
+  technical: {
+    available: boolean;
+    score: number;
+    label: string;
+    summary: string;
+  };
+  fundamental: {
+    available: boolean;
+    score: number | null;
+    label: string;
+    summary: string;
+    pe_ratio: number | null;
+    pb_ratio: number | null;
+    dividend_yield: number | null;
+    as_of: string | null;
+    source: string;
+  };
+  news: {
+    available: boolean;
+    score: number | null;
+    label: string;
+    summary: string;
+    positive_hits: number;
+    negative_hits: number;
+    articles: NewsArticle[];
+    source: string;
+  };
+  composite: {
+    score: number;
+    available_axes: number;
+    method: string;
+  };
+};
+
 export type AnalysisResponse = {
   stock: {
     code: string;
@@ -36,6 +80,8 @@ export type AnalysisResponse = {
     price_source: string;
   };
   analysis: {
+    technical_score: number;
+    /** @deprecated Use technical_score. Retained for API compatibility. */
     total_score: number;
     score_level: string;
     direction: string;
@@ -57,6 +103,31 @@ export type AnalysisResponse = {
       reward_risk_ratio: number | null;
     };
     reasons: string[];
+    veto_reasons: string[];
+    indicators: {
+      ema20: number | null;
+      ema60: number | null;
+      rsi: number | null;
+      macd: number | null;
+      macd_signal: number | null;
+      macd_histogram: number | null;
+      k: number | null;
+      d: number | null;
+      atr: number | null;
+      atr_percent: number | null;
+      adx: number | null;
+      volume_ratio: number | null;
+    };
+    recommendation: {
+      position_status: PositionStatus;
+      position_label: string;
+      action: string;
+      title: string;
+      summary: string;
+      tone: "positive" | "neutral" | "risk";
+      disclaimer: string;
+    };
+    perspectives?: AnalysisPerspectives;
   };
   chart: {
     candles: Candle[];
@@ -64,5 +135,133 @@ export type AnalysisResponse = {
     ma60: LinePoint[];
   };
   watchlist: WatchItem[];
+  meta: {
+    daily_rows: number;
+    hourly_rows: number;
+    hourly_available: boolean;
+    analysis_engine: string;
+    daily_source?: string;
+  };
   demo: boolean;
+};
+
+export type ScannerCandidate = {
+  code: string;
+  name: string;
+  market: string;
+  price: number;
+  change: number;
+  change_percent: number;
+  volume: number;
+  screening_score: number;
+  reasons: string[];
+  full_analysis_required: boolean;
+};
+
+export type ScannerResponse = {
+  updated_at: string;
+  market_scope: string;
+  universe_size: number;
+  candidate_count: number;
+  method: string;
+  candidates: ScannerCandidate[];
+};
+
+export type BacktestResponse = {
+  stock_code: string;
+  data_source: string;
+  actual_start_date: string;
+  actual_end_date: string;
+  initial_capital: number;
+  final_capital: number;
+  total_profit: number;
+  total_return_percent: number;
+  trade_count: number;
+  win_rate_percent: number;
+  max_drawdown_percent: number;
+  alpha_percent: number;
+  buy_and_hold: {
+    return_percent: number;
+  };
+};
+
+export type CompetitionTrade = {
+  robot_id: string;
+  stock_code: string;
+  segment: "backtest" | "forward";
+  entry_date: string;
+  exit_date: string;
+  entry_price: number;
+  exit_price: number;
+  shares: number;
+  profit: number;
+  return_percent: number;
+  entry_reason: string;
+  exit_reason: string;
+  entry_commission: number;
+  exit_commission: number;
+  transaction_tax: number;
+  stop_price: number;
+  target_price: number;
+};
+
+export type CompetitionSegment = {
+  initial_capital: number;
+  final_capital: number;
+  total_return_percent: number;
+  trade_count: number;
+  winning_trade_count: number;
+  win_rate_percent: number;
+  max_drawdown_percent: number;
+  total_commission: number;
+  total_transaction_tax: number;
+  trades: CompetitionTrade[];
+  equity_curve: Array<{ date: string; equity: number }>;
+};
+
+export type CompetitionRobot = {
+  robot_id: string;
+  name: string;
+  family: string;
+  rule_fingerprint: string;
+  rank: number;
+  wilson_lower_percent: number;
+  wilson_upper_percent: number;
+  backtest: CompetitionSegment;
+  forward: CompetitionSegment;
+};
+
+export type CompetitionResponse = {
+  run_id: string;
+  status: "completed";
+  executed_at: string;
+  periods: {
+    backtest: { start: string; end: string; purpose: string };
+    forward: { start: string; end: string; purpose: string };
+  };
+  fairness: {
+    initial_capital: number;
+    capital_per_symbol: number;
+    market_universe: string[];
+    commission_rate: number;
+    transaction_tax_rate: number;
+    execution: string;
+    stop_model: string;
+    target_model: string;
+    same_bar_stop_target_policy: string;
+  };
+  ranking: {
+    primary_metric: string;
+    minimum_forward_trades_for_champion: number;
+    leader_status: "qualified" | "provisional";
+  };
+  leader: {
+    robot_id: string;
+    name: string;
+    rank: number;
+    qualified: boolean;
+    reason: string;
+  };
+  robots: CompetitionRobot[];
+  disclosures: string[];
 };

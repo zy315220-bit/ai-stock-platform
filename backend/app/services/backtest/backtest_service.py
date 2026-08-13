@@ -7,7 +7,10 @@ from __future__ import annotations
 不要直接依賴 engine.py 內部細節。
 """
 
-from .engine import backtest_stock
+from .engine import (
+    MAX_INITIAL_CAPITAL,
+    backtest_stock,
+)
 from .trades import (
     COMMISSION_RATE,
     ETF_TRANSACTION_TAX_RATE,
@@ -16,5 +19,6 @@ from .trades import (
 __all__ = [
     "COMMISSION_RATE",
     "ETF_TRANSACTION_TAX_RATE",
+    "MAX_INITIAL_CAPITAL",
     "backtest_stock",
 ]

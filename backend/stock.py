@@ -16,6 +16,8 @@ from typing import Any, Iterable, Optional
 import pandas as pd
 import yfinance as yf
 
+from official_data import download_official_history
+
 
 REQUIRED_OHLCV_COLUMNS = [
     "Open",
@@ -421,6 +423,8 @@ def download_stock(
     update_with_intraday: bool = True,
     intraday_period: str = "5d",
     intraday_interval: str = "5m",
+    prefer_official: bool = False,
+    official_months: int = 10,
 ) -> pd.DataFrame:
     """
     下載股票日線資料。
@@ -445,6 +449,14 @@ def download_stock(
     intraday_interval:
         盤中資料間隔。
 
+    prefer_official:
+        優先使用證交所／櫃買中心的免費日線資料。
+        適合互動式分析，可避免 Yahoo Finance 限流造成等待。
+
+    official_months:
+        官方月資料的查詢月數。互動式分析只需足夠計算指標的期間，
+        可縮短首次查詢時間；回測則可保留較長期間。
+
     Returns
     -------
     pandas.DataFrame
@@ -458,26 +470,66 @@ def download_stock(
     errors = []
 
     for ticker in ticker_list:
+        market = (
+            "上櫃"
+            if ticker.endswith(".TWO")
+            else "上市"
+        )
+
         # ==========================================
         # 1. 下載日線資料
         # ==========================================
 
-        raw_daily = _download_yfinance(
-            ticker=ticker,
-            period=daily_period,
-            interval="1d",
-            prepost=False,
-        )
-
-        daily = _clean_ohlcv(
-            raw_daily
-        )
+        if prefer_official:
+            official_daily = download_official_history(
+                normalize_stock_code(ticker),
+                market=market,
+                months=official_months,
+            )
+            daily = _clean_ohlcv(official_daily)
+            daily_source = str(
+                official_daily.attrs.get("source", "官方交易所資料")
+            )
+        else:
+            raw_daily = _download_yfinance(
+                ticker=ticker,
+                period=daily_period,
+                interval="1d",
+                prepost=False,
+            )
+            daily = _clean_ohlcv(raw_daily)
+            daily_source = "Yahoo Finance"
 
         if daily.empty:
-            errors.append(
-                f"{ticker}：沒有有效日線資料"
+            if prefer_official:
+                raw_daily = _download_yfinance(
+                    ticker=ticker,
+                    period=daily_period,
+                    interval="1d",
+                    prepost=False,
+                )
+                daily = _clean_ohlcv(raw_daily)
+                daily_source = "Yahoo Finance"
+            else:
+                official_daily = download_official_history(
+                    normalize_stock_code(ticker),
+                    market=market,
+                    months=official_months,
+                )
+                daily = _clean_ohlcv(official_daily)
+                daily_source = str(
+                    official_daily.attrs.get("source", "官方交易所資料")
+                )
+
+            if daily.empty:
+                errors.append(
+                    f"{ticker}：Yahoo 與官方來源皆沒有有效日線資料"
+                )
+                continue
+
+            daily_source = str(
+                official_daily.attrs.get("source", "官方交易所資料")
             )
-            continue
 
         daily = _normalize_datetime_index(
             daily,
@@ -489,7 +541,7 @@ def download_stock(
         # 2. 使用盤中資料更新最新交易日
         # ==========================================
 
-        if update_with_intraday:
+        if update_with_intraday and daily_source == "Yahoo Finance":
             raw_intraday = _download_yfinance(
                 ticker=ticker,
                 period=intraday_period,
@@ -526,6 +578,7 @@ def download_stock(
             df=daily,
             ticker=ticker,
             interval="1d",
+            source=daily_source,
         )
 
         return daily

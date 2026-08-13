@@ -28,7 +28,7 @@ TWSE_MIS_URL = (
     "stock/api/getStockInfo.jsp"
 )
 
-DEFAULT_TIMEOUT = 10
+DEFAULT_TIMEOUT = 6
 
 
 def _to_float(value: Any) -> float | None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import (
     APIRouter,
@@ -14,12 +14,42 @@ from fastapi import (
 from starlette.concurrency import run_in_threadpool
 
 from app.services.analysis_service import analyze_stock
-from app.services.backtest_service import backtest_stock
+from app.services.backtest_service import (
+    MAX_INITIAL_CAPITAL,
+    backtest_stock,
+)
+from app.services.scanner_service import get_daily_scanner
+from app.services.stock_code import normalize_stock_code
 
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get(
+    "/scanner/daily",
+    summary="取得每日 AI 選股候選池",
+    description=(
+        "使用真實盤中行情，依當日動能、價格位置、流動性與開盤後強弱，"
+        "縮小需要執行完整三面向分析的候選股票；此階段不產生正式 AI 排名。"
+    ),
+)
+async def get_daily_stock_scanner() -> dict[str, Any]:
+    try:
+        result = await run_in_threadpool(get_daily_scanner)
+    except Exception as error:
+        _raise_service_http_error(
+            error,
+            stock_code="SCANNER",
+            service_name="選股",
+        )
+
+    return _validate_service_result(
+        result,
+        stock_code="SCANNER",
+        service_name="選股",
+    )
 
 
 def _normalize_stock_code(
@@ -29,15 +59,13 @@ def _normalize_stock_code(
     整理 API 路徑中的股票代號。
     """
 
-    normalized_code = stock_code.strip().upper()
-
-    if not normalized_code:
+    try:
+        return normalize_stock_code(stock_code)
+    except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="股票代號不能空白。",
-        )
-
-    return normalized_code
+            detail=str(error),
+        ) from error
 
 
 def _validate_service_result(
@@ -150,12 +178,16 @@ async def get_stock_analysis(
     stock_code: str = Path(
         ...,
         min_length=1,
-        max_length=20,
+        max_length=10,
         description=(
             "台股股票代號，例如 "
             "2330、0056、6488.TWO"
         ),
         examples=["2330"],
+    ),
+    position_status: Literal["not_holding", "holding"] = Query(
+        default="not_holding",
+        description="投資身分：尚未持有或已持有。",
     ),
 ) -> dict[str, Any]:
     """
@@ -177,6 +209,7 @@ async def get_stock_analysis(
         result = await run_in_threadpool(
             analyze_stock,
             normalized_code,
+            position_status,
         )
 
     except Exception as error:
@@ -207,7 +240,7 @@ async def get_stock_backtest(
     stock_code: str = Path(
         ...,
         min_length=1,
-        max_length=20,
+        max_length=10,
         description=(
             "台股股票代號，例如 "
             "2330、0056、6488.TWO"
@@ -237,6 +270,7 @@ async def get_stock_backtest(
     initial_capital: float = Query(
         default=100_000,
         gt=0,
+        le=MAX_INITIAL_CAPITAL,
         description="初始資金",
     ),
 ) -> dict[str, Any]:

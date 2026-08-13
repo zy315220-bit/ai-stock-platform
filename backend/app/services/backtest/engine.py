@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pandas as pd
@@ -30,6 +31,9 @@ from .trades import (
     _calculate_sell_value,
     _enrich_trades_with_excursions,
 )
+
+
+MAX_INITIAL_CAPITAL = 2_000_000
 
 
 def backtest_stock(
@@ -69,9 +73,16 @@ def backtest_stock(
             "股票代號不能空白。"
         )
 
-    if initial_capital <= 0:
+    normalized_capital = float(initial_capital)
+
+    if not math.isfinite(normalized_capital) or normalized_capital <= 0:
         raise ValueError(
             "初始資金必須大於 0。"
+        )
+
+    if normalized_capital > MAX_INITIAL_CAPITAL:
+        raise ValueError(
+            "初始資金不能超過 2,000,000 元。"
         )
 
     if entry_score <= exit_score:
@@ -98,8 +109,11 @@ def backtest_stock(
         )
 
     df = download_stock(
-        normalized_code
+        normalized_code,
+        prefer_official=True,
     )
+
+    data_source = str(df.attrs.get("source", "未知"))
 
     if df is None or df.empty:
         raise ValueError(
@@ -137,9 +151,7 @@ def backtest_stock(
             "至少需要約 61 個有效交易日。"
         )
 
-    cash = float(
-        initial_capital
-    )
+    cash = normalized_capital
 
     shares = 0
 
@@ -751,6 +763,7 @@ def backtest_stock(
         "stock_code": (
             normalized_code
         ),
+        "data_source": data_source,
         "requested_start_date": (
             start_date
         ),

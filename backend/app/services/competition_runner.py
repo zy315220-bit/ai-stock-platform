@@ -82,6 +82,22 @@ VOLATILITY_REFERENCE = {
 }
 
 
+TECHNICAL_PATTERN_REFERENCE = {
+    "title": (
+        "Foundations of Technical Analysis: Computational Algorithms, "
+        "Statistical Inference, and Empirical Implementation"
+    ),
+    "authors": "Andrew W. Lo, Harry Mamaysky, Jiang Wang",
+    "year": 2000,
+    "journal": "The Journal of Finance",
+    "doi": "10.1111/0022-1082.00265",
+    "use": (
+        "systematic technical-pattern research basis; MACD, RSI, Bollinger, "
+        "and KD thresholds remain platform parameters"
+    ),
+}
+
+
 ROBOT_SPECS: tuple[dict[str, Any], ...] = (
     {
         "robot_id": "EMA20-TREND-v1",
@@ -206,6 +222,85 @@ ROBOT_SPECS: tuple[dict[str, Any], ...] = (
         "exit": "Close < EMA20",
         "parameters": {"breakout_sessions": 55, "minimum_volume_ratio": 1.0},
         "research": [BROCK_REFERENCE],
+    },
+    {
+        "robot_id": "MACD-CROSS-v1",
+        "name": "MACD翻多機器人",
+        "family": "macd_trend_confirmation",
+        "entry": "MACD histogram crosses above zero while Close > EMA60",
+        "exit": "MACD histogram < 0 or Close < EMA60",
+        "parameters": {"ema_trend_period": 60, "macd_zero_cross": True},
+        "research": [BROCK_REFERENCE, TECHNICAL_PATTERN_REFERENCE],
+    },
+    {
+        "robot_id": "RSI-RECOVERY-v1",
+        "name": "RSI反轉確認機器人",
+        "family": "rsi_reversal_confirmation",
+        "entry": "RSI crosses above 35 after oversold while Close > EMA60",
+        "exit": "RSI >= 60 or Close < EMA60",
+        "parameters": {
+            "rsi_recovery_level": 35,
+            "rsi_exit_level": 60,
+            "ema_trend_period": 60,
+        },
+        "research": [REVERSAL_REFERENCE, TECHNICAL_PATTERN_REFERENCE],
+    },
+    {
+        "robot_id": "BOLLINGER-REBOUND-v1",
+        "name": "布林通道反彈機器人",
+        "family": "bollinger_mean_reversion",
+        "entry": (
+            "Price crosses back above the lower Bollinger band with RSI < 50"
+        ),
+        "exit": "Close >= MA20 or Close < lower Bollinger band",
+        "parameters": {
+            "bollinger_period": 20,
+            "bollinger_standard_deviations": 2,
+            "rsi_entry_max": 50,
+        },
+        "research": [REVERSAL_REFERENCE, TECHNICAL_PATTERN_REFERENCE],
+    },
+    {
+        "robot_id": "BOLLINGER-BREAKOUT-v1",
+        "name": "布林通道突破機器人",
+        "family": "bollinger_breakout",
+        "entry": (
+            "Price crosses above the upper Bollinger band "
+            "and Volume / VMA20 >= 1.0"
+        ),
+        "exit": "Close < MA20",
+        "parameters": {
+            "bollinger_period": 20,
+            "bollinger_standard_deviations": 2,
+            "minimum_volume_ratio": 1.0,
+        },
+        "research": [BROCK_REFERENCE, TECHNICAL_PATTERN_REFERENCE],
+    },
+    {
+        "robot_id": "KD-RECOVERY-v1",
+        "name": "KD低檔翻多機器人",
+        "family": "stochastic_reversal",
+        "entry": "K crosses above D below 35 while Close > EMA60",
+        "exit": "K crosses below D above 65 or Close < EMA60",
+        "parameters": {
+            "entry_zone_max": 35,
+            "exit_zone_min": 65,
+            "ema_trend_period": 60,
+        },
+        "research": [REVERSAL_REFERENCE, TECHNICAL_PATTERN_REFERENCE],
+    },
+    {
+        "robot_id": "MOMENTUM126-v1",
+        "name": "126日動能機器人",
+        "family": "medium_term_time_series_momentum",
+        "entry": "126-session return > 10% and Close > EMA60",
+        "exit": "126-session return <= 0 or Close < EMA60",
+        "parameters": {
+            "lookback_sessions": 126,
+            "entry_return_percent": 10,
+            "ema_trend_period": 60,
+        },
+        "research": [MOMENTUM_REFERENCE, TIME_SERIES_MOMENTUM_REFERENCE],
     },
 )
 
@@ -434,6 +529,144 @@ def _breakout55_signal(
     )
 
 
+def _macd_cross_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema60 = _number(row, "EMA60")
+    macd_hist = _number(row, "MACD_Hist")
+    previous_macd_hist = _number(previous, "MACD_Hist")
+    if not _all_finite(close, ema60, macd_hist, previous_macd_hist):
+        return False, False, "insufficient_indicators"
+    return (
+        previous_macd_hist <= 0 < macd_hist and close > ema60,
+        macd_hist < 0 or close < ema60,
+        "macd_histogram_zero_cross",
+    )
+
+
+def _rsi_recovery_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema60 = _number(row, "EMA60")
+    rsi = _number(row, "RSI")
+    previous_rsi = _number(previous, "RSI")
+    if not _all_finite(close, ema60, rsi, previous_rsi):
+        return False, False, "insufficient_indicators"
+    return (
+        previous_rsi <= 35 < rsi and close > ema60,
+        rsi >= 60 or close < ema60,
+        "rsi_oversold_recovery",
+    )
+
+
+def _bollinger_rebound_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    lower = _number(row, "Lower")
+    ma20 = _number(row, "MA20")
+    rsi = _number(row, "RSI")
+    previous_close = _number(previous, "Close")
+    previous_lower = _number(previous, "Lower")
+    if not _all_finite(
+        close,
+        lower,
+        ma20,
+        rsi,
+        previous_close,
+        previous_lower,
+    ):
+        return False, False, "insufficient_indicators"
+    return (
+        previous_close <= previous_lower and close > lower and rsi < 50,
+        close >= ma20 or close < lower,
+        "bollinger_lower_band_rebound",
+    )
+
+
+def _bollinger_breakout_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    upper = _number(row, "Upper")
+    ma20 = _number(row, "MA20")
+    volume_ratio = _number(row, "VolumeRatio")
+    previous_close = _number(previous, "Close")
+    previous_upper = _number(previous, "Upper")
+    if not _all_finite(
+        close,
+        upper,
+        ma20,
+        volume_ratio,
+        previous_close,
+        previous_upper,
+    ):
+        return False, False, "insufficient_indicators"
+    return (
+        previous_close <= previous_upper
+        and close > upper
+        and volume_ratio >= 1.0,
+        close < ma20,
+        "bollinger_upper_band_breakout",
+    )
+
+
+def _kd_recovery_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema60 = _number(row, "EMA60")
+    k_value = _number(row, "K")
+    d_value = _number(row, "D")
+    previous_k = _number(previous, "K")
+    previous_d = _number(previous, "D")
+    if not _all_finite(
+        close,
+        ema60,
+        k_value,
+        d_value,
+        previous_k,
+        previous_d,
+    ):
+        return False, False, "insufficient_indicators"
+    return (
+        previous_k <= previous_d
+        and k_value > d_value
+        and k_value <= 35
+        and close > ema60,
+        (
+            previous_k >= previous_d
+            and k_value < d_value
+            and k_value >= 65
+        )
+        or close < ema60,
+        "kd_oversold_recovery",
+    )
+
+
+def _momentum126_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema60 = _number(row, "EMA60")
+    return126 = _number(row, "Return126")
+    if not _all_finite(close, ema60, return126):
+        return False, False, "insufficient_indicators"
+    return (
+        return126 > 0.10 and close > ema60,
+        return126 <= 0 or close < ema60,
+        "126_session_time_series_momentum",
+    )
+
+
 SIGNAL_FUNCTIONS: dict[
     str,
     Callable[[pd.Series, pd.Series], tuple[bool, bool, str]],
@@ -448,6 +681,12 @@ SIGNAL_FUNCTIONS: dict[
     "VOLUME-MOMENTUM-v1": _volume_momentum_signal,
     "LOW-VOL-TREND-v1": _low_vol_trend_signal,
     "BREAKOUT55-v1": _breakout55_signal,
+    "MACD-CROSS-v1": _macd_cross_signal,
+    "RSI-RECOVERY-v1": _rsi_recovery_signal,
+    "BOLLINGER-REBOUND-v1": _bollinger_rebound_signal,
+    "BOLLINGER-BREAKOUT-v1": _bollinger_breakout_signal,
+    "KD-RECOVERY-v1": _kd_recovery_signal,
+    "MOMENTUM126-v1": _momentum126_signal,
 }
 
 
@@ -467,6 +706,9 @@ def _prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     )
     prepared["Return60"] = (
         prepared["Close"] / prepared["Close"].shift(60) - 1
+    )
+    prepared["Return126"] = (
+        prepared["Close"] / prepared["Close"].shift(126) - 1
     )
     return prepared.replace([math.inf, -math.inf], math.nan)
 
@@ -810,7 +1052,7 @@ def _download_competition_frames() -> tuple[dict[str, pd.DataFrame], dict[str, s
                 code,
                 prefer_official=True,
                 update_with_intraday=False,
-                official_months=6,
+                official_months=12,
             ): code
             for code in COMPETITION_UNIVERSE
         }
@@ -970,7 +1212,7 @@ def run_competition_on_frames(
         "robots": robot_outputs,
         "disclosures": [
             "目前的 1 個月區間是 walk-forward 歷史模擬，不冒充部署後累積的真實實盤前瞻紀錄。",
-            "EMA、RSI、ADX、成交量與 ATR 的具體期間／門檻是固定的 v1 實證參數，不代表論文證明其為最優值。",
+            "EMA、RSI、MACD、布林通道、KD、成交量與 ATR 的具體期間／門檻是固定的 v1 實證參數，不代表論文證明其為最優值。",
             "現階段只做多、無槓桿，且每檔 ETF 使用固定等額資金；所有交易均保存進出場與成本。",
         ],
         "references": [
@@ -980,6 +1222,7 @@ def run_competition_on_frames(
             REVERSAL_REFERENCE,
             VOLUME_MOMENTUM_REFERENCE,
             VOLATILITY_REFERENCE,
+            TECHNICAL_PATTERN_REFERENCE,
         ],
     }
 

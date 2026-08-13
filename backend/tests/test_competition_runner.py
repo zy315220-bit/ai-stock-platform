@@ -40,6 +40,7 @@ def _synthetic_frame(offset: float) -> pd.DataFrame:
 
 class CompetitionRunnerTests(unittest.TestCase):
     def test_robot_rule_fingerprints_are_stable_and_unique(self) -> None:
+        self.assertEqual(len(ROBOT_SPECS), 16)
         fingerprints = [
             freeze_robot_spec(spec)["rule_fingerprint"]
             for spec in ROBOT_SPECS
@@ -95,6 +96,15 @@ class CompetitionRunnerTests(unittest.TestCase):
                 self.assertGreaterEqual(trade["entry_commission"], 0)
                 self.assertGreaterEqual(trade["exit_commission"], 0)
                 self.assertGreaterEqual(trade["transaction_tax"], 0)
+
+    def test_126_session_return_uses_only_current_and_past_closes(self) -> None:
+        prepared = _prepare_frame(_synthetic_frame(0.0))
+        expected = (
+            prepared["Close"].iloc[126]
+            / prepared["Close"].iloc[0]
+            - 1
+        )
+        self.assertAlmostEqual(prepared["Return126"].iloc[126], expected)
 
 
 if __name__ == "__main__":

@@ -172,6 +172,42 @@ const robotSpecs = [
     focus: "長週期突破",
     rule: "突破前 55 個交易日高點並由成交量確認",
   },
+  {
+    id: "MACD-CROSS-v1",
+    name: "MACD翻多機器人",
+    focus: "趨勢轉折",
+    rule: "MACD柱狀體翻正且價格位於 EMA60 之上",
+  },
+  {
+    id: "RSI-RECOVERY-v1",
+    name: "RSI反轉確認機器人",
+    focus: "超跌回升",
+    rule: "RSI由超跌區回升，並以 EMA60 過濾長期方向",
+  },
+  {
+    id: "BOLLINGER-REBOUND-v1",
+    name: "布林通道反彈機器人",
+    focus: "均值回歸",
+    rule: "跌破下軌後重新站回，回到 MA20 附近出場",
+  },
+  {
+    id: "BOLLINGER-BREAKOUT-v1",
+    name: "布林通道突破機器人",
+    focus: "波動突破",
+    rule: "價格突破上軌並由成交量確認",
+  },
+  {
+    id: "KD-RECOVERY-v1",
+    name: "KD低檔翻多機器人",
+    focus: "震盪反轉",
+    rule: "KD低檔黃金交叉並以 EMA60 過濾方向",
+  },
+  {
+    id: "MOMENTUM126-v1",
+    name: "126日動能機器人",
+    focus: "中期動能",
+    rule: "依126日報酬與 EMA60 固定條件進出",
+  },
 ];
 
 
@@ -2290,7 +2326,7 @@ export default function Dashboard() {
         <PageHeader
           eyebrow="ROBOT COMPETITION"
           title="AI 策略機器人競賽"
-          description="10 個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；先做 2 個月歷史檢查，再以最後 1 個月 walk-forward 模擬排名。"
+          description="16 個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；先做 2 個月歷史檢查，再以最後 1 個月 walk-forward 模擬排名。"
         />
 
         <section className="metrics-grid">
@@ -2317,7 +2353,7 @@ export default function Dashboard() {
           <div>
             <strong>
               {competitionLoading
-                ? "10 個機器人正在讀取官方資料並逐筆模擬交易"
+                ? "16 個機器人正在讀取官方資料並逐筆模擬交易"
                 : competition
                   ? `資料期間：${competition.periods.backtest.start} 至 ${competition.periods.forward.end}`
                   : "尚未取得本次競賽結果"}
@@ -2587,6 +2623,7 @@ export default function Dashboard() {
           <a href="https://doi.org/10.1111/j.1540-6261.1990.tb05110.x" rel="noreferrer" target="_blank">Jegadeesh（1990）</a>
           <a href="https://doi.org/10.1111/0022-1082.00280" rel="noreferrer" target="_blank">Lee、Swaminathan（2000）</a>
           <a href="https://doi.org/10.1111/jofi.12513" rel="noreferrer" target="_blank">Moreira、Muir（2017）</a>
+          <a href="https://doi.org/10.1111/0022-1082.00265" rel="noreferrer" target="_blank">Lo、Mamaysky、Wang（2000）</a>
         </div>
       </>
     );

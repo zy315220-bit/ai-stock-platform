@@ -2089,8 +2089,8 @@ export default function Dashboard() {
               <p>
                 訊號時間、成交價格、費用與退出原因逐筆保留，讓好看的報酬不藏住壞假設。
               </p>
-              <button onClick={() => changePage("methodology")} type="button">
-                查看方法論 <span>→</span>
+              <button onClick={() => changePage("competition")} type="button">
+                查看競賽揭露 <span>→</span>
               </button>
             </article>
           </section>

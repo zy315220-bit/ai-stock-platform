@@ -433,6 +433,12 @@ export default function Dashboard() {
   const [competitionRefreshKey, setCompetitionRefreshKey] =
     useState(0);
 
+  const [competitionTradeRobotId, setCompetitionTradeRobotId] =
+    useState("TECHNICAL-v1");
+
+  const [competitionTradeSegment, setCompetitionTradeSegment] =
+    useState<"backtest" | "forward">("forward");
+
   const scannerAnalysesRef =
     useRef<Record<string, ScannerAnalysisEntry>>({});
 
@@ -2212,6 +2218,29 @@ export default function Dashboard() {
 
   function renderCompetitionPage() {
     const leaderRobot = competition?.robots[0] ?? null;
+    const selectedTradeRobot =
+      competition?.robots.find(
+        (robot) => robot.robot_id === competitionTradeRobotId,
+      ) ?? leaderRobot;
+    const selectedTradeSegment = selectedTradeRobot
+      ? selectedTradeRobot[competitionTradeSegment]
+      : null;
+
+    const exitReasonLabels: Record<string, string> = {
+      "2atr_stop": "2 ATR 停損",
+      "4atr_target": "4 ATR 停利",
+      "segment_end": "測試區間結束平倉",
+    };
+
+    function formatExitReason(reason: string): string {
+      if (exitReasonLabels[reason]) {
+        return exitReasonLabels[reason];
+      }
+      if (reason.startsWith("strategy_exit:")) {
+        return "策略出場訊號";
+      }
+      return reason;
+    }
 
     function rerunCompetition() {
       competitionControllerRef.current?.abort();
@@ -2384,6 +2413,101 @@ export default function Dashboard() {
               );
             })}
           </div>
+        </article>
+
+        <article className="panel competition-trades">
+          <div className="panel-header">
+            <div>
+              <span className="panel-kicker">TRADE LEDGER</span>
+              <h2>逐筆交易紀錄</h2>
+            </div>
+            <span className="data-badge neutral">
+              {selectedTradeSegment ? `${selectedTradeSegment.trade_count} 筆完整紀錄` : "等待競賽結果"}
+            </span>
+          </div>
+
+          <div className="trade-ledger-controls">
+            <div className="trade-robot-tabs" aria-label="選擇機器人交易紀錄">
+              {(competition?.robots ?? []).map((robot) => (
+                <button
+                  className={selectedTradeRobot?.robot_id === robot.robot_id ? "active" : ""}
+                  key={robot.robot_id}
+                  onClick={() => setCompetitionTradeRobotId(robot.robot_id)}
+                  type="button"
+                >
+                  #{robot.rank} {robot.name}
+                </button>
+              ))}
+            </div>
+            <div className="trade-segment-tabs" aria-label="選擇測試區間">
+              <button
+                className={competitionTradeSegment === "backtest" ? "active" : ""}
+                onClick={() => setCompetitionTradeSegment("backtest")}
+                type="button"
+              >
+                2 個月歷史段
+              </button>
+              <button
+                className={competitionTradeSegment === "forward" ? "active" : ""}
+                onClick={() => setCompetitionTradeSegment("forward")}
+                type="button"
+              >
+                1 個月前瞻段
+              </button>
+            </div>
+          </div>
+
+          {selectedTradeRobot && selectedTradeSegment ? (
+            <>
+              <div className="trade-ledger-summary">
+                <span><small>機器人</small><strong>{selectedTradeRobot.name}</strong></span>
+                <span><small>交易／勝場</small><strong>{selectedTradeSegment.trade_count}／{selectedTradeSegment.winning_trade_count}</strong></span>
+                <span><small>勝率</small><strong>{formatNumber(selectedTradeSegment.win_rate_percent)}%</strong></span>
+                <span><small>總報酬</small><strong className={selectedTradeSegment.total_return_percent >= 0 ? "positive" : "negative"}>{selectedTradeSegment.total_return_percent >= 0 ? "+" : ""}{formatNumber(selectedTradeSegment.total_return_percent)}%</strong></span>
+                <span><small>手續費＋稅</small><strong>NT${formatNumber(selectedTradeSegment.total_commission + selectedTradeSegment.total_transaction_tax)}</strong></span>
+              </div>
+
+              {selectedTradeSegment.trades.length ? (
+                <div className="trade-ledger-table">
+                  <div className="trade-ledger-row trade-ledger-head">
+                    <span>股票／期間</span>
+                    <span>進場</span>
+                    <span>出場</span>
+                    <span>股數</span>
+                    <span>損益</span>
+                    <span>交易成本</span>
+                    <span>停損／停利</span>
+                    <span>出場原因</span>
+                  </div>
+                  {selectedTradeSegment.trades.map((trade, index) => {
+                    const totalCost = trade.entry_commission + trade.exit_commission + trade.transaction_tax;
+                    return (
+                      <div className="trade-ledger-row" key={`${trade.stock_code}-${trade.entry_date}-${index}`}>
+                        <span data-label="股票／期間"><strong>{trade.stock_code}</strong><small>{trade.entry_date} → {trade.exit_date}</small></span>
+                        <span data-label="進場"><strong>{formatNumber(trade.entry_price)}</strong><small>{trade.entry_reason}</small></span>
+                        <span data-label="出場"><strong>{formatNumber(trade.exit_price)}</strong><small>{formatNumber(trade.return_percent)}%</small></span>
+                        <span data-label="股數"><strong>{formatInteger(trade.shares)}</strong><small>股</small></span>
+                        <span data-label="損益"><strong className={trade.profit >= 0 ? "positive" : "negative"}>{trade.profit >= 0 ? "+" : ""}NT${formatNumber(trade.profit)}</strong></span>
+                        <span data-label="交易成本"><strong>NT${formatNumber(totalCost)}</strong><small>手續費＋稅</small></span>
+                        <span data-label="停損／停利"><strong>{formatNumber(trade.stop_price)}／{formatNumber(trade.target_price)}</strong></span>
+                        <span data-label="出場原因"><strong>{formatExitReason(trade.exit_reason)}</strong></span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="ranking-empty trade-empty">
+                  <strong>此區間沒有成交</strong>
+                  <p>機器人有逐日執行規則，但沒有出現同時符合進場條件的訊號，因此不會捏造交易。</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="ranking-empty trade-empty">
+              <strong>競賽完成後顯示交易紀錄</strong>
+              <p>交易明細會直接取自後端模擬結果，不使用前端示範資料。</p>
+            </div>
+          )}
         </article>
 
         {competition ? (

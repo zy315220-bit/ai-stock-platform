@@ -184,3 +184,84 @@ export type BacktestResponse = {
     return_percent: number;
   };
 };
+
+export type CompetitionTrade = {
+  robot_id: string;
+  stock_code: string;
+  segment: "backtest" | "forward";
+  entry_date: string;
+  exit_date: string;
+  entry_price: number;
+  exit_price: number;
+  shares: number;
+  profit: number;
+  return_percent: number;
+  entry_reason: string;
+  exit_reason: string;
+  entry_commission: number;
+  exit_commission: number;
+  transaction_tax: number;
+  stop_price: number;
+  target_price: number;
+};
+
+export type CompetitionSegment = {
+  initial_capital: number;
+  final_capital: number;
+  total_return_percent: number;
+  trade_count: number;
+  winning_trade_count: number;
+  win_rate_percent: number;
+  max_drawdown_percent: number;
+  total_commission: number;
+  total_transaction_tax: number;
+  trades: CompetitionTrade[];
+  equity_curve: Array<{ date: string; equity: number }>;
+};
+
+export type CompetitionRobot = {
+  robot_id: string;
+  name: string;
+  family: string;
+  rule_fingerprint: string;
+  rank: number;
+  wilson_lower_percent: number;
+  wilson_upper_percent: number;
+  backtest: CompetitionSegment;
+  forward: CompetitionSegment;
+};
+
+export type CompetitionResponse = {
+  run_id: string;
+  status: "completed";
+  executed_at: string;
+  periods: {
+    backtest: { start: string; end: string; purpose: string };
+    forward: { start: string; end: string; purpose: string };
+  };
+  fairness: {
+    initial_capital: number;
+    capital_per_symbol: number;
+    market_universe: string[];
+    commission_rate: number;
+    transaction_tax_rate: number;
+    execution: string;
+    stop_model: string;
+    target_model: string;
+    same_bar_stop_target_policy: string;
+  };
+  ranking: {
+    primary_metric: string;
+    minimum_forward_trades_for_champion: number;
+    leader_status: "qualified" | "provisional";
+  };
+  leader: {
+    robot_id: string;
+    name: string;
+    rank: number;
+    qualified: boolean;
+    reason: string;
+  };
+  robots: CompetitionRobot[];
+  disclosures: string[];
+};

@@ -1,6 +1,7 @@
 import type {
   AnalysisResponse,
   BacktestResponse,
+  CompetitionResponse,
   PositionStatus,
   ScannerResponse,
 } from "@/types/stock";
@@ -194,6 +195,26 @@ export async function fetchDailyScanner(
       timeoutError: "每日選股池更新逾時，請稍後再試。",
       networkError: "目前無法連接每日選股服務。",
       fallbackError: "每日選股服務錯誤",
+    },
+  );
+}
+
+export async function fetchCompetition(
+  initialCapital = 100_000,
+  options: RequestOptions = {},
+): Promise<CompetitionResponse> {
+  const query = new URLSearchParams({
+    initial_capital: String(initialCapital),
+  });
+
+  return fetchJson<CompetitionResponse>(
+    `${API_BASE_URL}/api/competition/run?${query.toString()}`,
+    {
+      ...options,
+      timeoutMs: 120_000,
+      timeoutError: "機器人競賽執行時間過長，請稍後再試。",
+      networkError: "目前無法連接機器人競賽服務。",
+      fallbackError: "機器人競賽執行失敗",
     },
   );
 }

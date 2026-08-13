@@ -2,16 +2,61 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
+from starlette.concurrency import run_in_threadpool
 
 from app.services.competition_service import (
     competition_methodology,
     freeze_robot_spec,
     rank_robot_results,
 )
+from app.services.competition_runner import (
+    DEFAULT_INITIAL_CAPITAL,
+    MAX_INITIAL_CAPITAL,
+    run_competition,
+)
 
 
 router = APIRouter()
+
+
+@router.get(
+    "/run",
+    summary="執行四個固定規則機器人的公平競賽",
+    description=(
+        "使用相同股票池、初始資金、交易成本與 ATR 風控，"
+        "執行 2 個月歷史檢查及 1 個月 walk-forward 模擬；"
+        "正式排序只使用 forward 區間。"
+    ),
+)
+async def get_competition_run(
+    initial_capital: float = Query(
+        default=DEFAULT_INITIAL_CAPITAL,
+        gt=0,
+        le=MAX_INITIAL_CAPITAL,
+        description="每個機器人的相同初始資金。",
+    ),
+) -> dict[str, Any]:
+    try:
+        return await run_in_threadpool(
+            run_competition,
+            initial_capital,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+    except TimeoutError as error:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="取得官方歷史資料逾時，請稍後再執行競賽。",
+        ) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="機器人競賽目前無法完成，請稍後再試。",
+        ) from error
 
 
 @router.get(

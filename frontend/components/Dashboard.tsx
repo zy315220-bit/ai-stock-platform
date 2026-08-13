@@ -15,6 +15,7 @@ import StockChart from "@/components/StockChart";
 import {
   fetchAnalysis,
   fetchBacktest,
+  fetchCompetition,
   fetchDailyScanner,
   fetchHealth,
   isRetryableRequestError,
@@ -26,6 +27,7 @@ import {
 import type {
   AnalysisResponse,
   BacktestResponse,
+  CompetitionResponse,
   PositionStatus,
   ScannerCandidate,
   ScannerResponse,
@@ -419,6 +421,18 @@ export default function Dashboard() {
   const [scannerAnalyses, setScannerAnalyses] =
     useState<Record<string, ScannerAnalysisEntry>>({});
 
+  const [competition, setCompetition] =
+    useState<CompetitionResponse | null>(null);
+
+  const [competitionLoading, setCompetitionLoading] =
+    useState(false);
+
+  const [competitionError, setCompetitionError] =
+    useState("");
+
+  const [competitionRefreshKey, setCompetitionRefreshKey] =
+    useState(0);
+
   const scannerAnalysesRef =
     useRef<Record<string, ScannerAnalysisEntry>>({});
 
@@ -433,6 +447,9 @@ export default function Dashboard() {
 
   const backtestRequestIdRef =
     useRef(0);
+
+  const competitionControllerRef =
+    useRef<AbortController | null>(null);
 
   const healthControllerRef =
     useRef<AbortController | null>(null);
@@ -618,6 +635,58 @@ export default function Dashboard() {
 
 
   useEffect(() => {
+    if (activePage !== "competition" || competition) {
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+    competitionControllerRef.current = controller;
+    const timer = window.setTimeout(() => {
+      setCompetitionLoading(true);
+      setCompetitionError("");
+
+      void fetchCompetition(100_000, { signal: controller.signal })
+        .then((response) => {
+          if (!active) {
+            return;
+          }
+          setCompetition(response);
+          track("robot_competition_completed", {
+            run_id: response.run_id,
+            leader: response.leader.robot_id,
+            qualified: response.leader.qualified,
+          });
+        })
+        .catch((reason: unknown) => {
+          if (!active || isAbortError(reason)) {
+            return;
+          }
+          setCompetitionError(
+            reason instanceof Error
+              ? reason.message
+              : "機器人競賽執行失敗。",
+          );
+        })
+        .finally(() => {
+          if (active) {
+            setCompetitionLoading(false);
+          }
+        });
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+      if (competitionControllerRef.current === controller) {
+        competitionControllerRef.current = null;
+      }
+    };
+  }, [activePage, competition, competitionRefreshKey]);
+
+
+  useEffect(() => {
     let active = true;
 
     async function checkService() {
@@ -692,6 +761,7 @@ export default function Dashboard() {
       healthControllerRef.current?.abort();
       analysisControllerRef.current?.abort();
       backtestControllerRef.current?.abort();
+      competitionControllerRef.current?.abort();
     };
   }, []);
 
@@ -2141,38 +2211,119 @@ export default function Dashboard() {
 
 
   function renderCompetitionPage() {
+    const leaderRobot = competition?.robots[0] ?? null;
+
+    function rerunCompetition() {
+      competitionControllerRef.current?.abort();
+      setCompetition(null);
+      setCompetitionError("");
+      setCompetitionRefreshKey((value) => value + 1);
+    }
+
     return (
       <>
         <PageHeader
           eyebrow="ROBOT COMPETITION"
           title="AI 策略機器人競賽"
-          description="所有機器人使用相同資金、期間、交易成本與風控；規則固定後才參賽，目標找出勝率證據最強的策略。"
+          description="四個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；先做 2 個月歷史檢查，再以最後 1 個月 walk-forward 模擬排名。"
         />
 
         <section className="metrics-grid">
           <MetricCard label="已登錄策略" value={`${robotSpecs.length}`} />
-          <MetricCard label="正式排名" value="0" detail="尚無真實交易結果" />
+          <MetricCard
+            label="競賽狀態"
+            value={competitionLoading ? "執行中" : competition ? "已完成" : "尚未完成"}
+            detail={competition ? `Run ${competition.run_id}` : "等待官方資料"}
+          />
           <MetricCard label="主要排名指標" value="Wilson 95% 下界" />
-          <MetricCard label="策略規則" value="固定版本" />
-          <MetricCard label="目前領先" value="尚未產生" />
+          <MetricCard
+            label="前瞻交易數"
+            value={leaderRobot ? `${leaderRobot.forward.trade_count} 筆` : "—"}
+            detail={competition ? `冠軍門檻 ${competition.ranking.minimum_forward_trades_for_champion} 筆` : undefined}
+          />
+          <MetricCard
+            label="目前領先"
+            value={competition?.leader.name ?? "尚未產生"}
+            detail={competition?.leader.qualified ? "已達樣本門檻" : competition?.leader.reason}
+          />
         </section>
+
+        <div className="competition-runbar">
+          <div>
+            <strong>
+              {competitionLoading
+                ? "四個機器人正在讀取官方資料並逐筆模擬交易"
+                : competition
+                  ? `資料期間：${competition.periods.backtest.start} 至 ${competition.periods.forward.end}`
+                  : "尚未取得本次競賽結果"}
+            </strong>
+            <span>收盤產生訊號、下一交易日開盤成交；每筆交易計入手續費與 ETF 證交稅。</span>
+          </div>
+          <button disabled={competitionLoading} onClick={rerunCompetition} type="button">
+            {competitionLoading ? "競賽執行中…" : competition ? "重新執行" : "執行公平競賽"}
+          </button>
+        </div>
+
+        {competitionError ? (
+          <div className="error-banner" role="alert">
+            <span>{competitionError}</span>
+            <button onClick={rerunCompetition} type="button">重試</button>
+          </div>
+        ) : null}
 
         <section className="competition-grid">
           <article className="panel official-ranking">
             <div className="panel-header">
               <div>
-                <span className="panel-kicker">OFFICIAL LEADERBOARD</span>
-                <h2>正式勝率排行榜</h2>
+                <span className="panel-kicker">WALK-FORWARD LEADERBOARD</span>
+                <h2>前瞻勝率排行榜</h2>
               </div>
-              <span className="data-badge">只收真實結果</span>
+              <span className={`data-badge ${competition?.leader.qualified ? "" : "neutral"}`}>
+                {competition?.leader.qualified ? "已達樣本門檻" : "暫定排名"}
+              </span>
             </div>
-            <div className="ranking-empty">
-              <strong>尚無可驗證排名</strong>
-              <p>
-                完成相同條件的回測或 forward test 後，才會顯示交易數、原始勝率、Wilson 95% 下界、總報酬與最大回撤。
-              </p>
-              <small>展示數字不會混入正式排行榜。</small>
-            </div>
+            {competitionLoading && !competition ? (
+              <div className="ranking-empty">
+                <strong>正在執行四套固定策略</strong>
+                <p>逐檔讀取 0050、0056、00878、00919 官方日線，完成後會顯示逐筆交易與排名。</p>
+              </div>
+            ) : competition ? (
+              <div className="leaderboard-table">
+                <div className="leaderboard-row leaderboard-head">
+                  <span>名次／機器人</span>
+                  <span>前瞻交易／勝率</span>
+                  <span>Wilson 下界</span>
+                  <span>報酬／回撤</span>
+                </div>
+                {competition.robots.map((robot) => (
+                  <div className="leaderboard-row" key={robot.robot_id}>
+                    <span className="leaderboard-name">
+                      <b>#{robot.rank}</b>
+                      <span><strong>{robot.name}</strong><small>{robot.robot_id}</small></span>
+                    </span>
+                    <span>
+                      <strong>{robot.forward.trade_count} 筆／{formatNumber(robot.forward.win_rate_percent)}%</strong>
+                      <small>歷史段 {robot.backtest.trade_count} 筆／{formatNumber(robot.backtest.win_rate_percent)}%</small>
+                    </span>
+                    <span>
+                      <strong>{formatNumber(robot.wilson_lower_percent)}%</strong>
+                      <small>95% 上界 {formatNumber(robot.wilson_upper_percent)}%</small>
+                    </span>
+                    <span>
+                      <strong className={robot.forward.total_return_percent >= 0 ? "positive" : "negative"}>
+                        {robot.forward.total_return_percent >= 0 ? "+" : ""}{formatNumber(robot.forward.total_return_percent)}%
+                      </strong>
+                      <small>最大回撤 {formatNumber(robot.forward.max_drawdown_percent)}%</small>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="ranking-empty">
+                <strong>尚無競賽結果</strong>
+                <p>執行後才會顯示逐筆交易計算出的交易數、勝率、Wilson 95% 下界、總報酬與最大回撤。</p>
+              </div>
+            )}
           </article>
 
           <article className="panel">
@@ -2183,12 +2334,19 @@ export default function Dashboard() {
               </div>
             </div>
             <ul className="fairness-list">
-              <li>相同初始資金</li>
-              <li>相同測試期間與股票池</li>
-              <li>相同手續費與交易稅</li>
-              <li>相同風險與部位限制</li>
-              <li>下一交易時段成交，避免偷看未來</li>
+              <li>每個機器人相同本金：NT${competition ? formatInteger(competition.fairness.initial_capital) : "100,000"}</li>
+              <li>相同股票池：0050、0056、00878、00919</li>
+              <li>手續費 0.1425%，ETF 賣出稅 0.1%</li>
+              <li>相同 2 ATR 停損、4 ATR 停利</li>
+              <li>收盤訊號、下一交易日開盤成交</li>
+              <li>同日同時碰停損停利時先計停損</li>
             </ul>
+            {competition ? (
+              <div className="period-summary">
+                <span>歷史段<strong>{competition.periods.backtest.start}<br />{competition.periods.backtest.end}</strong></span>
+                <span>前瞻段<strong>{competition.periods.forward.start}<br />{competition.periods.forward.end}</strong></span>
+              </div>
+            ) : null}
           </article>
         </section>
 
@@ -2198,22 +2356,49 @@ export default function Dashboard() {
               <span className="panel-kicker">ROBOT REGISTRY</span>
               <h2>固定規則機器人</h2>
             </div>
-            <span className="data-badge neutral">等待正式回測</span>
+            <span className="data-badge neutral">
+              {competition ? "本次規則指紋已驗證" : "等待執行"}
+            </span>
           </div>
           <div className="robot-card-grid">
-            {robotSpecs.map((robot) => (
-              <article className="robot-card" key={robot.id}>
-                <div>
-                  <span className="robot-focus">{robot.focus}</span>
-                  <span className="robot-status">規則已固定</span>
-                </div>
-                <h3>{robot.name}</h3>
-                <p>{robot.rule}</p>
-                <code>{robot.id}</code>
-              </article>
-            ))}
+            {robotSpecs.map((robot) => {
+              const result = competition?.robots.find((item) => item.robot_id === robot.id);
+              return (
+                <article className="robot-card" key={robot.id}>
+                  <div>
+                    <span className="robot-focus">{robot.focus}</span>
+                    <span className="robot-status">規則已固定</span>
+                  </div>
+                  <h3>{robot.name}</h3>
+                  <p>{robot.rule}</p>
+                  <code>{robot.id}{result ? ` ・ ${result.rule_fingerprint.slice(0, 10)}` : ""}</code>
+                  {result ? (
+                    <div className="robot-result-line">
+                      <span>前瞻損益</span>
+                      <strong className={result.forward.total_return_percent >= 0 ? "positive" : "negative"}>
+                        {result.forward.total_return_percent >= 0 ? "+" : ""}{formatNumber(result.forward.total_return_percent)}%
+                      </strong>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         </article>
+
+        {competition ? (
+          <article className="panel competition-disclosures">
+            <div className="panel-header">
+              <div>
+                <span className="panel-kicker">AUDIT & DISCLOSURE</span>
+                <h2>本次競賽揭露</h2>
+              </div>
+            </div>
+            <ul className="fairness-list">
+              {competition.disclosures.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </article>
+        ) : null}
 
         <section className="lower-grid competition-method">
           <EmptyPanel
@@ -2224,14 +2409,21 @@ export default function Dashboard() {
           <EmptyPanel
             eyebrow="ANTI-OVERFITTING"
             title="規則改變就建立新版本"
-            description="每個策略保存規則指紋。修改參數後不能沿用舊績效，並保留 out-of-sample / forward 測試。"
+            description="每個策略保存規則指紋。修改參數後不能沿用舊績效，並將最後 1 個月保留給 walk-forward 模擬。"
           />
           <EmptyPanel
             eyebrow="AUDITABLE RESULTS"
             title="每一筆交易都要能追查"
-            description="正式結果保留進出場時間、價格、成本、策略版本與退出原因，排名才能重算與驗證。"
+            description="結果保留進出場日期、價格、股數、手續費、交易稅、停損停利與退出原因，排名可以重算。"
           />
         </section>
+
+        <div className="research-links">
+          <span>研究依據：</span>
+          <a href="https://doi.org/10.1111/j.1540-6261.1992.tb04681.x" rel="noreferrer" target="_blank">Brock、Lakonishok、LeBaron（1992）</a>
+          <a href="https://doi.org/10.1111/j.1540-6261.1993.tb04702.x" rel="noreferrer" target="_blank">Jegadeesh、Titman（1993）</a>
+          <a href="https://doi.org/10.1080/01621459.1927.10502953" rel="noreferrer" target="_blank">Wilson（1927）</a>
+        </div>
       </>
     );
   }

@@ -1,0 +1,767 @@
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, datetime, timezone
+from functools import lru_cache
+import hashlib
+import json
+import math
+from typing import Any, Callable
+
+import pandas as pd
+
+from indicators import add_indicators
+
+from app.services.competition_service import (
+    freeze_robot_spec,
+    rank_robot_results,
+)
+
+
+COMPETITION_UNIVERSE = ("0050", "0056", "00878", "00919")
+DEFAULT_INITIAL_CAPITAL = 100_000.0
+MAX_INITIAL_CAPITAL = 2_000_000.0
+COMMISSION_RATE = 0.001425
+ETF_TRANSACTION_TAX_RATE = 0.001
+STOP_ATR_MULTIPLE = 2.0
+TARGET_ATR_MULTIPLE = 4.0
+MIN_FORWARD_TRADES_FOR_CHAMPION = 30
+
+BROCK_REFERENCE = {
+    "title": "Simple Technical Trading Rules and the Stochastic Properties of Stock Returns",
+    "authors": "William Brock, Josef Lakonishok, Blake LeBaron",
+    "year": 1992,
+    "journal": "The Journal of Finance",
+    "doi": "10.1111/j.1540-6261.1992.tb04681.x",
+    "use": "moving-average and trading-range-break rule families",
+}
+
+MOMENTUM_REFERENCE = {
+    "title": "Returns to Buying Winners and Selling Losers: Implications for Stock Market Efficiency",
+    "authors": "Narasimhan Jegadeesh, Sheridan Titman",
+    "year": 1993,
+    "journal": "The Journal of Finance",
+    "doi": "10.1111/j.1540-6261.1993.tb04702.x",
+    "use": "momentum as a research basis; short-window thresholds remain platform parameters",
+}
+
+ROBOT_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "robot_id": "EMA20-TREND-v1",
+        "name": "EMA20 趨勢機器人",
+        "family": "moving_average",
+        "entry": "Close > EMA20 and EMA20SlopePerBar > 0",
+        "exit": "Close < EMA20 or EMA20SlopePerBar < 0",
+        "parameters": {"ema_period": 20},
+        "research": [BROCK_REFERENCE],
+    },
+    {
+        "robot_id": "TECHNICAL-v1",
+        "name": "純技術面機器人",
+        "family": "trend_momentum_confirmation",
+        "entry": (
+            "Close > EMA20 > EMA60, RSI in [50, 70], MACD histogram > 0, ADX >= 18"
+        ),
+        "exit": "Close < EMA20 or RSI < 45 or MACD histogram < 0",
+        "parameters": {
+            "ema_fast": 20,
+            "ema_slow": 60,
+            "rsi_entry_min": 50,
+            "rsi_entry_max": 70,
+            "rsi_exit": 45,
+            "adx_min": 18,
+        },
+        "research": [BROCK_REFERENCE, MOMENTUM_REFERENCE],
+    },
+    {
+        "robot_id": "BREAKOUT-v1",
+        "name": "突破機器人",
+        "family": "trading_range_break",
+        "entry": "Close > prior 20-session high and Volume / VMA20 >= 1.0",
+        "exit": "Close < EMA20",
+        "parameters": {"breakout_sessions": 20, "minimum_volume_ratio": 1.0},
+        "research": [BROCK_REFERENCE],
+    },
+    {
+        "robot_id": "PULLBACK-v1",
+        "name": "均線回檔機器人",
+        "family": "trend_pullback",
+        "entry": (
+            "EMA20 > EMA60 and price crosses back above EMA20 with RSI in [40, 65]"
+        ),
+        "exit": "Close < EMA60 or RSI < 40",
+        "parameters": {
+            "ema_fast": 20,
+            "ema_slow": 60,
+            "rsi_entry_min": 40,
+            "rsi_entry_max": 65,
+            "rsi_exit": 40,
+        },
+        "research": [BROCK_REFERENCE, MOMENTUM_REFERENCE],
+    },
+)
+
+
+def _calculate_buy_cost(
+    *,
+    price: float,
+    shares: int,
+    commission_rate: float,
+) -> dict[str, float]:
+    gross_amount = price * shares
+    commission = gross_amount * commission_rate
+    return {
+        "gross_amount": gross_amount,
+        "commission": commission,
+        "total_cost": gross_amount + commission,
+    }
+
+
+def _calculate_sell_value(
+    *,
+    price: float,
+    shares: int,
+    commission_rate: float,
+    transaction_tax_rate: float,
+) -> dict[str, float]:
+    gross_amount = price * shares
+    commission = gross_amount * commission_rate
+    transaction_tax = gross_amount * transaction_tax_rate
+    return {
+        "gross_amount": gross_amount,
+        "commission": commission,
+        "transaction_tax": transaction_tax,
+        "net_amount": gross_amount - commission - transaction_tax,
+    }
+
+
+def _calculate_purchasable_shares(
+    *,
+    cash: float,
+    price: float,
+    commission_rate: float,
+) -> int:
+    if cash <= 0 or price <= 0:
+        return 0
+    return max(0, int(cash // (price * (1 + commission_rate))))
+
+
+def _number(row: pd.Series, key: str) -> float:
+    value = row.get(key)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return math.nan
+    return number if math.isfinite(number) else math.nan
+
+
+def _all_finite(*values: float) -> bool:
+    return all(math.isfinite(value) for value in values)
+
+
+def _ema20_signal(row: pd.Series, previous: pd.Series) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema20 = _number(row, "EMA20")
+    slope = _number(row, "EMA20SlopePerBar")
+    if not _all_finite(close, ema20, slope):
+        return False, False, "insufficient_indicators"
+    return (
+        close > ema20 and slope > 0,
+        close < ema20 or slope < 0,
+        "ema20_trend",
+    )
+
+
+def _technical_signal(row: pd.Series, previous: pd.Series) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema20 = _number(row, "EMA20")
+    ema60 = _number(row, "EMA60")
+    rsi = _number(row, "RSI")
+    macd_hist = _number(row, "MACD_Hist")
+    adx = _number(row, "ADX")
+    if not _all_finite(close, ema20, ema60, rsi, macd_hist, adx):
+        return False, False, "insufficient_indicators"
+    return (
+        close > ema20 > ema60 and 50 <= rsi <= 70 and macd_hist > 0 and adx >= 18,
+        close < ema20 or rsi < 45 or macd_hist < 0,
+        "trend_momentum_confirmation",
+    )
+
+
+def _breakout_signal(row: pd.Series, previous: pd.Series) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    prior_high = _number(row, "Prior20High")
+    volume_ratio = _number(row, "VolumeRatio")
+    ema20 = _number(row, "EMA20")
+    if not _all_finite(close, prior_high, volume_ratio, ema20):
+        return False, False, "insufficient_indicators"
+    return (
+        close > prior_high and volume_ratio >= 1.0,
+        close < ema20,
+        "20_session_range_break",
+    )
+
+
+def _pullback_signal(row: pd.Series, previous: pd.Series) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema20 = _number(row, "EMA20")
+    ema60 = _number(row, "EMA60")
+    rsi = _number(row, "RSI")
+    previous_close = _number(previous, "Close")
+    previous_ema20 = _number(previous, "EMA20")
+    if not _all_finite(close, ema20, ema60, rsi, previous_close, previous_ema20):
+        return False, False, "insufficient_indicators"
+    return (
+        ema20 > ema60
+        and previous_close <= previous_ema20
+        and close > ema20
+        and 40 <= rsi <= 65,
+        close < ema60 or rsi < 40,
+        "ema20_pullback_in_uptrend",
+    )
+
+
+SIGNAL_FUNCTIONS: dict[
+    str,
+    Callable[[pd.Series, pd.Series], tuple[bool, bool, str]],
+] = {
+    "EMA20-TREND-v1": _ema20_signal,
+    "TECHNICAL-v1": _technical_signal,
+    "BREAKOUT-v1": _breakout_signal,
+    "PULLBACK-v1": _pullback_signal,
+}
+
+
+def _date_text(value: Any) -> str:
+    return pd.Timestamp(value).strftime("%Y-%m-%d")
+
+
+def _prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        raise ValueError("競賽股票資料為空白。")
+    prepared = add_indicators(frame.copy()).sort_index()
+    prepared["Prior20High"] = (
+        prepared["High"].shift(1).rolling(window=20, min_periods=20).max()
+    )
+    return prepared.replace([math.inf, -math.inf], math.nan)
+
+
+def _close_position(
+    *,
+    cash: float,
+    shares: int,
+    price: float,
+    commission_rate: float,
+    transaction_tax_rate: float,
+) -> tuple[float, dict[str, float]]:
+    sale = _calculate_sell_value(
+        price=price,
+        shares=shares,
+        commission_rate=commission_rate,
+        transaction_tax_rate=transaction_tax_rate,
+    )
+    return cash + sale["net_amount"], sale
+
+
+def _simulate_symbol(
+    *,
+    frame: pd.DataFrame,
+    stock_code: str,
+    robot_id: str,
+    segment: str,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    initial_capital: float,
+    commission_rate: float,
+    transaction_tax_rate: float,
+) -> dict[str, Any]:
+    signal_function = SIGNAL_FUNCTIONS[robot_id]
+    positions = [
+        index
+        for index, timestamp in enumerate(frame.index)
+        if start <= pd.Timestamp(timestamp) <= end
+    ]
+    if not positions:
+        raise ValueError(f"{stock_code} 在指定競賽期間沒有資料。")
+
+    cash = float(initial_capital)
+    shares = 0
+    entry_price: float | None = None
+    entry_date: str | None = None
+    entry_reason = ""
+    entry_total_cost = 0.0
+    entry_commission = 0.0
+    stop_price: float | None = None
+    target_price: float | None = None
+    pending_entry: tuple[str, float] | None = None
+    pending_exit: str | None = None
+    trades: list[dict[str, Any]] = []
+    equity_curve: list[dict[str, Any]] = []
+    total_commission = 0.0
+    total_transaction_tax = 0.0
+
+    first_position = positions[0]
+    if first_position > 0:
+        prior = frame.iloc[first_position - 1]
+        prior_previous = frame.iloc[max(0, first_position - 2)]
+        enter, _, reason = signal_function(prior, prior_previous)
+        prior_atr = _number(prior, "ATR")
+        if enter and math.isfinite(prior_atr) and prior_atr > 0:
+            pending_entry = (reason, prior_atr)
+
+    for position in positions:
+        row = frame.iloc[position]
+        previous = frame.iloc[max(0, position - 1)]
+        session_date = _date_text(frame.index[position])
+        open_price = _number(row, "Open")
+        high_price = _number(row, "High")
+        low_price = _number(row, "Low")
+        close_price = _number(row, "Close")
+
+        if not _all_finite(open_price, high_price, low_price, close_price):
+            continue
+
+        if pending_exit and shares > 0:
+            cash, sale = _close_position(
+                cash=cash,
+                shares=shares,
+                price=open_price,
+                commission_rate=commission_rate,
+                transaction_tax_rate=transaction_tax_rate,
+            )
+            profit = sale["net_amount"] - entry_total_cost
+            trades.append(
+                {
+                    "robot_id": robot_id,
+                    "stock_code": stock_code,
+                    "segment": segment,
+                    "entry_date": entry_date,
+                    "exit_date": session_date,
+                    "entry_price": round(entry_price or 0.0, 4),
+                    "exit_price": round(open_price, 4),
+                    "shares": shares,
+                    "profit": round(profit, 2),
+                    "return_percent": round(
+                        profit / entry_total_cost * 100 if entry_total_cost else 0.0,
+                        4,
+                    ),
+                    "entry_reason": entry_reason,
+                    "exit_reason": pending_exit,
+                    "entry_commission": round(entry_commission, 2),
+                    "exit_commission": round(sale["commission"], 2),
+                    "transaction_tax": round(sale["transaction_tax"], 2),
+                    "stop_price": round(stop_price or 0.0, 4),
+                    "target_price": round(target_price or 0.0, 4),
+                }
+            )
+            total_commission += sale["commission"]
+            total_transaction_tax += sale["transaction_tax"]
+            shares = 0
+            entry_price = None
+            entry_date = None
+            entry_total_cost = 0.0
+            entry_commission = 0.0
+            stop_price = None
+            target_price = None
+            pending_exit = None
+
+        if pending_entry and shares == 0:
+            reason, signal_atr = pending_entry
+            purchasable_shares = _calculate_purchasable_shares(
+                cash=cash,
+                price=open_price,
+                commission_rate=commission_rate,
+            )
+            if purchasable_shares > 0:
+                purchase = _calculate_buy_cost(
+                    price=open_price,
+                    shares=purchasable_shares,
+                    commission_rate=commission_rate,
+                )
+                cash -= purchase["total_cost"]
+                shares = purchasable_shares
+                entry_price = open_price
+                entry_date = session_date
+                entry_reason = reason
+                entry_total_cost = purchase["total_cost"]
+                entry_commission = purchase["commission"]
+                stop_price = max(0.01, open_price - STOP_ATR_MULTIPLE * signal_atr)
+                target_price = open_price + TARGET_ATR_MULTIPLE * signal_atr
+                total_commission += purchase["commission"]
+            pending_entry = None
+
+        intraday_exit: tuple[float, str] | None = None
+        if shares > 0 and stop_price is not None and target_price is not None:
+            if low_price <= stop_price:
+                intraday_exit = (min(open_price, stop_price), "2atr_stop")
+            elif high_price >= target_price:
+                intraday_exit = (max(open_price, target_price), "4atr_target")
+
+        if intraday_exit is not None and shares > 0:
+            exit_price, exit_reason = intraday_exit
+            cash, sale = _close_position(
+                cash=cash,
+                shares=shares,
+                price=exit_price,
+                commission_rate=commission_rate,
+                transaction_tax_rate=transaction_tax_rate,
+            )
+            profit = sale["net_amount"] - entry_total_cost
+            trades.append(
+                {
+                    "robot_id": robot_id,
+                    "stock_code": stock_code,
+                    "segment": segment,
+                    "entry_date": entry_date,
+                    "exit_date": session_date,
+                    "entry_price": round(entry_price or 0.0, 4),
+                    "exit_price": round(exit_price, 4),
+                    "shares": shares,
+                    "profit": round(profit, 2),
+                    "return_percent": round(
+                        profit / entry_total_cost * 100 if entry_total_cost else 0.0,
+                        4,
+                    ),
+                    "entry_reason": entry_reason,
+                    "exit_reason": exit_reason,
+                    "entry_commission": round(entry_commission, 2),
+                    "exit_commission": round(sale["commission"], 2),
+                    "transaction_tax": round(sale["transaction_tax"], 2),
+                    "stop_price": round(stop_price, 4),
+                    "target_price": round(target_price, 4),
+                }
+            )
+            total_commission += sale["commission"]
+            total_transaction_tax += sale["transaction_tax"]
+            shares = 0
+            entry_price = None
+            entry_date = None
+            entry_total_cost = 0.0
+            entry_commission = 0.0
+            stop_price = None
+            target_price = None
+
+        equity_curve.append(
+            {
+                "date": session_date,
+                "equity": round(cash + shares * close_price, 2),
+            }
+        )
+
+        enter, exit_now, reason = signal_function(row, previous)
+        if shares > 0 and exit_now:
+            pending_exit = f"strategy_exit:{reason}"
+            pending_entry = None
+        elif shares == 0 and enter:
+            atr = _number(row, "ATR")
+            if math.isfinite(atr) and atr > 0:
+                pending_entry = (reason, atr)
+            pending_exit = None
+        else:
+            pending_entry = None
+            if shares == 0:
+                pending_exit = None
+
+    if shares > 0:
+        final_row = frame.iloc[positions[-1]]
+        final_price = _number(final_row, "Close")
+        final_date = _date_text(frame.index[positions[-1]])
+        cash, sale = _close_position(
+            cash=cash,
+            shares=shares,
+            price=final_price,
+            commission_rate=commission_rate,
+            transaction_tax_rate=transaction_tax_rate,
+        )
+        profit = sale["net_amount"] - entry_total_cost
+        trades.append(
+            {
+                "robot_id": robot_id,
+                "stock_code": stock_code,
+                "segment": segment,
+                "entry_date": entry_date,
+                "exit_date": final_date,
+                "entry_price": round(entry_price or 0.0, 4),
+                "exit_price": round(final_price, 4),
+                "shares": shares,
+                "profit": round(profit, 2),
+                "return_percent": round(
+                    profit / entry_total_cost * 100 if entry_total_cost else 0.0,
+                    4,
+                ),
+                "entry_reason": entry_reason,
+                "exit_reason": "segment_end",
+                "entry_commission": round(entry_commission, 2),
+                "exit_commission": round(sale["commission"], 2),
+                "transaction_tax": round(sale["transaction_tax"], 2),
+                "stop_price": round(stop_price or 0.0, 4),
+                "target_price": round(target_price or 0.0, 4),
+            }
+        )
+        total_commission += sale["commission"]
+        total_transaction_tax += sale["transaction_tax"]
+        if equity_curve:
+            equity_curve[-1]["equity"] = round(cash, 2)
+
+    return {
+        "stock_code": stock_code,
+        "initial_capital": round(initial_capital, 2),
+        "final_capital": round(cash, 2),
+        "total_commission": round(total_commission, 2),
+        "total_transaction_tax": round(total_transaction_tax, 2),
+        "trades": trades,
+        "equity_curve": equity_curve,
+    }
+
+
+def _aggregate_portfolio(
+    symbol_results: list[dict[str, Any]],
+    *,
+    initial_capital: float,
+) -> dict[str, Any]:
+    trades = [trade for result in symbol_results for trade in result["trades"]]
+    final_capital = sum(float(result["final_capital"]) for result in symbol_results)
+    winning_trade_count = sum(float(trade["profit"]) > 0 for trade in trades)
+    series: list[pd.Series] = []
+    for result in symbol_results:
+        curve = result["equity_curve"]
+        if not curve:
+            continue
+        series.append(
+            pd.Series(
+                [float(point["equity"]) for point in curve],
+                index=pd.to_datetime([point["date"] for point in curve]),
+            )
+        )
+    if series:
+        portfolio = pd.concat(series, axis=1).sort_index().ffill().bfill().sum(axis=1)
+        peak = portfolio.cummax().replace(0, math.nan)
+        drawdown = ((peak - portfolio) / peak * 100).fillna(0.0)
+        max_drawdown = float(drawdown.max())
+        equity_curve = [
+            {"date": _date_text(index), "equity": round(float(value), 2)}
+            for index, value in portfolio.items()
+        ]
+    else:
+        max_drawdown = 0.0
+        equity_curve = []
+    trade_count = len(trades)
+    return {
+        "initial_capital": round(initial_capital, 2),
+        "final_capital": round(final_capital, 2),
+        "total_return_percent": round(
+            (final_capital - initial_capital) / initial_capital * 100,
+            4,
+        ),
+        "trade_count": trade_count,
+        "winning_trade_count": int(winning_trade_count),
+        "win_rate_percent": round(
+            winning_trade_count / trade_count * 100 if trade_count else 0.0,
+            4,
+        ),
+        "max_drawdown_percent": round(max_drawdown, 4),
+        "total_commission": round(
+            sum(float(result["total_commission"]) for result in symbol_results),
+            2,
+        ),
+        "total_transaction_tax": round(
+            sum(float(result["total_transaction_tax"]) for result in symbol_results),
+            2,
+        ),
+        "trades": trades,
+        "equity_curve": equity_curve,
+    }
+
+
+def _download_competition_frames() -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
+    from stock import download_stock
+
+    frames: dict[str, pd.DataFrame] = {}
+    sources: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=len(COMPETITION_UNIVERSE)) as executor:
+        futures = {
+            executor.submit(
+                download_stock,
+                code,
+                prefer_official=True,
+                update_with_intraday=False,
+                official_months=6,
+            ): code
+            for code in COMPETITION_UNIVERSE
+        }
+        for future in as_completed(futures):
+            code = futures[future]
+            frame = future.result()
+            sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
+            frames[code] = _prepare_frame(frame)
+    return frames, sources
+
+
+def run_competition_on_frames(
+    frames: dict[str, pd.DataFrame],
+    *,
+    initial_capital: float = DEFAULT_INITIAL_CAPITAL,
+    sources: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    capital = float(initial_capital)
+    if not math.isfinite(capital) or capital <= 0:
+        raise ValueError("競賽初始資金必須大於 0。")
+    if capital > MAX_INITIAL_CAPITAL:
+        raise ValueError("競賽初始資金不能超過 2,000,000 元。")
+    missing = [code for code in COMPETITION_UNIVERSE if code not in frames]
+    if missing:
+        raise ValueError("競賽缺少股票資料：" + "、".join(missing))
+
+    latest_date = min(pd.Timestamp(frames[code].index.max()) for code in COMPETITION_UNIVERSE)
+    forward_start = (latest_date - pd.DateOffset(months=1)).normalize()
+    backtest_start = (forward_start - pd.DateOffset(months=2)).normalize()
+    backtest_end = forward_start - pd.Timedelta(days=1)
+    per_symbol_capital = capital / len(COMPETITION_UNIVERSE)
+    robot_outputs: list[dict[str, Any]] = []
+    ranking_rows: list[dict[str, Any]] = []
+
+    for spec in ROBOT_SPECS:
+        frozen = freeze_robot_spec(spec)
+        robot_id = str(spec["robot_id"])
+        segment_outputs: dict[str, dict[str, Any]] = {}
+        for segment, start, end in (
+            ("backtest", backtest_start, backtest_end),
+            ("forward", forward_start, latest_date),
+        ):
+            symbol_results = [
+                _simulate_symbol(
+                    frame=frames[code],
+                    stock_code=code,
+                    robot_id=robot_id,
+                    segment=segment,
+                    start=start,
+                    end=end,
+                    initial_capital=per_symbol_capital,
+                    commission_rate=COMMISSION_RATE,
+                    transaction_tax_rate=ETF_TRANSACTION_TAX_RATE,
+                )
+                for code in COMPETITION_UNIVERSE
+            ]
+            segment_outputs[segment] = _aggregate_portfolio(
+                symbol_results,
+                initial_capital=capital,
+            )
+        forward = segment_outputs["forward"]
+        ranking_rows.append(
+            {
+                "robot_id": robot_id,
+                "robot_version": "1",
+                "rule_fingerprint": frozen["rule_fingerprint"],
+                "initial_capital": capital,
+                "period_start": _date_text(forward_start),
+                "period_end": _date_text(latest_date),
+                "cost_model_id": "TWSE-ETF-0.1425-0.1-v1",
+                "risk_model_id": "ATR-2R-STOP-4R-TARGET-v1",
+                "market_universe_id": "TW-ETF-CORE-4-v1",
+                "trade_count": forward["trade_count"],
+                "winning_trade_count": forward["winning_trade_count"],
+                "total_return_percent": forward["total_return_percent"],
+                "max_drawdown_percent": forward["max_drawdown_percent"],
+            }
+        )
+        robot_outputs.append(
+            {
+                "robot_id": robot_id,
+                "name": spec["name"],
+                "family": spec["family"],
+                "rule_fingerprint": frozen["rule_fingerprint"],
+                "spec": spec,
+                "backtest": segment_outputs["backtest"],
+                "forward": forward,
+            }
+        )
+
+    ranking = rank_robot_results(ranking_rows)
+    rank_by_id = {row["robot_id"]: row for row in ranking["robots"]}
+    for output in robot_outputs:
+        rank_row = rank_by_id[output["robot_id"]]
+        output["rank"] = rank_row["rank"]
+        output["wilson_lower_percent"] = rank_row["wilson_lower_percent"]
+        output["wilson_upper_percent"] = rank_row["wilson_upper_percent"]
+    robot_outputs.sort(key=lambda item: int(item["rank"]))
+
+    leader = robot_outputs[0]
+    forward_trades = int(leader["forward"]["trade_count"])
+    qualified = forward_trades >= MIN_FORWARD_TRADES_FOR_CHAMPION
+    run_basis = {
+        "latest_date": _date_text(latest_date),
+        "capital": capital,
+        "universe": list(COMPETITION_UNIVERSE),
+        "fingerprints": [robot["rule_fingerprint"] for robot in robot_outputs],
+    }
+    run_id = hashlib.sha256(
+        json.dumps(run_basis, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
+
+    return {
+        "run_id": run_id,
+        "status": "completed",
+        "executed_at": datetime.now(timezone.utc).isoformat(),
+        "data_sources": sources or {},
+        "periods": {
+            "backtest": {
+                "start": _date_text(backtest_start),
+                "end": _date_text(backtest_end),
+                "purpose": "固定規則的 2 個月歷史檢查，不在執行中調參。",
+            },
+            "forward": {
+                "start": _date_text(forward_start),
+                "end": _date_text(latest_date),
+                "purpose": "最後 1 個月 walk-forward 模擬；正式排名只使用此區間。",
+            },
+        },
+        "fairness": {
+            "initial_capital": round(capital, 2),
+            "capital_per_symbol": round(per_symbol_capital, 2),
+            "market_universe": list(COMPETITION_UNIVERSE),
+            "commission_rate": COMMISSION_RATE,
+            "transaction_tax_rate": ETF_TRANSACTION_TAX_RATE,
+            "execution": "signal at close, execute next session open",
+            "stop_model": f"{STOP_ATR_MULTIPLE:g} ATR",
+            "target_model": f"{TARGET_ATR_MULTIPLE:g} ATR",
+            "same_bar_stop_target_policy": "stop first (conservative)",
+        },
+        "ranking": {
+            "primary_metric": "forward Wilson 95% win-rate lower bound",
+            "minimum_forward_trades_for_champion": MIN_FORWARD_TRADES_FOR_CHAMPION,
+            "leader_status": "qualified" if qualified else "provisional",
+        },
+        "leader": {
+            "robot_id": leader["robot_id"],
+            "name": leader["name"],
+            "rank": 1,
+            "qualified": qualified,
+            "reason": (
+                "已達最低前瞻交易樣本門檻。"
+                if qualified
+                else f"目前僅 {forward_trades} 筆前瞻交易，未達 {MIN_FORWARD_TRADES_FOR_CHAMPION} 筆門檻。"
+            ),
+        },
+        "robots": robot_outputs,
+        "disclosures": [
+            "目前的 1 個月區間是 walk-forward 歷史模擬，不冒充部署後累積的真實實盤前瞻紀錄。",
+            "EMA、RSI、ADX、成交量與 ATR 的具體期間／門檻是固定的 v1 實證參數，不代表論文證明其為最優值。",
+            "現階段只做多、無槓桿，且每檔 ETF 使用固定等額資金；所有交易均保存進出場與成本。",
+        ],
+        "references": [BROCK_REFERENCE, MOMENTUM_REFERENCE],
+    }
+
+
+@lru_cache(maxsize=8)
+def _run_competition_cached(initial_capital: float, cache_date: str) -> dict[str, Any]:
+    frames, sources = _download_competition_frames()
+    return run_competition_on_frames(
+        frames,
+        initial_capital=initial_capital,
+        sources=sources,
+    )
+
+
+def run_competition(initial_capital: float = DEFAULT_INITIAL_CAPITAL) -> dict[str, Any]:
+    capital = round(float(initial_capital), 2)
+    return _run_competition_cached(capital, date.today().isoformat())

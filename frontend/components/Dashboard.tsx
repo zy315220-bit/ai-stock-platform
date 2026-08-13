@@ -2641,7 +2641,7 @@ export default function Dashboard() {
             </div>
             {competitionLoading && !competition ? (
               <div className="ranking-empty">
-                <strong>正在執行四套固定策略</strong>
+                <strong>正在執行 16 套固定策略</strong>
                 <p>逐檔讀取 0050、0056、00878、00919 官方日線，完成後會顯示逐筆交易與排名。</p>
               </div>
             ) : competition ? (

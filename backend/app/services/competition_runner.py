@@ -45,6 +45,43 @@ MOMENTUM_REFERENCE = {
     "use": "momentum as a research basis; short-window thresholds remain platform parameters",
 }
 
+TIME_SERIES_MOMENTUM_REFERENCE = {
+    "title": "Time Series Momentum",
+    "authors": "Tobias J. Moskowitz, Yao Hua Ooi, Lasse Heje Pedersen",
+    "year": 2012,
+    "journal": "Journal of Financial Economics",
+    "doi": "10.1016/j.jfineco.2011.11.003",
+    "use": "time-series momentum research basis; 60-session threshold is a platform parameter",
+}
+
+REVERSAL_REFERENCE = {
+    "title": "Evidence of Predictable Behavior of Security Returns",
+    "author": "Narasimhan Jegadeesh",
+    "year": 1990,
+    "journal": "The Journal of Finance",
+    "doi": "10.1111/j.1540-6261.1990.tb05110.x",
+    "use": "short-horizon return reversal research basis; RSI thresholds are platform parameters",
+}
+
+VOLUME_MOMENTUM_REFERENCE = {
+    "title": "Price Momentum and Trading Volume",
+    "authors": "Charles M. C. Lee, Bhaskaran Swaminathan",
+    "year": 2000,
+    "journal": "The Journal of Finance",
+    "doi": "10.1111/0022-1082.00280",
+    "use": "interaction between past volume and momentum; volume-ratio thresholds are platform parameters",
+}
+
+VOLATILITY_REFERENCE = {
+    "title": "Volatility-Managed Portfolios",
+    "authors": "Alan Moreira, Tyler Muir",
+    "year": 2017,
+    "journal": "The Journal of Finance",
+    "doi": "10.1111/jofi.12513",
+    "use": "lower exposure during high volatility; ATR-percent thresholds are platform parameters",
+}
+
+
 ROBOT_SPECS: tuple[dict[str, Any], ...] = (
     {
         "robot_id": "EMA20-TREND-v1",
@@ -98,6 +135,77 @@ ROBOT_SPECS: tuple[dict[str, Any], ...] = (
             "rsi_exit": 40,
         },
         "research": [BROCK_REFERENCE, MOMENTUM_REFERENCE],
+    },
+    {
+        "robot_id": "EMA-CROSS-v1",
+        "name": "均線黃金交叉機器人",
+        "family": "moving_average_crossover",
+        "entry": "EMA20 crosses above EMA60",
+        "exit": "EMA20 crosses below EMA60",
+        "parameters": {"ema_fast": 20, "ema_slow": 60},
+        "research": [BROCK_REFERENCE],
+    },
+    {
+        "robot_id": "MOMENTUM60-v1",
+        "name": "60日動能機器人",
+        "family": "time_series_momentum",
+        "entry": "60-session return > 5% and Close > EMA20",
+        "exit": "60-session return <= 0% or Close < EMA20",
+        "parameters": {"lookback_sessions": 60, "entry_return_percent": 5},
+        "research": [MOMENTUM_REFERENCE, TIME_SERIES_MOMENTUM_REFERENCE],
+    },
+    {
+        "robot_id": "REVERSAL-v1",
+        "name": "短期反轉機器人",
+        "family": "short_term_reversal",
+        "entry": "Close > EMA60, Close < EMA20, and RSI <= 35",
+        "exit": "RSI >= 55 or Close < EMA60",
+        "parameters": {"rsi_entry_max": 35, "rsi_exit_min": 55},
+        "research": [REVERSAL_REFERENCE],
+    },
+    {
+        "robot_id": "VOLUME-MOMENTUM-v1",
+        "name": "量價動能機器人",
+        "family": "volume_conditioned_momentum",
+        "entry": (
+            "60-session return > 0, Close > EMA20 > EMA60, "
+            "and Volume / VMA20 in [0.5, 1.2]"
+        ),
+        "exit": "60-session return <= 0 or Close < EMA20",
+        "parameters": {
+            "lookback_sessions": 60,
+            "minimum_volume_ratio": 0.5,
+            "maximum_volume_ratio": 1.2,
+        },
+        "research": [
+            MOMENTUM_REFERENCE,
+            TIME_SERIES_MOMENTUM_REFERENCE,
+            VOLUME_MOMENTUM_REFERENCE,
+        ],
+    },
+    {
+        "robot_id": "LOW-VOL-TREND-v1",
+        "name": "低波動趨勢機器人",
+        "family": "volatility_filtered_trend",
+        "entry": (
+            "Close > EMA20 > EMA60, ATRPercent <= 2.5%, and ADX >= 18"
+        ),
+        "exit": "Close < EMA20 or ATRPercent > 4%",
+        "parameters": {
+            "maximum_entry_atr_percent": 2.5,
+            "maximum_hold_atr_percent": 4.0,
+            "adx_min": 18,
+        },
+        "research": [BROCK_REFERENCE, VOLATILITY_REFERENCE],
+    },
+    {
+        "robot_id": "BREAKOUT55-v1",
+        "name": "55日突破機器人",
+        "family": "long_trading_range_break",
+        "entry": "Close > prior 55-session high and Volume / VMA20 >= 1.0",
+        "exit": "Close < EMA20",
+        "parameters": {"breakout_sessions": 55, "minimum_volume_ratio": 1.0},
+        "research": [BROCK_REFERENCE],
     },
 )
 
@@ -221,6 +329,111 @@ def _pullback_signal(row: pd.Series, previous: pd.Series) -> tuple[bool, bool, s
     )
 
 
+def _ema_cross_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    ema20 = _number(row, "EMA20")
+    ema60 = _number(row, "EMA60")
+    previous_ema20 = _number(previous, "EMA20")
+    previous_ema60 = _number(previous, "EMA60")
+    if not _all_finite(ema20, ema60, previous_ema20, previous_ema60):
+        return False, False, "insufficient_indicators"
+    return (
+        previous_ema20 <= previous_ema60 and ema20 > ema60,
+        previous_ema20 >= previous_ema60 and ema20 < ema60,
+        "ema20_ema60_cross",
+    )
+
+
+def _momentum60_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema20 = _number(row, "EMA20")
+    return60 = _number(row, "Return60")
+    if not _all_finite(close, ema20, return60):
+        return False, False, "insufficient_indicators"
+    return (
+        return60 > 0.05 and close > ema20,
+        return60 <= 0 or close < ema20,
+        "60_session_time_series_momentum",
+    )
+
+
+def _reversal_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema20 = _number(row, "EMA20")
+    ema60 = _number(row, "EMA60")
+    rsi = _number(row, "RSI")
+    if not _all_finite(close, ema20, ema60, rsi):
+        return False, False, "insufficient_indicators"
+    return (
+        close > ema60 and close < ema20 and rsi <= 35,
+        rsi >= 55 or close < ema60,
+        "short_term_reversal_in_long_trend",
+    )
+
+
+def _volume_momentum_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema20 = _number(row, "EMA20")
+    ema60 = _number(row, "EMA60")
+    return60 = _number(row, "Return60")
+    volume_ratio = _number(row, "VolumeRatio")
+    if not _all_finite(close, ema20, ema60, return60, volume_ratio):
+        return False, False, "insufficient_indicators"
+    return (
+        return60 > 0
+        and close > ema20 > ema60
+        and 0.5 <= volume_ratio <= 1.2,
+        return60 <= 0 or close < ema20,
+        "low_volume_winner_momentum",
+    )
+
+
+def _low_vol_trend_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    ema20 = _number(row, "EMA20")
+    ema60 = _number(row, "EMA60")
+    atr_percent = _number(row, "ATRPercent")
+    adx = _number(row, "ADX")
+    if not _all_finite(close, ema20, ema60, atr_percent, adx):
+        return False, False, "insufficient_indicators"
+    return (
+        close > ema20 > ema60 and atr_percent <= 2.5 and adx >= 18,
+        close < ema20 or atr_percent > 4.0,
+        "low_volatility_trend",
+    )
+
+
+def _breakout55_signal(
+    row: pd.Series,
+    previous: pd.Series,
+) -> tuple[bool, bool, str]:
+    close = _number(row, "Close")
+    prior_high = _number(row, "Prior55High")
+    volume_ratio = _number(row, "VolumeRatio")
+    ema20 = _number(row, "EMA20")
+    if not _all_finite(close, prior_high, volume_ratio, ema20):
+        return False, False, "insufficient_indicators"
+    return (
+        close > prior_high and volume_ratio >= 1.0,
+        close < ema20,
+        "55_session_range_break",
+    )
+
+
 SIGNAL_FUNCTIONS: dict[
     str,
     Callable[[pd.Series, pd.Series], tuple[bool, bool, str]],
@@ -229,6 +442,12 @@ SIGNAL_FUNCTIONS: dict[
     "TECHNICAL-v1": _technical_signal,
     "BREAKOUT-v1": _breakout_signal,
     "PULLBACK-v1": _pullback_signal,
+    "EMA-CROSS-v1": _ema_cross_signal,
+    "MOMENTUM60-v1": _momentum60_signal,
+    "REVERSAL-v1": _reversal_signal,
+    "VOLUME-MOMENTUM-v1": _volume_momentum_signal,
+    "LOW-VOL-TREND-v1": _low_vol_trend_signal,
+    "BREAKOUT55-v1": _breakout55_signal,
 }
 
 
@@ -242,6 +461,12 @@ def _prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     prepared = add_indicators(frame.copy()).sort_index()
     prepared["Prior20High"] = (
         prepared["High"].shift(1).rolling(window=20, min_periods=20).max()
+    )
+    prepared["Prior55High"] = (
+        prepared["High"].shift(1).rolling(window=55, min_periods=55).max()
+    )
+    prepared["Return60"] = (
+        prepared["Close"] / prepared["Close"].shift(60) - 1
     )
     return prepared.replace([math.inf, -math.inf], math.nan)
 
@@ -748,7 +973,14 @@ def run_competition_on_frames(
             "EMA、RSI、ADX、成交量與 ATR 的具體期間／門檻是固定的 v1 實證參數，不代表論文證明其為最優值。",
             "現階段只做多、無槓桿，且每檔 ETF 使用固定等額資金；所有交易均保存進出場與成本。",
         ],
-        "references": [BROCK_REFERENCE, MOMENTUM_REFERENCE],
+        "references": [
+            BROCK_REFERENCE,
+            MOMENTUM_REFERENCE,
+            TIME_SERIES_MOMENTUM_REFERENCE,
+            REVERSAL_REFERENCE,
+            VOLUME_MOMENTUM_REFERENCE,
+            VOLATILITY_REFERENCE,
+        ],
     }
 
 

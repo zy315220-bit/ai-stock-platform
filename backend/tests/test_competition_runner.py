@@ -13,6 +13,7 @@ if "yfinance" not in sys.modules:
 from app.services.competition_runner import (
     COMPETITION_UNIVERSE,
     ROBOT_SPECS,
+    SIGNAL_FUNCTIONS,
     _prepare_frame,
     run_competition_on_frames,
 )
@@ -43,8 +44,8 @@ class CompetitionRunnerTests(unittest.TestCase):
             freeze_robot_spec(spec)["rule_fingerprint"]
             for spec in ROBOT_SPECS
         ]
-        self.assertEqual(len(fingerprints), 4)
-        self.assertEqual(len(set(fingerprints)), 4)
+        self.assertEqual(len(fingerprints), len(ROBOT_SPECS))
+        self.assertEqual(len(set(fingerprints)), len(ROBOT_SPECS))
         self.assertEqual(
             fingerprints,
             [
@@ -65,6 +66,8 @@ class CompetitionRunnerTests(unittest.TestCase):
         )
 
         self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(result["robots"]), len(ROBOT_SPECS))
+        self.assertEqual(set(SIGNAL_FUNCTIONS), {spec["robot_id"] for spec in ROBOT_SPECS})
         self.assertEqual(result["fairness"]["initial_capital"], 100_000)
         self.assertEqual(result["fairness"]["capital_per_symbol"], 25_000)
         self.assertEqual(
@@ -76,7 +79,7 @@ class CompetitionRunnerTests(unittest.TestCase):
         )
         self.assertEqual(
             [robot["rank"] for robot in result["robots"]],
-            [1, 2, 3, 4],
+            list(range(1, len(ROBOT_SPECS) + 1)),
         )
 
         for robot in result["robots"]:

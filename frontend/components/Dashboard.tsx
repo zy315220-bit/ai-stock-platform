@@ -136,6 +136,42 @@ const robotSpecs = [
     focus: "趨勢回檔",
     rule: "多頭方向中的固定回檔進場",
   },
+  {
+    id: "EMA-CROSS-v1",
+    name: "均線黃金交叉機器人",
+    focus: "均線交叉",
+    rule: "EMA20 向上穿越 EMA60 進場，反向交叉出場",
+  },
+  {
+    id: "MOMENTUM60-v1",
+    name: "60日動能機器人",
+    focus: "時間序列動能",
+    rule: "依 60 日報酬與 EMA20 固定條件進出",
+  },
+  {
+    id: "REVERSAL-v1",
+    name: "短期反轉機器人",
+    focus: "超跌反轉",
+    rule: "長期趨勢向上時，依 RSI 超跌條件進場",
+  },
+  {
+    id: "VOLUME-MOMENTUM-v1",
+    name: "量價動能機器人",
+    focus: "量價關係",
+    rule: "結合 60 日動能、趨勢與成交量比率",
+  },
+  {
+    id: "LOW-VOL-TREND-v1",
+    name: "低波動趨勢機器人",
+    focus: "波動風控",
+    rule: "只參與低 ATR 波動且 ADX 確認的多頭趨勢",
+  },
+  {
+    id: "BREAKOUT55-v1",
+    name: "55日突破機器人",
+    focus: "長週期突破",
+    rule: "突破前 55 個交易日高點並由成交量確認",
+  },
 ];
 
 
@@ -2254,7 +2290,7 @@ export default function Dashboard() {
         <PageHeader
           eyebrow="ROBOT COMPETITION"
           title="AI 策略機器人競賽"
-          description="四個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；先做 2 個月歷史檢查，再以最後 1 個月 walk-forward 模擬排名。"
+          description="10 個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；先做 2 個月歷史檢查，再以最後 1 個月 walk-forward 模擬排名。"
         />
 
         <section className="metrics-grid">
@@ -2281,7 +2317,7 @@ export default function Dashboard() {
           <div>
             <strong>
               {competitionLoading
-                ? "四個機器人正在讀取官方資料並逐筆模擬交易"
+                ? "10 個機器人正在讀取官方資料並逐筆模擬交易"
                 : competition
                   ? `資料期間：${competition.periods.backtest.start} 至 ${competition.periods.forward.end}`
                   : "尚未取得本次競賽結果"}
@@ -2547,6 +2583,10 @@ export default function Dashboard() {
           <a href="https://doi.org/10.1111/j.1540-6261.1992.tb04681.x" rel="noreferrer" target="_blank">Brock、Lakonishok、LeBaron（1992）</a>
           <a href="https://doi.org/10.1111/j.1540-6261.1993.tb04702.x" rel="noreferrer" target="_blank">Jegadeesh、Titman（1993）</a>
           <a href="https://doi.org/10.1080/01621459.1927.10502953" rel="noreferrer" target="_blank">Wilson（1927）</a>
+          <a href="https://doi.org/10.1016/j.jfineco.2011.11.003" rel="noreferrer" target="_blank">Moskowitz、Ooi、Pedersen（2012）</a>
+          <a href="https://doi.org/10.1111/j.1540-6261.1990.tb05110.x" rel="noreferrer" target="_blank">Jegadeesh（1990）</a>
+          <a href="https://doi.org/10.1111/0022-1082.00280" rel="noreferrer" target="_blank">Lee、Swaminathan（2000）</a>
+          <a href="https://doi.org/10.1111/jofi.12513" rel="noreferrer" target="_blank">Moreira、Muir（2017）</a>
         </div>
       </>
     );

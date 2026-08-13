@@ -429,6 +429,134 @@ function isAbortError(reason: unknown): boolean {
 }
 
 
+
+function MarketSignalVisual() {
+  const candles = [
+    { x: 74, high: 260, low: 304, open: 290, close: 272, up: true },
+    { x: 118, high: 238, low: 286, open: 254, close: 276, up: false },
+    { x: 162, high: 218, low: 270, open: 258, close: 232, up: true },
+    { x: 206, high: 202, low: 248, open: 226, close: 214, up: true },
+    { x: 250, high: 212, low: 264, open: 222, close: 250, up: false },
+    { x: 294, high: 184, low: 240, open: 232, close: 198, up: true },
+    { x: 338, high: 166, low: 218, open: 194, close: 178, up: true },
+    { x: 382, high: 174, low: 226, open: 186, close: 210, up: false },
+    { x: 426, high: 142, low: 202, open: 194, close: 154, up: true },
+    { x: 470, high: 126, low: 184, open: 148, close: 166, up: false },
+    { x: 514, high: 104, low: 168, open: 158, close: 118, up: true },
+    { x: 558, high: 88, low: 148, open: 112, close: 98, up: true },
+  ];
+
+  return (
+    <article className="market-signal-visual">
+      <div className="signal-visual-head">
+        <div>
+          <span>STRATEGY SIGNAL LAB</span>
+          <strong>收盤訊號 → 隔日成交</strong>
+        </div>
+        <span className="visual-mode">
+          <i />
+          規則模擬
+        </span>
+      </div>
+
+      <div className="signal-chart-wrap">
+        <svg
+          aria-label="策略訊號流程示意圖，非即時行情"
+          className="signal-chart"
+          role="img"
+          viewBox="0 0 640 360"
+        >
+          <defs>
+            <linearGradient id="signalArea" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#5eead4" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#5eead4" stopOpacity="0" />
+            </linearGradient>
+            <filter id="signalGlow">
+              <feGaussianBlur result="blur" stdDeviation="4" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          <g className="signal-grid">
+            {[72, 132, 192, 252, 312].map((y) => (
+              <line key={"h-" + y} x1="42" x2="598" y1={y} y2={y} />
+            ))}
+            {[42, 134, 226, 318, 410, 502, 598].map((x) => (
+              <line key={"v-" + x} x1={x} x2={x} y1="56" y2="318" />
+            ))}
+          </g>
+
+          <path
+            className="signal-area"
+            d="M42 270 C110 254 132 242 182 248 C232 254 244 206 300 212 C356 218 364 180 420 184 C476 188 488 130 598 102 L598 318 L42 318 Z"
+          />
+          <path
+            className="signal-line"
+            d="M42 270 C110 254 132 242 182 248 C232 254 244 206 300 212 C356 218 364 180 420 184 C476 188 488 130 598 102"
+            pathLength="1"
+          />
+
+          <g className="signal-candles">
+            {candles.map((candle, index) => {
+              const bodyTop = Math.min(candle.open, candle.close);
+              const bodyHeight = Math.max(Math.abs(candle.open - candle.close), 8);
+
+              return (
+                <g
+                  className={candle.up ? "candle candle-up" : "candle candle-down"}
+                  key={candle.x}
+                  style={{ animationDelay: String(index * 80) + "ms" }}
+                >
+                  <line x1={candle.x} x2={candle.x} y1={candle.high} y2={candle.low} />
+                  <rect
+                    height={bodyHeight}
+                    rx="3"
+                    width="14"
+                    x={candle.x - 7}
+                    y={bodyTop}
+                  />
+                </g>
+              );
+            })}
+          </g>
+
+          <g className="signal-marker" filter="url(#signalGlow)">
+            <circle className="signal-ring" cx="558" cy="98" r="22" />
+            <circle cx="558" cy="98" r="6" />
+          </g>
+        </svg>
+
+        <div className="chart-corner-card">
+          <span>訊號確認</span>
+          <strong>Close → Next Open</strong>
+          <small>拒絕同根 K 棒成交</small>
+        </div>
+      </div>
+
+      <div className="signal-timeline" aria-label="交易時間流程">
+        <div>
+          <span>01</span>
+          <p><strong>收盤判斷</strong><small>只使用當時資料</small></p>
+        </div>
+        <i />
+        <div>
+          <span>02</span>
+          <p><strong>隔日成交</strong><small>避免偷看未來</small></p>
+        </div>
+        <i />
+        <div>
+          <span>03</span>
+          <p><strong>成本入帳</strong><small>稅費一起計算</small></p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+
 export default function Dashboard() {
   const [activePage, setActivePage] =
     useState<PageKey>("home");
@@ -1851,10 +1979,138 @@ export default function Dashboard() {
 
 
   function renderHomePage() {
+    const quickCode = stockCode.trim() || "2330";
+
     if (!data) {
       return (
         <>
-          {renderAnalysisOverview()}
+          <section className="home-hero">
+            <div className="home-hero-copy">
+              <div className="hero-status">
+                <span className="status-dot" />
+                <span>{serviceLabel}</span>
+                <i />
+                <span>16 台策略在線</span>
+              </div>
+
+              <p className="eyebrow">EVIDENCE BEFORE OPINION</p>
+              <h1>
+                把市場雜訊，
+                <span>變成可驗證的訊號。</span>
+              </h1>
+              <p className="hero-lead">
+                技術面、基本面、消息面分開計算，再讓固定規則的機器人公平競賽。
+                每筆訊號遵守 T+1 成交，績效計入成本。
+              </p>
+
+              <div className="hero-actions">
+                <button
+                  className="hero-primary"
+                  disabled={loading}
+                  onClick={() => void load(quickCode, true)}
+                  type="button"
+                >
+                  {loading ? "正在分析 " + quickCode : "立即分析 " + quickCode}
+                  <span aria-hidden="true">↗</span>
+                </button>
+                <button
+                  className="hero-secondary"
+                  onClick={() => changePage("competition")}
+                  type="button"
+                >
+                  查看 {robotSpecs.length} 台策略競賽
+                </button>
+              </div>
+
+              <div className="hero-trust-list">
+                <span><i>✓</i> 不偷看未來</span>
+                <span><i>✓</i> 計入交易成本</span>
+                <span><i>✓</i> 規則版本固定</span>
+              </div>
+            </div>
+
+            <MarketSignalVisual />
+          </section>
+
+          <section className="home-proof-strip" aria-label="平台驗證重點">
+            <article>
+              <strong>{robotSpecs.length}</strong>
+              <span>台固定規則機器人</span>
+            </article>
+            <article>
+              <strong>3</strong>
+              <span>面向獨立評分</span>
+            </article>
+            <article>
+              <strong>T+1</strong>
+              <span>訊號與成交分離</span>
+            </article>
+            <article>
+              <strong>95%</strong>
+              <span>Wilson 勝率區間</span>
+            </article>
+          </section>
+
+          <section className="home-feature-grid">
+            <article className="home-feature-card feature-large">
+              <div className="feature-icon feature-icon-mint">01</div>
+              <p className="panel-kicker">THREE-LENS ANALYSIS</p>
+              <h2>三個視角，不互相掩蓋</h2>
+              <p>
+                技術面看價格與趨勢，基本面看企業品質，消息面追蹤事件風險。
+                每個分數保留來源與理由。
+              </p>
+              <div className="lens-bars" aria-label="三面分析視覺示意">
+                <span><i style={{ width: "78%" }} /><em>技術面</em></span>
+                <span><i style={{ width: "64%" }} /><em>基本面</em></span>
+                <span><i style={{ width: "52%" }} /><em>消息面</em></span>
+              </div>
+              <button onClick={() => changePage("analysis")} type="button">
+                開始研究個股 <span>→</span>
+              </button>
+            </article>
+
+            <article className="home-feature-card">
+              <div className="feature-icon feature-icon-gold">02</div>
+              <p className="panel-kicker">ROBOT ARENA</p>
+              <h2>讓策略用同一把尺競賽</h2>
+              <p>
+                同一區間、同一成本與同一成交規則，比較趨勢、反轉、突破與風險控制。
+              </p>
+              <button onClick={() => changePage("competition")} type="button">
+                看完整排行榜 <span>→</span>
+              </button>
+            </article>
+
+            <article className="home-feature-card">
+              <div className="feature-icon feature-icon-blue">03</div>
+              <p className="panel-kicker">AUDITABLE BY DESIGN</p>
+              <h2>漂亮之外，也能被檢查</h2>
+              <p>
+                訊號時間、成交價格、費用與退出原因逐筆保留，讓好看的報酬不藏住壞假設。
+              </p>
+              <button onClick={() => changePage("methodology")} type="button">
+                查看方法論 <span>→</span>
+              </button>
+            </article>
+          </section>
+
+          <aside className="design-research-note">
+            <div>
+              <span>DESIGN RESEARCH</span>
+              <strong>快速辨識、精準比較、克制動態</strong>
+            </div>
+            <p>
+              首屏層級參考 50 毫秒視覺印象研究；數值比較優先用位置與長度；
+              動態只負責引導注意。38:62 比例僅作版面起點，不宣稱黃金比例能保證美感。
+            </p>
+            <div className="research-links">
+              <a href="https://doi.org/10.1080/01449290500330448" rel="noreferrer" target="_blank">視覺印象</a>
+              <a href="https://doi.org/10.1080/01621459.1984.10478080" rel="noreferrer" target="_blank">圖形感知</a>
+              <a href="https://doi.org/10.1016/S1071-5819(03)00021-1" rel="noreferrer" target="_blank">動態注意</a>
+            </div>
+          </aside>
+
           {renderVisitorGuide()}
         </>
       );

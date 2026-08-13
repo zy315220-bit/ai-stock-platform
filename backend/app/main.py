@@ -3,18 +3,15 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.competition import router as competition_router
 from app.api.stocks import router as stocks_router
 from app.core.config import settings
 
 
 app = FastAPI(
     title="AI 台股分析 API",
-    version="0.1.0",
+    version="0.2.0",
 )
-
-# =========================
-# CORS
-# =========================
 
 origins = [
     origin.strip()
@@ -30,19 +27,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =========================
-# Router
-# =========================
-
 app.include_router(
     stocks_router,
     prefix="/api/stocks",
     tags=["stocks"],
 )
-
-# =========================
-# API
-# =========================
+app.include_router(
+    competition_router,
+    prefix="/api/competition",
+    tags=["competition"],
+)
 
 @app.get("/")
 def root() -> dict[str, str]:
@@ -50,7 +44,6 @@ def root() -> dict[str, str]:
         "name": "AI 台股分析 API",
         "docs": "/docs",
     }
-
 
 @app.get("/health")
 def health() -> dict[str, object]:

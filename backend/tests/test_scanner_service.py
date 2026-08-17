@@ -31,11 +31,17 @@ class ScannerReliabilityTests(unittest.TestCase):
         self.assertEqual(mock_sleep.call_count, 2)
         self.assertIs(scanner_service._cache["payload"], messages)
 
+    @patch("app.services.scanner_service.time.monotonic", return_value=1000.0)
     @patch("app.services.scanner_service.time.sleep")
     @patch("app.services.scanner_service.requests.get")
-    def test_fetch_messages_uses_stale_cache_after_all_retries_fail(self, mock_get: Mock, mock_sleep: Mock) -> None:
+    def test_fetch_messages_uses_stale_cache_after_all_retries_fail(
+        self,
+        mock_get: Mock,
+        mock_sleep: Mock,
+        mock_monotonic: Mock,
+    ) -> None:
         stale = [{"c": "0050", "z": "200", "y": "198"}]
-        scanner_service._cache.update(at=0.0, payload=stale)
+        scanner_service._cache.update(at=1.0, payload=stale)
         mock_get.side_effect = requests.Timeout("down")
 
         messages = scanner_service._fetch_messages()
@@ -43,6 +49,7 @@ class ScannerReliabilityTests(unittest.TestCase):
         self.assertIs(messages, stale)
         self.assertEqual(mock_get.call_count, 3)
         self.assertEqual(mock_sleep.call_count, 2)
+        self.assertGreater(mock_monotonic.return_value - scanner_service._cache["at"], scanner_service._CACHE_TTL_SECONDS)
 
     @patch("app.services.scanner_service.time.sleep")
     @patch("app.services.scanner_service.requests.get")

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { fetchCompetitionPbo } from "@/lib/api";
@@ -52,7 +53,7 @@ export default function PboReportPage() {
   return (
     <main style={{ minHeight: "100vh", padding: "32px", background: "#08111f", color: "#e5edf7", fontFamily: "system-ui, sans-serif" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-        <a href="/" style={{ color: "#93c5fd", textDecoration: "none" }}>← 返回 AI 台股平台</a>
+        <Link href="/" style={{ color: "#93c5fd", textDecoration: "none" }}>← 返回 AI 台股平台</Link>
         <header style={{ margin: "28px 0" }}>
           <p style={{ color: "#5eead4", letterSpacing: 2, fontSize: 12 }}>CSCV / PROBABILITY OF BACKTEST OVERFITTING</p>
           <h1 style={{ margin: "8px 0", fontSize: 36 }}>冠軍跨時間穩定性閘門</h1>

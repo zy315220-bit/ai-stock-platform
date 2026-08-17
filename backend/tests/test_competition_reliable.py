@@ -1,11 +1,34 @@
 from __future__ import annotations
 
+import math
 import unittest
 from unittest.mock import patch
+
+import pandas as pd
 
 from app.services.competition_reliable import _remove_synthetic_segment_end_exit, run_competition_on_frames
 from app.services.trading_costs import TAIWAN_ETF_COST_MODEL
 from app.services import competition_runner as legacy
+
+
+def _synthetic_frames() -> dict[str, pd.DataFrame]:
+    dates = pd.bdate_range(end="2026-08-13", periods=190)
+    frames: dict[str, pd.DataFrame] = {}
+    for symbol_index, code in enumerate(legacy.COMPETITION_UNIVERSE):
+        offset = symbol_index * 3.0
+        prices = [50.0 + offset + index * 0.06 + math.sin(index / 4.0) * 2.4 for index in range(len(dates))]
+        frame = pd.DataFrame(
+            {
+                "Open": [price * 0.998 for price in prices],
+                "High": [price * 1.018 for price in prices],
+                "Low": [price * 0.982 for price in prices],
+                "Close": prices,
+                "Volume": [1_000_000 + (index % 20) * 90_000 for index in range(len(dates))],
+            },
+            index=dates,
+        )
+        frames[code] = legacy._prepare_frame(frame)
+    return frames
 
 
 class CompetitionReliableTests(unittest.TestCase):
@@ -40,20 +63,22 @@ class CompetitionReliableTests(unittest.TestCase):
 
     @patch("app.services.competition_reliable._simulate_symbol_mark_to_market")
     def test_runner_passes_shared_etf_cost_model_to_every_simulation(self, simulate) -> None:
-        frames = legacy._build_synthetic_frames()
         simulate.return_value = {
             "stock_code": "0050", "initial_capital": 250_000.0, "final_capital": 250_000.0,
             "total_return_percent": 0.0, "max_drawdown_percent": 0.0, "trade_count": 0,
-            "winning_trade_count": 0, "win_rate_percent": None, "total_commission": 0.0,
+            "winning_trade_count": 0, "win_rate_percent": 0.0, "total_commission": 0.0,
             "total_transaction_tax": 0.0, "trades": [], "equity_curve": [], "open_positions": [],
         }
-        result = run_competition_on_frames(frames, initial_capital=1_000_000.0)
-        self.assertGreater(simulate.call_count, 0)
+        result = run_competition_on_frames(_synthetic_frames(), initial_capital=1_000_000.0)
+        expected_calls = len(legacy.ROBOT_SPECS) * 2 * len(legacy.COMPETITION_UNIVERSE)
+        self.assertEqual(simulate.call_count, expected_calls)
         for call in simulate.call_args_list:
             self.assertEqual(call.kwargs["commission_rate"], TAIWAN_ETF_COST_MODEL.commission_rate)
             self.assertEqual(call.kwargs["transaction_tax_rate"], TAIWAN_ETF_COST_MODEL.transaction_tax_rate)
         self.assertEqual(result["fairness"]["cost_model_id"], TAIWAN_ETF_COST_MODEL.model_id)
         self.assertEqual(result["fairness"]["instrument_type"], "etf")
+        self.assertEqual(result["fairness"]["commission_rate"], TAIWAN_ETF_COST_MODEL.commission_rate)
+        self.assertEqual(result["fairness"]["transaction_tax_rate"], TAIWAN_ETF_COST_MODEL.transaction_tax_rate)
 
 
 if __name__ == "__main__":

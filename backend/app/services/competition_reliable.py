@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from functools import lru_cache
+import hashlib
+import json
+import math
 from typing import Any
+
+import pandas as pd
 
 from app.services import competition_runner as legacy
 
@@ -68,28 +73,180 @@ def _simulate_symbol_mark_to_market(**kwargs: Any) -> dict[str, Any]:
 
 
 def run_competition_on_frames(
-    frames: dict[str, Any],
+    frames: dict[str, pd.DataFrame],
     *,
     initial_capital: float = DEFAULT_INITIAL_CAPITAL,
     sources: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Run the existing fixed strategies while excluding synthetic boundary exits from win rate."""
-    previous = legacy._simulate_symbol
-    legacy._simulate_symbol = _simulate_symbol_mark_to_market
-    try:
-        result = legacy.run_competition_on_frames(
-            frames,
-            initial_capital=initial_capital,
-            sources=sources,
-        )
-    finally:
-        legacy._simulate_symbol = previous
+    """Run fixed strategies without mutating legacy module globals.
 
-    result.setdefault("disclosures", []).append(
-        "區間結束時仍持有的部位採收盤價 mark-to-market；不建立人工賣出交易，因此不計入勝率或 Wilson 樣本。"
-    )
-    result.setdefault("fairness", {})["segment_end_policy"] = "mark_to_market_open_position"
-    return result
+    The legacy simulator is called directly for each symbol, then synthetic
+    segment-boundary exits are converted into mark-to-market open positions
+    before portfolio statistics and Wilson ranking are calculated.
+    """
+    capital = float(initial_capital)
+    if not math.isfinite(capital) or capital <= 0:
+        raise ValueError("競賽初始資金必須大於 0。")
+    if capital > MAX_INITIAL_CAPITAL:
+        raise ValueError("競賽初始資金不能超過 2,000,000 元。")
+
+    missing = [code for code in legacy.COMPETITION_UNIVERSE if code not in frames]
+    if missing:
+        raise ValueError("競賽缺少股票資料：" + "、".join(missing))
+
+    latest_date = min(pd.Timestamp(frames[code].index.max()) for code in legacy.COMPETITION_UNIVERSE)
+    forward_start = (latest_date - pd.DateOffset(months=1)).normalize()
+    backtest_start = (forward_start - pd.DateOffset(months=2)).normalize()
+    backtest_end = forward_start - pd.Timedelta(days=1)
+    per_symbol_capital = capital / len(legacy.COMPETITION_UNIVERSE)
+    robot_outputs: list[dict[str, Any]] = []
+    ranking_rows: list[dict[str, Any]] = []
+
+    for spec in legacy.ROBOT_SPECS:
+        frozen = legacy.freeze_robot_spec(spec)
+        robot_id = str(spec["robot_id"])
+        segment_outputs: dict[str, dict[str, Any]] = {}
+        for segment, start, end in (
+            ("backtest", backtest_start, backtest_end),
+            ("forward", forward_start, latest_date),
+        ):
+            symbol_results = [
+                _simulate_symbol_mark_to_market(
+                    frame=frames[code],
+                    stock_code=code,
+                    robot_id=robot_id,
+                    segment=segment,
+                    start=start,
+                    end=end,
+                    initial_capital=per_symbol_capital,
+                    commission_rate=legacy.COMMISSION_RATE,
+                    transaction_tax_rate=legacy.ETF_TRANSACTION_TAX_RATE,
+                )
+                for code in legacy.COMPETITION_UNIVERSE
+            ]
+            segment_outputs[segment] = legacy._aggregate_portfolio(
+                symbol_results,
+                initial_capital=capital,
+            )
+            segment_outputs[segment]["open_positions"] = [
+                position
+                for result in symbol_results
+                for position in result.get("open_positions", [])
+            ]
+
+        forward = segment_outputs["forward"]
+        ranking_rows.append(
+            {
+                "robot_id": robot_id,
+                "robot_version": "1",
+                "rule_fingerprint": frozen["rule_fingerprint"],
+                "initial_capital": capital,
+                "period_start": legacy._date_text(forward_start),
+                "period_end": legacy._date_text(latest_date),
+                "cost_model_id": "TWSE-ETF-0.1425-0.1-v1",
+                "risk_model_id": "ATR-2R-STOP-4R-TARGET-v1",
+                "market_universe_id": "TW-ETF-CORE-4-v1",
+                "trade_count": forward["trade_count"],
+                "winning_trade_count": forward["winning_trade_count"],
+                "total_return_percent": forward["total_return_percent"],
+                "max_drawdown_percent": forward["max_drawdown_percent"],
+            }
+        )
+        robot_outputs.append(
+            {
+                "robot_id": robot_id,
+                "name": spec["name"],
+                "family": spec["family"],
+                "rule_fingerprint": frozen["rule_fingerprint"],
+                "spec": spec,
+                "backtest": segment_outputs["backtest"],
+                "forward": forward,
+            }
+        )
+
+    ranking = legacy.rank_robot_results(ranking_rows)
+    rank_by_id = {row["robot_id"]: row for row in ranking["robots"]}
+    for output in robot_outputs:
+        rank_row = rank_by_id[output["robot_id"]]
+        output["rank"] = rank_row["rank"]
+        output["wilson_lower_percent"] = rank_row["wilson_lower_percent"]
+        output["wilson_upper_percent"] = rank_row["wilson_upper_percent"]
+    robot_outputs.sort(key=lambda item: int(item["rank"]))
+
+    leader = robot_outputs[0]
+    forward_trades = int(leader["forward"]["trade_count"])
+    qualified = forward_trades >= legacy.MIN_FORWARD_TRADES_FOR_CHAMPION
+    run_basis = {
+        "latest_date": legacy._date_text(latest_date),
+        "capital": capital,
+        "universe": list(legacy.COMPETITION_UNIVERSE),
+        "fingerprints": [robot["rule_fingerprint"] for robot in robot_outputs],
+    }
+    run_id = hashlib.sha256(json.dumps(run_basis, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+    return {
+        "run_id": run_id,
+        "status": "completed",
+        "executed_at": datetime.now(timezone.utc).isoformat(),
+        "data_sources": sources or {},
+        "periods": {
+            "backtest": {
+                "start": legacy._date_text(backtest_start),
+                "end": legacy._date_text(backtest_end),
+                "purpose": "固定規則的 2 個月歷史檢查，不在執行中調參。",
+            },
+            "forward": {
+                "start": legacy._date_text(forward_start),
+                "end": legacy._date_text(latest_date),
+                "purpose": "最後 1 個月 walk-forward 模擬；正式排名只使用此區間。",
+            },
+        },
+        "fairness": {
+            "initial_capital": round(capital, 2),
+            "capital_per_symbol": round(per_symbol_capital, 2),
+            "market_universe": list(legacy.COMPETITION_UNIVERSE),
+            "commission_rate": legacy.COMMISSION_RATE,
+            "transaction_tax_rate": legacy.ETF_TRANSACTION_TAX_RATE,
+            "execution": "signal at close, execute next session open",
+            "stop_model": f"{legacy.STOP_ATR_MULTIPLE:g} ATR",
+            "target_model": f"{legacy.TARGET_ATR_MULTIPLE:g} ATR",
+            "same_bar_stop_target_policy": "stop first (conservative)",
+            "segment_end_policy": "mark_to_market_open_position",
+            "runner_isolation": "no_global_monkeypatch",
+        },
+        "ranking": {
+            "primary_metric": "forward Wilson 95% win-rate lower bound",
+            "minimum_forward_trades_for_champion": legacy.MIN_FORWARD_TRADES_FOR_CHAMPION,
+            "leader_status": "qualified" if qualified else "provisional",
+        },
+        "leader": {
+            "robot_id": leader["robot_id"],
+            "name": leader["name"],
+            "rank": 1,
+            "qualified": qualified,
+            "reason": (
+                "已達最低前瞻交易樣本門檻。"
+                if qualified
+                else f"目前僅 {forward_trades} 筆前瞻交易，未達 {legacy.MIN_FORWARD_TRADES_FOR_CHAMPION} 筆門檻。"
+            ),
+        },
+        "robots": robot_outputs,
+        "disclosures": [
+            "目前的 1 個月區間是 walk-forward 歷史模擬，不冒充部署後累積的真實實盤前瞻紀錄。",
+            "EMA、RSI、MACD、布林通道、KD、成交量與 ATR 的具體期間／門檻是固定的 v1 實證參數，不代表論文證明其為最優值。",
+            "現階段只做多、無槓桿，且每檔 ETF 使用固定等額資金；所有已完成交易均保存進出場與成本。",
+            "區間結束時仍持有的部位採收盤價 mark-to-market；不建立人工賣出交易，因此不計入勝率或 Wilson 樣本。",
+        ],
+        "references": [
+            legacy.BROCK_REFERENCE,
+            legacy.MOMENTUM_REFERENCE,
+            legacy.TIME_SERIES_MOMENTUM_REFERENCE,
+            legacy.REVERSAL_REFERENCE,
+            legacy.VOLUME_MOMENTUM_REFERENCE,
+            legacy.VOLATILITY_REFERENCE,
+            legacy.TECHNICAL_PATTERN_REFERENCE,
+        ],
+    }
 
 
 @lru_cache(maxsize=8)

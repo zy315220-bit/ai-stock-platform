@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { fetchCompetitionPbo } from "@/lib/api";
 import type { CompetitionPboResponse } from "@/types/stock";
 
 function pct(value: number): string {
   return `${value.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
+}
+
+function pboLevel(value: number): { label: string; verdict: string } {
+  if (value <= 25) return { label: "低", verdict: "跨時間結果目前沒有顯示明顯的策略挑選過擬合。" };
+  if (value <= 50) return { label: "中", verdict: "存在過擬合風險，冠軍只能列為候選，不能直接認定為最佳策略。" };
+  return { label: "高", verdict: "樣本內冠軍經常在樣本外落後，暫停授予正式冠軍。" };
 }
 
 export default function PboReportPage() {
@@ -26,10 +32,22 @@ export default function PboReportPage() {
     }
   }
 
-  const pbo = report?.pbo;
-  const selectionRows = pbo
-    ? Object.entries(pbo.selection_counts).sort((a, b) => b[1] - a[1])
-    : [];
+  const ranking = useMemo(() => {
+    if (!report) return [];
+    return report.matrix.robot_ids.map((robotId, robotIndex) => {
+      const values = report.matrix.matrix.map((slice) => slice[robotIndex]).filter(Number.isFinite);
+      const mean = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+      const positive = values.filter((value) => value > 0).length;
+      const selected = report.pbo.selection_counts[robotId] ?? 0;
+      return { robotId, mean, positive, slices: values.length, selected };
+    }).sort((a, b) => b.selected - a.selected || b.mean - a.mean);
+  }, [report]);
+
+  const candidate = ranking[0] ?? null;
+  const level = report ? pboLevel(report.pbo.pbo_percent) : null;
+  const championGate = report && candidate
+    ? report.pbo.pbo_percent <= 25 && candidate.positive >= Math.ceil(candidate.slices * 0.6)
+    : false;
 
   return (
     <main style={{ minHeight: "100vh", padding: "32px", background: "#08111f", color: "#e5edf7", fontFamily: "system-ui, sans-serif" }}>
@@ -37,27 +55,28 @@ export default function PboReportPage() {
         <a href="/" style={{ color: "#93c5fd", textDecoration: "none" }}>← 返回 AI 台股平台</a>
         <header style={{ margin: "28px 0" }}>
           <p style={{ color: "#5eead4", letterSpacing: 2, fontSize: 12 }}>CSCV / PROBABILITY OF BACKTEST OVERFITTING</p>
-          <h1 style={{ margin: "8px 0", fontSize: 36 }}>跨時間穩定性檢驗</h1>
-          <p style={{ color: "#9fb0c6", maxWidth: 820, lineHeight: 1.7 }}>
-            不只看單一回測冠軍。系統把共同歷史切成時間片，反覆用一半時間選策略、另一半時間驗證，估計「挑到樣本內冠軍後，樣本外反而落後」的機率。
+          <h1 style={{ margin: "8px 0", fontSize: 36 }}>冠軍跨時間穩定性閘門</h1>
+          <p style={{ color: "#9fb0c6", maxWidth: 850, lineHeight: 1.7 }}>
+            16 個固定策略先在共同歷史上形成 12×16 績效矩陣，再以 CSCV 反覆做樣本內選拔與樣本外驗證。這一頁不再只報 PBO，而是直接判斷目前是否有資格把某個策略升格為「穩健冠軍」。
           </p>
         </header>
 
         <button onClick={() => void run()} disabled={loading} style={{ padding: "12px 18px", borderRadius: 10, border: 0, fontWeight: 700, cursor: loading ? "wait" : "pointer" }}>
-          {loading ? "正在執行 12×16 跨時間檢驗…" : report ? "重新執行 CSCV / PBO" : "執行 CSCV / PBO"}
+          {loading ? "正在執行跨時間檢驗…" : report ? "重新執行穩定性閘門" : "執行穩定性閘門"}
         </button>
 
         {error ? <p role="alert" style={{ marginTop: 18, padding: 14, border: "1px solid #ef4444", borderRadius: 10 }}>{error}</p> : null}
 
-        {report && pbo ? (
+        {report && level ? (
           <>
             <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginTop: 28 }}>
               {[
-                ["PBO", pct(pbo.pbo_percent)],
+                ["PBO", pct(report.pbo.pbo_percent)],
+                ["過擬合風險", level.label],
                 ["時間切片", `${report.slice_count} 個`],
                 ["固定策略", `${report.strategy_count} 個`],
-                ["CSCV 分割", `${pbo.split_count} 組`],
-                ["過擬合分割", `${pbo.overfit_split_count} 組`],
+                ["CSCV 分割", `${report.pbo.split_count} 組`],
+                ["過擬合分割", `${report.pbo.overfit_split_count} 組`],
               ].map(([label, value]) => (
                 <article key={label} style={{ padding: 18, border: "1px solid #22324a", borderRadius: 14, background: "#0d192a" }}>
                   <span style={{ display: "block", color: "#8ea0b8", fontSize: 13 }}>{label}</span>
@@ -66,56 +85,57 @@ export default function PboReportPage() {
               ))}
             </section>
 
+            <article style={{ marginTop: 18, padding: 24, border: `1px solid ${championGate ? "#34d399" : "#f59e0b"}`, borderRadius: 14, background: "#0d192a" }}>
+              <p style={{ margin: 0, color: championGate ? "#6ee7b7" : "#fbbf24", fontWeight: 800, letterSpacing: 1 }}>ROBUSTNESS GATE</p>
+              <h2 style={{ marginBottom: 8 }}>{championGate ? "通過：可列為穩健冠軍候選" : "未通過：暫不授予穩健冠軍"}</h2>
+              <p style={{ color: "#b8c5d6", lineHeight: 1.8 }}>{level.verdict}</p>
+              {candidate ? (
+                <p style={{ lineHeight: 1.8 }}>
+                  跨時間候選：<strong>{candidate.robotId}</strong>；樣本內被選為最佳 {candidate.selected} 次；
+                  {candidate.slices} 個月度切片中有 {candidate.positive} 個為正報酬；平均月度淨報酬 {pct(candidate.mean)}。
+                </p>
+              ) : null}
+              <small style={{ color: "#8ea0b8" }}>
+                目前閘門規則：PBO ≤ 25%，且候選策略至少 60% 時間切片為正報酬。此閘門是額外穩健性條件，不取代競賽頁的 Wilson 95% 下界與最低交易樣本門檻。
+              </small>
+            </article>
+
             <article style={{ marginTop: 18, padding: 22, border: "1px solid #22324a", borderRadius: 14, background: "#0d192a" }}>
-              <h2 style={{ marginTop: 0 }}>這個數字代表什麼？</h2>
-              <p style={{ color: "#b8c5d6", lineHeight: 1.8 }}>{pbo.interpretation}</p>
-              <p style={{ color: "#fbbf24", lineHeight: 1.7 }}>{pbo.warning || report.warning}</p>
+              <h2 style={{ marginTop: 0 }}>16 台策略跨時間摘要</h2>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+                  <thead><tr>{["策略", "樣本內獲選", "正報酬切片", "平均月報酬", "穩定率"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #334155", color: "#94a3b8" }}>{head}</th>)}</tr></thead>
+                  <tbody>{ranking.map((row) => (
+                    <tr key={row.robotId}>
+                      <td style={{ padding: 10, borderBottom: "1px solid #1e293b", fontWeight: 700 }}>{row.robotId}</td>
+                      <td style={{ padding: 10, borderBottom: "1px solid #1e293b" }}>{row.selected} 次</td>
+                      <td style={{ padding: 10, borderBottom: "1px solid #1e293b" }}>{row.positive} / {row.slices}</td>
+                      <td style={{ padding: 10, borderBottom: "1px solid #1e293b" }}>{pct(row.mean)}</td>
+                      <td style={{ padding: 10, borderBottom: "1px solid #1e293b" }}>{row.slices ? pct((row.positive / row.slices) * 100) : "—"}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
             </article>
 
             <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18, marginTop: 18 }}>
               <article style={{ padding: 22, border: "1px solid #22324a", borderRadius: 14, background: "#0d192a" }}>
-                <h2 style={{ marginTop: 0 }}>樣本內被選為冠軍的次數</h2>
-                <div style={{ display: "grid", gap: 9 }}>
-                  {selectionRows.map(([robotId, count]) => (
-                    <div key={robotId} style={{ display: "flex", justifyContent: "space-between", gap: 14, paddingBottom: 8, borderBottom: "1px solid #1d2a3d" }}>
-                      <code>{robotId}</code><strong>{count}</strong>
-                    </div>
-                  ))}
-                </div>
+                <h2 style={{ marginTop: 0 }}>PBO 解讀</h2>
+                <p style={{ color: "#b8c5d6", lineHeight: 1.8 }}>{report.pbo.interpretation}</p>
+                <p style={{ color: "#fbbf24", lineHeight: 1.7 }}>{report.pbo.warning || report.warning}</p>
               </article>
-
               <article style={{ padding: 22, border: "1px solid #22324a", borderRadius: 14, background: "#0d192a" }}>
-                <h2 style={{ marginTop: 0 }}>檢驗設定</h2>
-                <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, color: "#b8c5d6" }}>
-                  <dt>績效指標</dt><dd>{report.metric}</dd>
-                  <dt>每片長度</dt><dd>{report.slice_months} 個月</dd>
-                  <dt>成本模型</dt><dd>{report.cost_model_id}</dd>
-                  <dt>資料來源</dt><dd>{report.source}</dd>
-                  <dt>股票池</dt><dd>{report.market_universe.join("、")}</dd>
-                  <dt>矩陣狀態</dt><dd>{report.matrix.ready_for_pbo ? "可進行 PBO" : "資料不足"}</dd>
-                </dl>
+                <h2 style={{ marginTop: 0 }}>可稽核條件</h2>
+                <p style={{ color: "#b8c5d6", lineHeight: 1.8 }}>
+                  指標：{report.metric}<br />
+                  執行：{report.matrix.execution}<br />
+                  成本模型：{report.cost_model_id}<br />
+                  股票池：{report.market_universe.join("、")}<br />
+                  資料：{report.source}
+                </p>
               </article>
             </section>
-
-            <article style={{ marginTop: 18, padding: 22, border: "1px solid #22324a", borderRadius: 14, background: "#0d192a", overflowX: "auto" }}>
-              <h2 style={{ marginTop: 0 }}>跨時間績效矩陣</h2>
-              <p style={{ color: "#8ea0b8" }}>每列是一個時間切片，每欄是一個固定規則機器人；數值為扣除成本後總報酬率。</p>
-              <table style={{ borderCollapse: "collapse", minWidth: 1000, width: "100%", fontSize: 12 }}>
-                <thead><tr><th style={{ textAlign: "left", padding: 8 }}>Slice</th>{report.matrix.robot_ids.map((id) => <th key={id} style={{ padding: 8, writingMode: "vertical-rl", height: 130 }}>{id}</th>)}</tr></thead>
-                <tbody>{report.matrix.matrix.map((row, rowIndex) => <tr key={rowIndex}><th style={{ textAlign: "left", padding: 8 }}>#{rowIndex + 1}</th>{row.map((value, colIndex) => <td key={colIndex} style={{ padding: 8, textAlign: "right", borderTop: "1px solid #1d2a3d" }}>{value.toFixed(2)}%</td>)}</tr>)}</tbody>
-              </table>
-            </article>
-
-            <article style={{ marginTop: 18, padding: 22, border: "1px solid #22324a", borderRadius: 14, background: "#0d192a", overflowX: "auto" }}>
-              <h2 style={{ marginTop: 0 }}>CSCV 分割稽核（前 40 筆）</h2>
-              <table style={{ borderCollapse: "collapse", minWidth: 760, width: "100%", fontSize: 13 }}>
-                <thead><tr><th>選中策略</th><th>IS 報酬</th><th>OOS 報酬</th><th>OOS Rank</th><th>相對排名</th><th>Logit</th><th>過擬合</th></tr></thead>
-                <tbody>{pbo.records.slice(0, 40).map((record, index) => <tr key={`${record.selected_robot_id}-${index}`}><td style={{ padding: 8 }}>{record.selected_robot_id}</td><td style={{ textAlign: "right" }}>{pct(record.is_mean_return_percent)}</td><td style={{ textAlign: "right" }}>{pct(record.oos_mean_return_percent)}</td><td style={{ textAlign: "right" }}>{record.oos_rank}</td><td style={{ textAlign: "right" }}>{record.oos_relative_rank.toFixed(3)}</td><td style={{ textAlign: "right" }}>{record.logit.toFixed(3)}</td><td style={{ textAlign: "center" }}>{record.overfit ? "是" : "否"}</td></tr>)}</tbody>
-              </table>
-            </article>
           </>
-        ) : !loading ? (
-          <p style={{ marginTop: 24, color: "#8ea0b8" }}>尚未執行。這項檢驗運算量高，因此不會在首頁自動觸發。</p>
         ) : null}
       </div>
     </main>

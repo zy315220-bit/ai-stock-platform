@@ -10,7 +10,7 @@ from app.services.competition_service import (
     freeze_robot_spec,
     rank_robot_results,
 )
-from app.services.competition_runner import (
+from app.services.competition_reliable import (
     DEFAULT_INITIAL_CAPITAL,
     MAX_INITIAL_CAPITAL,
     run_competition,
@@ -22,11 +22,11 @@ router = APIRouter()
 
 @router.get(
     "/run",
-    summary="執行四個固定規則機器人的公平競賽",
+    summary="執行固定規則機器人的公平競賽",
     description=(
         "使用相同股票池、初始資金、交易成本與 ATR 風控，"
         "執行 2 個月歷史檢查及 1 個月 walk-forward 模擬；"
-        "正式排序只使用 forward 區間。"
+        "正式排序只使用 forward 區間，區間末未平倉部位採 mark-to-market。"
     ),
 )
 async def get_competition_run(

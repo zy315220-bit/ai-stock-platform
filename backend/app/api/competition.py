@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, status
 from starlette.concurrency import run_in_threadpool
 
+from app.services.champion_gate import evaluate_champion_gate
 from app.services.competition_service import competition_methodology, freeze_robot_spec, rank_robot_results
 from app.services.competition_reliable import DEFAULT_INITIAL_CAPITAL, MAX_INITIAL_CAPITAL, run_competition
 from app.services import competition_runner as legacy
@@ -54,6 +55,49 @@ async def get_competition_pbo(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="取得 CSCV/PBO 所需官方歷史資料逾時，請稍後再試。") from error
     except Exception as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="CSCV/PBO 分析目前無法完成，請稍後再試。") from error
+
+
+@router.get(
+    "/champion",
+    summary="執行正式冠軍資格判定",
+    description="同一次請求執行公平競賽與 CSCV/PBO，並只對競賽 leader 本人套用統一 Champion Gate。正式冠軍必須同時通過 forward/Wilson 樣本資格與跨時間穩健性門檻。",
+)
+async def get_official_champion(
+    initial_capital: float = Query(default=DEFAULT_INITIAL_CAPITAL, gt=0, le=MAX_INITIAL_CAPITAL),
+    slice_months: int = Query(default=1, ge=1, le=3),
+    max_slices: int = Query(default=12, ge=4, le=12),
+) -> dict[str, Any]:
+    if max_slices % 2:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="正式冠軍 CSCV/PBO 的 max_slices 必須是偶數。")
+    try:
+        competition = await run_in_threadpool(run_competition, initial_capital)
+        frames, sources = await run_in_threadpool(legacy._download_competition_frames)
+        pbo_analysis = await run_in_threadpool(
+            analyze_historical_selection_overfit,
+            frames,
+            initial_capital=initial_capital,
+            slice_months=slice_months,
+            max_slices=max_slices,
+        )
+        champion = evaluate_champion_gate(competition=competition, pbo_analysis=pbo_analysis)
+        return {
+            "status": "completed",
+            "champion": champion,
+            "competition_run_id": competition.get("run_id"),
+            "competition_leader": competition.get("leader"),
+            "pbo_percent": pbo_analysis.get("pbo", {}).get("pbo_percent"),
+            "slice_count": pbo_analysis.get("slice_count"),
+            "strategy_count": pbo_analysis.get("strategy_count"),
+            "data_sources": sources,
+            "policy": champion["policy"],
+            "warning": "正式冠軍資格是歷史與 forward 統計證據的品質閘門，不代表未來獲利保證。",
+        }
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except TimeoutError as error:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="取得正式冠軍判定所需資料逾時，請稍後再試。") from error
+    except Exception as error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="正式冠軍資格判定目前無法完成，請稍後再試。") from error
 
 
 @router.get("/methodology", summary="取得機器人競賽方法")

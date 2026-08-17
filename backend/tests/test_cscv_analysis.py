@@ -26,13 +26,14 @@ class CSCVAnalysisTests(unittest.TestCase):
         pbo = {"method": "CSCV-PBO-v1", "pbo": 0.25, "pbo_percent": 25.0, "split_count": 924}
         build_matrix.return_value = matrix
         calculate_pbo.return_value = pbo
+        frames = {"placeholder": object()}
 
         result = analyze_historical_selection_overfit(
-            {"placeholder": object()}, initial_capital=1_000_000.0, slice_months=1, max_slices=12
+            frames, initial_capital=1_000_000.0, slice_months=1, max_slices=12
         )
 
         build_matrix.assert_called_once_with(
-            {"placeholder": object()}, initial_capital=1_000_000.0, slice_months=1, max_slices=12
+            frames, initial_capital=1_000_000.0, slice_months=1, max_slices=12
         )
         calculate_pbo.assert_called_once_with(matrix)
         self.assertEqual(result["status"], "completed")

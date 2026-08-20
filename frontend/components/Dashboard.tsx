@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 32501)
-Total output lines: 4117
-
 "use client";
 /* eslint-disable react-hooks/refs -- refs are read only inside event handlers attached by render helpers. */
 
@@ -2314,7 +2311,240 @@ export default function Dashboard() {
                 >
                   重新回測
                 </button>
-              …2501 tokens truncated…       訊號時間、成交價格、費用與退出原因逐筆保留，讓好看的報酬不藏住壞假設。
+              ) : null}
+            </div>
+          ) : null}
+
+          {backtestLoading && backtest ? (
+            <div className="request-notice request-notice-compact" role="status">
+              <div>
+                <strong>{backtestLoadingStage(backtestLoadingSeconds)}</strong>
+                <span>已執行 {formatElapsedTime(backtestLoadingSeconds)}；目前顯示上一筆結果，完成後會自動更新。</span>
+              </div>
+            </div>
+          ) : null}
+
+          {backtestLoading && !backtest ? (
+            <DataLoadingPanel
+              code={data.stock.code}
+              elapsedSeconds={backtestLoadingSeconds}
+              kind="backtest"
+              onCancel={cancelBacktest}
+            />
+          ) : null}
+
+          {backtest ? (
+            <>
+              <p className="backtest-period">
+                實際資料期間：{backtest.actual_start_date} 至 {backtest.actual_end_date}
+                {" ・ "}{backtest.data_source}
+                {" ・ "}約 {formatNumber(backtest.history_coverage.available_years)} 年
+              </p>
+              {!backtest.history_coverage.long_horizon_qualified ? (
+                <p className="backtest-note">
+                  {!backtest.history_coverage.complete_month_coverage
+                    ? `官方資料缺少月份：${backtest.history_coverage.missing_months.join("、")}，本次不能視為完整長期回測。`
+                    : "這檔商品可用資料不足 3 年，不能視為長期回測；可能是上市時間較短。"}
+                </p>
+              ) : null}
+              {backtest.history_recovery?.recovered ? (
+                <p className="data-recovery-note">
+                  系統偵測到首批歷史資料不足，已自動補齊 {backtest.history_recovery.initial_rows} → {backtest.history_recovery.final_rows} 筆（共嘗試 {backtest.history_recovery.attempts} 次）。
+                </p>
+              ) : null}
+              <div className="backtest-grid">
+                <MetricCard
+                  label="策略報酬"
+                  value={`${formatNumber(backtest.total_return_percent)}%`}
+                  detail={`含配息 NT$${formatInteger(backtest.total_dividends)}`}
+                  tone={backtest.total_return_percent >= 0 ? "positive" : "negative"}
+                />
+                <MetricCard
+                  label="同期持有（含息）"
+                  value={`${formatNumber(backtest.buy_and_hold.return_percent)}%`}
+                  detail={`配息 NT$${formatInteger(backtest.buy_and_hold.total_dividends)}`}
+                  tone={backtest.buy_and_hold.return_percent >= 0 ? "positive" : "negative"}
+                />
+                <MetricCard
+                  label="相對績效"
+                  value={`${formatNumber(backtest.alpha_percent)}%`}
+                  tone={backtest.alpha_percent >= 0 ? "positive" : "negative"}
+                />
+                <MetricCard
+                  label="最大回撤"
+                  value={`${formatNumber(backtest.max_drawdown_percent)}%`}
+                  tone="negative"
+                />
+                <MetricCard
+                  label="交易／勝率"
+                  value={`${backtest.trade_count} 次／${formatNumber(backtest.win_rate_percent)}%`}
+                />
+              </div>
+              <p className="backtest-note">
+                已依股價分割調整歷史價格，並納入證交所公告配息；過去績效不代表未來結果。若策略報酬低於同期持有，代表目前規則仍需調整，不能因名稱含 AI 就視為有效。
+              </p>
+            </>
+          ) : backtestLoading ? null : (
+            <p className="empty-state">
+              回測不會自動下單。按下執行後，系統會用最近五年官方資料比較量化策略與同期持有績效。
+            </p>
+          )}
+        </article>
+      </>
+    );
+  }
+
+
+  function renderVisitorGuide() {
+    return (
+      <>
+        <section className="platform-guide" aria-label="平台使用說明">
+          <article className="panel guide-card">
+            <span className="panel-kicker">DATA SOURCES</span>
+            <h2>資料從哪裡來</h2>
+            <p>
+              上市與 ETF 日線以臺灣證券交易所資料為主，上櫃日線以櫃買中心資料為主；每次分析都會標示實際資料來源與更新時間。
+            </p>
+          </article>
+
+          <article className="panel guide-card">
+            <span className="panel-kicker">SCORE ENGINE V2</span>
+            <h2>AI 分數代表什麼</h2>
+            <p>
+              綜合趨勢、位置、觸發、風險與量價環境形成 0–100 分，用來整理條件強弱，不代表獲利保證或買賣指令。
+            </p>
+          </article>
+
+          <article className="panel guide-card">
+            <span className="panel-kicker">POSITION MODE</span>
+            <h2>先選擇持股狀態</h2>
+            <p>
+              「尚未持有」著重進場資格；「已持有」著重續抱、減碼與風險管理。同一檔股票可能因持股狀態得到不同說明。
+            </p>
+          </article>
+        </section>
+
+        <section className="risk-note" aria-label="風險提醒">
+          <strong>使用前請注意</strong>
+          <p>
+            本平台不會自動下單。分析與回測僅供研究參考，歷史績效不代表未來結果；投資前仍應自行評估價格波動、流動性與可承受損失。
+          </p>
+        </section>
+      </>
+    );
+  }
+
+
+  function renderHomePage() {
+    const quickCode = stockCode.trim() || "2330";
+
+    if (!data) {
+      return (
+        <>
+          <section className="home-hero">
+            <div className="home-hero-copy">
+              <div className="hero-status">
+                <span className="status-dot" />
+                <span>{serviceLabel}</span>
+                <i />
+                <span>16 台策略在線</span>
+              </div>
+
+              <p className="eyebrow">EVIDENCE BEFORE OPINION</p>
+              <h1>
+                把市場雜訊，
+                <span>變成可驗證的訊號。</span>
+              </h1>
+              <p className="hero-lead">
+                技術面、基本面、消息面分開計算，再讓固定規則的機器人公平競賽。
+                每筆訊號遵守 T+1 成交，績效計入成本。
+              </p>
+
+              <div className="hero-actions">
+                <button
+                  className="hero-primary"
+                  disabled={loading}
+                  onClick={() => void load(quickCode, true)}
+                  type="button"
+                >
+                  {loading ? "正在分析 " + quickCode : "立即分析 " + quickCode}
+                  <span aria-hidden="true">↗</span>
+                </button>
+                <button
+                  className="hero-secondary"
+                  onClick={() => changePage("competition")}
+                  type="button"
+                >
+                  查看 {robotSpecs.length} 台策略競賽
+                </button>
+              </div>
+
+              <div className="hero-trust-list">
+                <span><i>✓</i> 不偷看未來</span>
+                <span><i>✓</i> 計入交易成本</span>
+                <span><i>✓</i> 規則版本固定</span>
+              </div>
+            </div>
+
+            <MarketSignalVisual />
+          </section>
+
+          <section className="home-proof-strip" aria-label="平台驗證重點">
+            <article>
+              <strong>{robotSpecs.length}</strong>
+              <span>台固定規則機器人</span>
+            </article>
+            <article>
+              <strong>3</strong>
+              <span>面向獨立評分</span>
+            </article>
+            <article>
+              <strong>T+1</strong>
+              <span>訊號與成交分離</span>
+            </article>
+            <article>
+              <strong>95%</strong>
+              <span>Wilson 勝率區間</span>
+            </article>
+          </section>
+
+          <section className="home-feature-grid">
+            <article className="home-feature-card feature-large">
+              <div className="feature-icon feature-icon-mint">01</div>
+              <p className="panel-kicker">THREE-LENS ANALYSIS</p>
+              <h2>三個視角，不互相掩蓋</h2>
+              <p>
+                技術面看價格與趨勢，基本面看企業品質，消息面追蹤事件風險。
+                每個分數保留來源與理由。
+              </p>
+              <div className="lens-bars" aria-label="三面分析視覺示意">
+                <span><i style={{ width: "78%" }} /><em>技術面</em></span>
+                <span><i style={{ width: "64%" }} /><em>基本面</em></span>
+                <span><i style={{ width: "52%" }} /><em>消息面</em></span>
+              </div>
+              <button onClick={() => changePage("analysis")} type="button">
+                開始研究個股 <span>→</span>
+              </button>
+            </article>
+
+            <article className="home-feature-card">
+              <div className="feature-icon feature-icon-gold">02</div>
+              <p className="panel-kicker">ROBOT ARENA</p>
+              <h2>讓策略用同一把尺競賽</h2>
+              <p>
+                同一區間、同一成本與同一成交規則，比較趨勢、反轉、突破與風險控制。
+              </p>
+              <button onClick={() => changePage("competition")} type="button">
+                看完整排行榜 <span>→</span>
+              </button>
+            </article>
+
+            <article className="home-feature-card">
+              <div className="feature-icon feature-icon-blue">03</div>
+              <p className="panel-kicker">AUDITABLE BY DESIGN</p>
+              <h2>漂亮之外，也能被檢查</h2>
+              <p>
+                訊號時間、成交價格、費用與退出原因逐筆保留，讓好看的報酬不藏住壞假設。
               </p>
               <button onClick={() => changePage("competition")} type="button">
                 查看競賽揭露 <span>→</span>

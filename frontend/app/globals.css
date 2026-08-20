@@ -1888,7 +1888,7 @@ button, input, select { font: inherit; }
 .sector-ranking-head,
 .sector-ranking-list > div {
   display: grid;
-  grid-template-columns: 64px minmax(150px, 1.2fr) minmax(90px, 0.8fr) minmax(90px, 0.7fr) 70px;
+  grid-template-columns: 54px minmax(130px, 1.2fr) repeat(3, minmax(72px, 0.65fr)) minmax(88px, 0.75fr);
   gap: 12px;
   align-items: center;
 }
@@ -1909,6 +1909,29 @@ button, input, select { font: inherit; }
 .sector-ranking-list strong { font-size: 12px; }
 .sector-ranking-list span { color: #8ea0b2; font-size: 10px; }
 .sector-ranking-list b { font-size: 11px; }
+.sector-trend-cell { display: grid; gap: 3px; }
+.sector-trend-cell strong { color: #dbe7ff; }
+.sector-trend-cell small { color: #71839a; font-size: 8px; }
+.sector-view-tabs {
+  margin-bottom: 14px;
+  display: flex;
+  gap: 7px;
+}
+.sector-view-tabs button {
+  padding: 7px 10px;
+  border: 1px solid #263449;
+  border-radius: 7px;
+  color: #8d9bb0;
+  background: #0c131f;
+  font-size: 9px;
+  cursor: pointer;
+}
+.sector-view-tabs button.active {
+  border-color: #4255ad;
+  color: #eef2ff;
+  background: #1e2857;
+}
+.sector-view-tabs button:disabled { cursor: not-allowed; opacity: .45; }
 
 @keyframes draw-signal {
   to { stroke-dashoffset: 0; }
@@ -2035,9 +2058,10 @@ button, input, select { font: inherit; }
   .market-overview-grid { grid-template-columns: 1fr; }
   .sector-ranking-head { display: none; }
   .sector-ranking-list > div {
-    grid-template-columns: 34px minmax(0, 1fr) auto;
+    grid-template-columns: 28px minmax(92px, 1fr) minmax(58px, .7fr) minmax(58px, .7fr);
   }
   .sector-ranking-list > div > span:nth-child(3),
+  .sector-ranking-list > div > b:nth-child(3),
   .sector-ranking-list > div > span:last-child { display: none; }
   .competition-runbar { align-items: stretch; flex-direction: column; }
   .competition-runbar button { width: 100%; }

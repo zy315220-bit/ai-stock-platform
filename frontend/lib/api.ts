@@ -19,6 +19,10 @@ type CompetitionRequestOptions = RequestOptions & {
   refreshKey?: number;
 };
 
+type MarketRequestOptions = RequestOptions & {
+  refreshKey?: number;
+};
+
 export type HealthResponse = {
   demo_mode: boolean;
   status: string;
@@ -206,12 +210,21 @@ export async function fetchDailyScanner(
 }
 
 export async function fetchMarketOverview(
-  options: RequestOptions = {},
+  options: MarketRequestOptions = {},
 ): Promise<MarketOverviewResponse> {
+  const { refreshKey, ...requestOptions } = options;
+  const query = new URLSearchParams();
+
+  if (refreshKey) {
+    query.set("refresh", String(refreshKey));
+  }
+
+  const queryString = query.toString();
   return fetchJson<MarketOverviewResponse>(
-    `${API_BASE_URL}/api/stocks/market/overview`,
+    `${API_BASE_URL}/api/stocks/market/overview${queryString ? `?${queryString}` : ""}`,
     {
-      ...options,
+      ...requestOptions,
+      cache: requestOptions.cache ?? "default",
       timeoutMs: 30_000,
       timeoutError: "官方市場總覽更新逾時，請稍後再試。",
       networkError: "目前無法連接市場總覽服務。",

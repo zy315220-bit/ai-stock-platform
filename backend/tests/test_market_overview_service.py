@@ -1,4 +1,8 @@
-from app.services.market_overview_service import build_market_overview
+from app.services.market_overview_service import (
+    _calendar_dates_from_payload,
+    _price_index_rows_from_payload,
+    build_market_overview,
+)
 
 
 def test_market_overview_combines_official_market_rows() -> None:
@@ -87,3 +91,90 @@ def test_market_overview_marks_mismatched_exchange_dates() -> None:
     assert result["dates_aligned"] is False
     assert result["source_dates"] == ["2026-08-19", "2026-08-20"]
     assert result["indices"]["twse"]["change"] == -100
+
+
+def test_market_overview_builds_multi_session_sector_ranking() -> None:
+    current_indices = [
+        {
+            "日期": "1150820",
+            "指數": "發行量加權股價指數",
+            "收盤指數": "1000",
+            "漲跌百分比": "1.00",
+        },
+        {
+            "日期": "1150820",
+            "指數": "半導體類指數",
+            "收盤指數": "220",
+            "漲跌百分比": "2.00",
+        },
+        {
+            "日期": "1150820",
+            "指數": "航運類指數",
+            "收盤指數": "95",
+            "漲跌百分比": "-1.00",
+        },
+    ]
+    five_day_indices = [
+        {"日期": "1150813", "指數": "發行量加權股價指數", "收盤指數": "980"},
+        {"日期": "1150813", "指數": "半導體類指數", "收盤指數": "200"},
+        {"日期": "1150813", "指數": "航運類指數", "收盤指數": "100"},
+    ]
+    twenty_day_indices = [
+        {"日期": "1150723", "指數": "發行量加權股價指數", "收盤指數": "950"},
+        {"日期": "1150723", "指數": "半導體類指數", "收盤指數": "180"},
+        {"日期": "1150723", "指數": "航運類指數", "收盤指數": "90"},
+    ]
+
+    result = build_market_overview(
+        current_indices,
+        [],
+        [],
+        [],
+        sector_history={
+            "as_of": "2026-08-20",
+            "five_session_start": "2026-08-13",
+            "twenty_session_start": "2026-07-23",
+            "five_session_rows": five_day_indices,
+            "twenty_session_rows": twenty_day_indices,
+        },
+    )
+
+    semiconductor = next(
+        sector for sector in result["sectors"] if sector["name"] == "半導體"
+    )
+    shipping = next(
+        sector for sector in result["sectors"] if sector["name"] == "航運"
+    )
+
+    assert result["sector_trend"]["available"] is True
+    assert semiconductor["return_5d"] == 10.0
+    assert semiconductor["return_20d"] == 22.22
+    assert semiconductor["excess_20d"] == 16.96
+    assert semiconductor["trend_rank"] == 1
+    assert semiconductor["trend_label"] == "持續轉強"
+    assert shipping["trend_rank"] == 2
+
+
+def test_official_history_payload_parsers() -> None:
+    calendar_dates = _calendar_dates_from_payload(
+        {"data": [["115/08/19", "1"], ["115/08/20", "2"]]}
+    )
+    rows = _price_index_rows_from_payload(
+        {
+            "date": "20260820",
+            "tables": [
+                {
+                    "title": "115年08月20日 價格指數(臺灣證券交易所)",
+                    "fields": ["指數", "收盤指數", "漲跌百分比(%)"],
+                    "data": [["半導體類指數", "1,600", "1.2"]],
+                }
+            ],
+        }
+    )
+
+    assert [item.isoformat() for item in calendar_dates] == [
+        "2026-08-19",
+        "2026-08-20",
+    ]
+    assert rows[0]["指數"] == "半導體類指數"
+    assert rows[0]["日期"] == "2026-08-20"

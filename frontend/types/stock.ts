@@ -207,6 +207,13 @@ export type SectorSnapshot = {
   change_percent: number;
   direction: "上漲" | "下跌" | "持平";
   rank: number;
+  return_5d: number | null;
+  return_20d: number | null;
+  excess_5d: number | null;
+  excess_20d: number | null;
+  trend_score: number | null;
+  trend_rank: number | null;
+  trend_label: string;
 };
 
 export type MarketOverviewResponse = {
@@ -228,6 +235,13 @@ export type MarketOverviewResponse = {
     regime_reason: string;
   };
   sectors: SectorSnapshot[];
+  sector_trend: {
+    available: boolean;
+    as_of: string | null;
+    five_session_start: string | null;
+    twenty_session_start: string | null;
+    method: string;
+  };
   method: string;
   sources: Array<{
     name: string;

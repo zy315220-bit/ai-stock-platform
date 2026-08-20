@@ -5,7 +5,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import requests
@@ -18,6 +18,12 @@ TWSE_QUOTES_URL = (
 TPEX_INDEX_URL = "https://www.tpex.org.tw/openapi/v1/tpex_index"
 TPEX_QUOTES_URL = (
     "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"
+)
+TWSE_TRADING_CALENDAR_URL = (
+    "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK"
+)
+TWSE_DAILY_INDEX_URL = (
+    "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
 )
 
 REQUEST_TIMEOUT = 10
@@ -92,8 +98,31 @@ def _request_rows(url: str) -> list[dict[str, Any]]:
     return [item for item in payload if isinstance(item, dict)]
 
 
+def _request_payload(
+    url: str,
+    *,
+    params: dict[str, str],
+) -> dict[str, Any]:
+    response = requests.get(
+        url,
+        params=params,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "AI-Stock-Platform/2.0 (+official sector trend)",
+        },
+        timeout=REQUEST_TIMEOUT,
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    if not isinstance(payload, dict) or payload.get("stat") != "OK":
+        raise RuntimeError("交易所歷史指數格式不正確。")
+
+    return payload
+
+
 def _iso_market_date(value: Any) -> str:
-    text = str(value or "").strip()
+    text = str(value or "").strip().replace("/", "")
 
     if len(text) != 7 and len(text) != 8:
         return text
@@ -112,6 +141,129 @@ def _iso_market_date(value: Any) -> str:
     except ValueError:
         return text
 
+
+def _calendar_dates_from_payload(payload: dict[str, Any]) -> list[date]:
+    trading_dates: list[date] = []
+
+    for row in payload.get("data", []):
+        if not isinstance(row, list) or not row:
+            continue
+
+        iso_date = _iso_market_date(row[0])
+        try:
+            trading_dates.append(date.fromisoformat(iso_date))
+        except ValueError:
+            continue
+
+    return trading_dates
+
+
+def _price_index_rows_from_payload(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    payload_date = _iso_market_date(payload.get("date"))
+
+    for table in payload.get("tables", []):
+        if not isinstance(table, dict):
+            continue
+
+        fields = table.get("fields")
+        rows = table.get("data")
+
+        if (
+            not isinstance(fields, list)
+            or not isinstance(rows, list)
+            or "指數" not in fields
+            or "收盤指數" not in fields
+            or "臺灣證券交易所" not in str(table.get("title", ""))
+        ):
+            continue
+
+        normalized: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, list):
+                continue
+
+            item = dict(zip(fields, row, strict=False))
+            item["日期"] = payload_date
+            normalized.append(item)
+
+        return normalized
+
+    raise RuntimeError("交易所歷史價格指數欄位不完整。")
+
+
+def _recent_month_starts(as_of: date, count: int = 3) -> list[date]:
+    starts: list[date] = []
+    year = as_of.year
+    month = as_of.month
+
+    for _ in range(count):
+        starts.append(date(year, month, 1))
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+
+    return starts
+
+
+def _load_sector_trend_history(as_of_text: str) -> dict[str, Any]:
+    as_of = date.fromisoformat(as_of_text)
+    month_starts = _recent_month_starts(as_of)
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        calendar_payloads = list(
+            executor.map(
+                lambda month_start: _request_payload(
+                    TWSE_TRADING_CALENDAR_URL,
+                    params={
+                        "date": month_start.strftime("%Y%m%d"),
+                        "response": "json",
+                    },
+                ),
+                month_starts,
+            )
+        )
+
+    trading_dates = sorted(
+        {
+            trading_date
+            for payload in calendar_payloads
+            for trading_date in _calendar_dates_from_payload(payload)
+            if trading_date <= as_of
+        }
+    )
+
+    if len(trading_dates) < 21:
+        raise RuntimeError("官方交易日資料不足 21 個交易日。")
+
+    five_session_start = trading_dates[-6]
+    twenty_session_start = trading_dates[-21]
+    anchor_dates = (five_session_start, twenty_session_start)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        anchor_payloads = list(
+            executor.map(
+                lambda anchor_date: _request_payload(
+                    TWSE_DAILY_INDEX_URL,
+                    params={
+                        "date": anchor_date.strftime("%Y%m%d"),
+                        "type": "IND",
+                        "response": "json",
+                    },
+                ),
+                anchor_dates,
+            )
+        )
+
+    return {
+        "as_of": as_of.isoformat(),
+        "five_session_start": five_session_start.isoformat(),
+        "twenty_session_start": twenty_session_start.isoformat(),
+        "five_session_rows": _price_index_rows_from_payload(anchor_payloads[0]),
+        "twenty_session_rows": _price_index_rows_from_payload(anchor_payloads[1]),
+    }
 
 def _index_entry(
     rows: list[dict[str, Any]],
@@ -210,8 +362,79 @@ def _breadth(
     }
 
 
-def _sector_rows(index_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _return_percent(current: float | None, previous: float | None) -> float | None:
+    if current is None or previous in {None, 0}:
+        return None
+
+    return round((current / previous - 1) * 100, 2)
+
+
+def _percentile_scores(
+    sectors: list[dict[str, Any]],
+    key: str,
+) -> dict[str, float]:
+    values = [
+        float(item[key])
+        for item in sectors
+        if item.get(key) is not None
+    ]
+
+    if len(values) < 2:
+        return {
+            str(item["index_name"]): 50.0
+            for item in sectors
+        }
+
+    denominator = len(values) - 1
+    return {
+        str(item["index_name"]): round(
+            sum(value < float(item[key]) for value in values)
+            / denominator
+            * 100,
+            2,
+        )
+        if item.get(key) is not None
+        else 50.0
+        for item in sectors
+    }
+
+
+def _trend_label(
+    return_5d: float | None,
+    return_20d: float | None,
+    excess_20d: float | None,
+) -> str:
+    if return_5d is None or return_20d is None:
+        return "資料不足"
+    if return_5d > 0 and return_20d > 0 and (excess_20d or 0) > 0:
+        return "持續轉強"
+    if return_5d > 0 and return_20d <= 0:
+        return "短線轉強"
+    if return_5d < 0 and return_20d < 0:
+        return "持續轉弱"
+    if return_5d < 0 and return_20d >= 0:
+        return "短線轉弱"
+    return "震盪整理"
+
+
+def _sector_rows(
+    index_rows: list[dict[str, Any]],
+    *,
+    five_session_rows: list[dict[str, Any]] | None = None,
+    twenty_session_rows: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     sectors: list[dict[str, Any]] = []
+    benchmark_current = _index_entry(index_rows, "發行量加權股價指數")
+    benchmark_5d = _index_entry(five_session_rows or [], "發行量加權股價指數")
+    benchmark_20d = _index_entry(twenty_session_rows or [], "發行量加權股價指數")
+    benchmark_return_5d = _return_percent(
+        benchmark_current.get("close") if benchmark_current else None,
+        benchmark_5d.get("close") if benchmark_5d else None,
+    )
+    benchmark_return_20d = _return_percent(
+        benchmark_current.get("close") if benchmark_current else None,
+        benchmark_20d.get("close") if benchmark_20d else None,
+    )
 
     for sector_name, index_name in SECTOR_INDICES:
         entry = _index_entry(index_rows, index_name)
@@ -219,6 +442,26 @@ def _sector_rows(index_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
 
         change_percent = float(entry["change_percent"])
+        five_session_entry = _index_entry(five_session_rows or [], index_name)
+        twenty_session_entry = _index_entry(twenty_session_rows or [], index_name)
+        return_5d = _return_percent(
+            entry["close"],
+            five_session_entry.get("close") if five_session_entry else None,
+        )
+        return_20d = _return_percent(
+            entry["close"],
+            twenty_session_entry.get("close") if twenty_session_entry else None,
+        )
+        excess_5d = (
+            round(return_5d - benchmark_return_5d, 2)
+            if return_5d is not None and benchmark_return_5d is not None
+            else None
+        )
+        excess_20d = (
+            round(return_20d - benchmark_return_20d, 2)
+            if return_20d is not None and benchmark_return_20d is not None
+            else None
+        )
         sectors.append(
             {
                 "name": sector_name,
@@ -233,6 +476,13 @@ def _sector_rows(index_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     if change_percent < 0
                     else "持平"
                 ),
+                "return_5d": return_5d,
+                "return_20d": return_20d,
+                "excess_5d": excess_5d,
+                "excess_20d": excess_20d,
+                "trend_score": None,
+                "trend_rank": None,
+                "trend_label": _trend_label(return_5d, return_20d, excess_20d),
             }
         )
 
@@ -240,6 +490,30 @@ def _sector_rows(index_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     for rank, item in enumerate(sectors, start=1):
         item["rank"] = rank
+
+    daily_scores = _percentile_scores(sectors, "change_percent")
+    five_day_scores = _percentile_scores(sectors, "return_5d")
+    twenty_day_scores = _percentile_scores(sectors, "return_20d")
+
+    for item in sectors:
+        if item["return_5d"] is None or item["return_20d"] is None:
+            continue
+
+        index_name = str(item["index_name"])
+        item["trend_score"] = round(
+            daily_scores[index_name] * 0.2
+            + five_day_scores[index_name] * 0.35
+            + twenty_day_scores[index_name] * 0.45,
+            1,
+        )
+
+    trend_ready = sorted(
+        (item for item in sectors if item["trend_score"] is not None),
+        key=lambda item: (item["trend_score"], item["return_20d"]),
+        reverse=True,
+    )
+    for trend_rank, item in enumerate(trend_ready, start=1):
+        item["trend_rank"] = trend_rank
 
     return sectors
 
@@ -283,6 +557,7 @@ def build_market_overview(
     twse_quotes: list[dict[str, Any]],
     tpex_indices: list[dict[str, Any]],
     tpex_quotes: list[dict[str, Any]],
+    sector_history: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     twse_index = _index_entry(twse_indices, "發行量加權股價指數")
     tpex_index = _tpex_index_entry(tpex_indices)
@@ -310,7 +585,15 @@ def build_market_overview(
         advancing,
         declining,
     )
-    sectors = _sector_rows(twse_indices)
+    history = sector_history or {}
+    sectors = _sector_rows(
+        twse_indices,
+        five_session_rows=history.get("five_session_rows"),
+        twenty_session_rows=history.get("twenty_session_rows"),
+    )
+    trend_available = bool(
+        sectors and all(item["trend_score"] is not None for item in sectors)
+    )
     dates = sorted(
         {
             item["date"]
@@ -342,10 +625,24 @@ def build_market_overview(
             "regime_reason": regime_reason,
         },
         "sectors": sectors,
+        "sector_trend": {
+            "available": trend_available,
+            "as_of": history.get("as_of") if trend_available else None,
+            "five_session_start": (
+                history.get("five_session_start") if trend_available else None
+            ),
+            "twenty_session_start": (
+                history.get("twenty_session_start") if trend_available else None
+            ),
+            "method": (
+                "以最近 1、5、20 個交易日的產業價格指數橫斷面百分位，"
+                "分別給予 20%、35%、45% 權重；另揭露相對加權指數超額報酬。"
+            ),
+        },
         "method": (
             "盤後資料取自證交所與櫃買中心 OpenAPI；市場狀態綜合加權指數、"
-            "櫃買指數與上市櫃普通股漲跌家數，產業排名依證交所產業類指數"
-            "當日漲跌幅排序。"
+            "櫃買指數與上市櫃普通股漲跌家數。產業頁同時揭露當日、5 日、"
+            "20 日價格表現與相對大盤超額報酬。"
         ),
         "sources": [
             {
@@ -387,11 +684,28 @@ def get_market_overview() -> dict[str, Any]:
 
         raise RuntimeError("官方市場資料暫時無法取得，請稍後再試。") from error
 
+    basic_result = build_market_overview(
+        twse_indices,
+        twse_quotes,
+        tpex_indices,
+        tpex_quotes,
+    )
+
+    sector_history: dict[str, Any] | None = None
+    if basic_result["indices"]["twse"]:
+        try:
+            sector_history = _load_sector_trend_history(
+                basic_result["indices"]["twse"]["date"]
+            )
+        except (requests.RequestException, RuntimeError, ValueError):
+            sector_history = None
+
     result = build_market_overview(
         twse_indices,
         twse_quotes,
         tpex_indices,
         tpex_quotes,
+        sector_history=sector_history,
     )
 
     with _cache_lock:

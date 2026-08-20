@@ -377,6 +377,17 @@ function backtestLoadingStage(elapsedSeconds: number): string {
 }
 
 
+function marketLoadingStage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 7) {
+    return "取得證交所與櫃買中心盤後資料";
+  }
+  if (elapsedSeconds < 16) {
+    return "定位最近 5／20 個交易日";
+  }
+  return "計算產業相對強弱與趨勢排名";
+}
+
+
 function formatElapsedTime(elapsedSeconds: number): string {
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
@@ -437,13 +448,16 @@ function DataLoadingPanel({
 }: {
   code: string;
   elapsedSeconds: number;
-  kind: "analysis" | "backtest";
+  kind: "analysis" | "backtest" | "market";
   onCancel: () => void;
 }) {
   const isBacktest = kind === "backtest";
+  const isMarket = kind === "market";
   const stage = isBacktest
     ? backtestLoadingStage(elapsedSeconds)
-    : analysisLoadingStage(elapsedSeconds);
+    : isMarket
+      ? marketLoadingStage(elapsedSeconds)
+      : analysisLoadingStage(elapsedSeconds);
 
   return (
     <div className={`data-loading-panel ${isBacktest ? "compact" : ""}`} role="status" aria-live="polite">
@@ -454,12 +468,14 @@ function DataLoadingPanel({
         </div>
       </div>
       <div className="data-loading-copy">
-        <span>{isBacktest ? "HISTORICAL TEST" : "REAL DATA ANALYSIS"}</span>
+        <span>{isBacktest ? "HISTORICAL TEST" : isMarket ? "OFFICIAL MARKET DATA" : "REAL DATA ANALYSIS"}</span>
         <strong>{code || "股票"}・{stage}</strong>
         <p>
           {isBacktest
             ? "系統會先確認長期資料完整度，再計入分割、配息與交易成本。"
-            : "系統正在交叉檢查資料完整度；若筆數不足會自動改用長期來源重抓。"}
+            : isMarket
+              ? "產業趨勢只使用官方價格指數，並分開顯示當日、5 日與 20 日結果。"
+              : "系統正在交叉檢查資料完整度；若筆數不足會自動改用長期來源重抓。"}
         </p>
         <small>已執行 {formatElapsedTime(elapsedSeconds)}</small>
       </div>
@@ -632,15 +648,6 @@ function PerspectiveCard({
       <h3>{label}</h3>
       <p>{summary}</p>
     </article>
-  );
-}
-
-
-function LoadingPanel() {
-  return (
-    <div className="loading-panel">
-      正在取得官方行情並計算指標，第一次查詢會比重複查詢稍久……
-    </div>
   );
 }
 
@@ -881,11 +888,17 @@ export default function Dashboard() {
   const [marketLoading, setMarketLoading] =
     useState(false);
 
+  const [marketLoadingSeconds, setMarketLoadingSeconds] =
+    useState(0);
+
   const [marketError, setMarketError] =
     useState("");
 
   const [marketRefreshKey, setMarketRefreshKey] =
     useState(0);
+
+  const [industryRankingView, setIndustryRankingView] =
+    useState<"trend" | "daily">("trend");
 
   const scannerAnalysesRef =
     useRef<Record<string, ScannerAnalysisEntry>>({});
@@ -1210,10 +1223,14 @@ export default function Dashboard() {
     const controller = new AbortController();
     marketControllerRef.current = controller;
     const timer = window.setTimeout(() => {
+      setMarketLoadingSeconds(0);
       setMarketLoading(true);
       setMarketError("");
 
-      void fetchMarketOverview({ signal: controller.signal })
+      void fetchMarketOverview({
+        signal: controller.signal,
+        refreshKey: marketRefreshKey || undefined,
+      })
         .then((response) => {
           if (!active) {
             return;
@@ -1252,6 +1269,19 @@ export default function Dashboard() {
       }
     };
   }, [activePage, marketOverview, marketRefreshKey]);
+
+
+  useEffect(() => {
+    if (!marketLoading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setMarketLoadingSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [marketLoading]);
 
 
   useEffect(() => {
@@ -1527,6 +1557,11 @@ export default function Dashboard() {
     setMarketOverview(null);
     setMarketError("");
     setMarketRefreshKey((value) => value + 1);
+  }
+
+
+  function cancelMarketOverview() {
+    marketControllerRef.current?.abort();
   }
 
 
@@ -3385,7 +3420,14 @@ export default function Dashboard() {
     const twse = marketOverview?.indices.twse ?? null;
     const tpex = marketOverview?.indices.tpex ?? null;
     const market = marketOverview?.market ?? null;
-    const topSectors = marketOverview?.sectors.slice(0, 5) ?? [];
+    const trendAvailable = marketOverview?.sector_trend.available ?? false;
+    const topSectors = marketOverview
+      ? trendAvailable
+        ? [...marketOverview.sectors]
+            .sort((left, right) => (left.trend_rank ?? 999) - (right.trend_rank ?? 999))
+            .slice(0, 5)
+        : marketOverview.sectors.slice(0, 5)
+      : [];
 
     return (
       <>
@@ -3423,7 +3465,14 @@ export default function Dashboard() {
           </div>
         ) : null}
 
-        {marketLoading && !marketOverview ? <LoadingPanel /> : null}
+        {marketLoading && !marketOverview ? (
+          <DataLoadingPanel
+            code="市場與產業"
+            elapsedSeconds={marketLoadingSeconds}
+            kind="market"
+            onCancel={cancelMarketOverview}
+          />
+        ) : null}
 
         <section className="metrics-grid">
           <MetricCard
@@ -3539,7 +3588,7 @@ export default function Dashboard() {
               <div className="panel-header">
                 <div>
                   <span className="panel-kicker">SECTOR LEADERS</span>
-                  <h2>今日產業強弱前五名</h2>
+                  <h2>{trendAvailable ? "多日產業趨勢前五名" : "今日產業強弱前五名"}</h2>
                 </div>
                 <button onClick={() => changePage("industry")} type="button">
                   查看完整排名
@@ -3551,8 +3600,10 @@ export default function Dashboard() {
                   <div key={sector.index_name}>
                     <span>{sector.rank}</span>
                     <strong>{sector.name}</strong>
-                    <b className={sector.change_percent >= 0 ? "positive" : "negative"}>
-                      {sector.change_percent >= 0 ? "+" : ""}{formatNumber(sector.change_percent)}%
+                    <b className={(trendAvailable ? sector.return_20d ?? 0 : sector.change_percent) >= 0 ? "positive" : "negative"}>
+                      {trendAvailable ? "20日 " : ""}
+                      {(trendAvailable ? sector.return_20d ?? 0 : sector.change_percent) >= 0 ? "+" : ""}
+                      {formatNumber(trendAvailable ? sector.return_20d : sector.change_percent)}%
                     </b>
                   </div>
                 ))}
@@ -3586,8 +3637,14 @@ export default function Dashboard() {
 
   function renderIndustryPage() {
     const sectors = marketOverview?.sectors ?? [];
-    const strongest = sectors[0] ?? null;
-    const weakest = sectors.at(-1) ?? null;
+    const trendAvailable = marketOverview?.sector_trend.available ?? false;
+    const effectiveRankingView = trendAvailable ? industryRankingView : "daily";
+    const rankedSectors = effectiveRankingView === "trend"
+      ? [...sectors].sort(
+          (left, right) => (left.trend_rank ?? 999) - (right.trend_rank ?? 999),
+        )
+      : [...sectors].sort((left, right) => left.rank - right.rank);
+    const strongest = rankedSectors[0] ?? null;
     const advancingSectors = sectors.filter(
       (sector) => sector.change_percent > 0,
     ).length;
@@ -3603,7 +3660,7 @@ export default function Dashboard() {
         <PageHeader
           eyebrow="INDUSTRY ANALYSIS"
           title="產業分析"
-          description="以證交所官方產業類指數比較半導體、電子、金融、航運與其他產業的當日相對強弱。"
+          description="以證交所官方產業價格指數比較當日、5 日與 20 日表現，並揭露相對加權指數的超額報酬。"
         />
 
         <div className="market-page-actions">
@@ -3634,55 +3691,68 @@ export default function Dashboard() {
           </div>
         ) : null}
 
-        {marketLoading && !marketOverview ? <LoadingPanel /> : null}
+        {marketLoading && !marketOverview ? (
+          <DataLoadingPanel
+            code="產業趨勢"
+            elapsedSeconds={marketLoadingSeconds}
+            kind="market"
+            onCancel={cancelMarketOverview}
+          />
+        ) : null}
 
         <section className="metrics-grid">
           <MetricCard
-            label="最強產業"
+            label={effectiveRankingView === "trend" ? "趨勢最強" : "今日最強"}
             value={strongest?.name ?? "—"}
             detail={
               strongest
-                ? `${strongest.change_percent >= 0 ? "+" : ""}${formatNumber(strongest.change_percent)}%`
+                ? effectiveRankingView === "trend"
+                  ? `趨勢分數 ${formatNumber(strongest.trend_score, 1)}`
+                  : `${strongest.change_percent >= 0 ? "+" : ""}${formatNumber(strongest.change_percent)}%`
                 : undefined
             }
             tone="positive"
           />
 
           <MetricCard
-            label="最弱產業"
-            value={weakest?.name ?? "—"}
+            label="5 日表現"
+            value={strongest?.return_5d === null || strongest?.return_5d === undefined
+              ? "—"
+              : `${strongest.return_5d >= 0 ? "+" : ""}${formatNumber(strongest.return_5d)}%`}
             detail={
-              weakest
-                ? `${weakest.change_percent >= 0 ? "+" : ""}${formatNumber(weakest.change_percent)}%`
+              marketOverview?.sector_trend.five_session_start
+                ? `自 ${marketOverview.sector_trend.five_session_start}`
                 : undefined
             }
-            tone="negative"
+            tone={(strongest?.return_5d ?? 0) >= 0 ? "positive" : "negative"}
           />
 
           <MetricCard
-            label="上漲產業"
+            label="20 日表現"
+            value={strongest?.return_20d === null || strongest?.return_20d === undefined
+              ? "—"
+              : `${strongest.return_20d >= 0 ? "+" : ""}${formatNumber(strongest.return_20d)}%`}
+            detail={
+              marketOverview?.sector_trend.twenty_session_start
+                ? `自 ${marketOverview.sector_trend.twenty_session_start}`
+                : undefined
+            }
+            tone={(strongest?.return_20d ?? 0) >= 0 ? "positive" : "negative"}
+          />
+
+          <MetricCard
+            label="20 日超額大盤"
+            value={strongest?.excess_20d === null || strongest?.excess_20d === undefined
+              ? "—"
+              : `${strongest.excess_20d >= 0 ? "+" : ""}${formatNumber(strongest.excess_20d)}%`}
+            detail="產業報酬－加權指數報酬"
+            tone={(strongest?.excess_20d ?? 0) >= 0 ? "positive" : "negative"}
+          />
+
+          <MetricCard
+            label="本日產業廣度"
             value={sectors.length ? `${advancingSectors}／${sectors.length}` : "—"}
-            detail="官方產業類指數樣本"
-          />
-
-          <MetricCard
-            label="產業平均漲跌"
-            value={
-              averageChange === null
-                ? "—"
-                : `${averageChange >= 0 ? "+" : ""}${formatNumber(averageChange)}%`
-            }
-            tone={
-              (averageChange ?? 0) >= 0
-                ? "positive"
-                : "negative"
-            }
-          />
-
-          <MetricCard
-            label="更新時間"
-            value={strongest?.date ?? "—"}
-            detail="盤後資料"
+            detail={averageChange === null ? undefined : `平均 ${averageChange >= 0 ? "+" : ""}${formatNumber(averageChange)}%`}
           />
         </section>
 
@@ -3691,29 +3761,60 @@ export default function Dashboard() {
             <div className="panel-header">
               <div>
                 <span className="panel-kicker">SECTOR STRENGTH</span>
-                <h2>產業強弱完整排名</h2>
+                <h2>{effectiveRankingView === "trend" ? "多日趨勢完整排名" : "當日強弱完整排名"}</h2>
               </div>
-              <span className="data-badge neutral">依當日漲跌幅</span>
+              <span className="data-badge neutral">
+                {effectiveRankingView === "trend" ? "1／5／20 日綜合" : "依當日漲跌幅"}
+              </span>
+            </div>
+
+            <div className="sector-view-tabs" aria-label="選擇產業排名期間">
+              <button
+                className={effectiveRankingView === "trend" ? "active" : ""}
+                disabled={!trendAvailable}
+                onClick={() => setIndustryRankingView("trend")}
+                type="button"
+              >
+                多日趨勢排名
+              </button>
+              <button
+                className={effectiveRankingView === "daily" ? "active" : ""}
+                onClick={() => setIndustryRankingView("daily")}
+                type="button"
+              >
+                當日漲跌排名
+              </button>
             </div>
 
             <div className="sector-ranking-head" aria-hidden="true">
               <span>排名</span>
               <span>產業</span>
-              <span>指數</span>
-              <span>當日漲跌</span>
-              <span>方向</span>
+              <span>當日</span>
+              <span>5 日</span>
+              <span>20 日</span>
+              <span>趨勢分數</span>
             </div>
 
             <div className="sector-ranking-list">
-              {sectors.map((sector) => (
+              {rankedSectors.map((sector) => (
                 <div key={sector.index_name}>
-                  <span className="sector-rank-number">{sector.rank}</span>
+                  <span className="sector-rank-number">
+                    {effectiveRankingView === "trend" ? sector.trend_rank ?? "—" : sector.rank}
+                  </span>
                   <strong>{sector.name}</strong>
-                  <span>{formatNumber(sector.close)}</span>
                   <b className={sector.change_percent >= 0 ? "positive" : "negative"}>
                     {sector.change_percent >= 0 ? "+" : ""}{formatNumber(sector.change_percent)}%
                   </b>
-                  <span>{sector.direction}</span>
+                  <b className={(sector.return_5d ?? 0) >= 0 ? "positive" : "negative"}>
+                    {sector.return_5d === null ? "—" : `${sector.return_5d >= 0 ? "+" : ""}${formatNumber(sector.return_5d)}%`}
+                  </b>
+                  <b className={(sector.return_20d ?? 0) >= 0 ? "positive" : "negative"}>
+                    {sector.return_20d === null ? "—" : `${sector.return_20d >= 0 ? "+" : ""}${formatNumber(sector.return_20d)}%`}
+                  </b>
+                  <span className="sector-trend-cell">
+                    <strong>{formatNumber(sector.trend_score, 1)}</strong>
+                    <small>{sector.trend_label}</small>
+                  </span>
                 </div>
               ))}
             </div>
@@ -3722,9 +3823,11 @@ export default function Dashboard() {
 
         {marketOverview ? (
           <article className="market-method-note">
-            <strong>目前排名代表什麼？</strong>
+            <strong>多日趨勢怎麼算？</strong>
             <p>
-              這一版只比較官方產業類指數的當日價格強弱，不把單日上漲直接說成資金流入，也不冒充長期產業趨勢。下一階段再加入多日相對強弱、成交量與產業內個股廣度。
+              {marketOverview.sector_trend.available
+                ? `${marketOverview.sector_trend.method} 資料期間 ${marketOverview.sector_trend.twenty_session_start} 至 ${marketOverview.sector_trend.as_of}。這是價格相對強弱，不等同資金流入，也不是買進建議。`
+                : "官方歷史產業指數暫時不完整，因此本次只顯示當日排名，不用缺漏資料冒充多日趨勢。"}
             </p>
           </article>
         ) : null}

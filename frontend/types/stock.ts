@@ -321,6 +321,8 @@ export type CompetitionResponse = {
     status: string;
     long_horizon_qualified: boolean;
     complete_month_coverage: boolean;
+    required_start_month?: string;
+    requested_span_complete?: boolean;
     missing_months: string[];
     row_count: number;
   }>;

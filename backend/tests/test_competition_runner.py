@@ -16,6 +16,8 @@ from app.services.competition_runner import (
     ROBOT_SPECS,
     SIGNAL_FUNCTIONS,
     _competition_official_months,
+    _competition_coverage_is_complete,
+    _expected_competition_history_month,
     _prepare_frame,
     _simulate_symbol,
     run_competition_on_frames,
@@ -46,6 +48,39 @@ class CompetitionRunnerTests(unittest.TestCase):
         as_of = date(2026, 8, 20)
         self.assertEqual(_competition_official_months("00878", as_of=as_of), 66)
         self.assertEqual(_competition_official_months("00919", as_of=as_of), 47)
+
+    def test_competition_rejects_partial_recent_history(self) -> None:
+        as_of = date(2026, 8, 20)
+        self.assertEqual(
+            _expected_competition_history_month("0056", as_of=as_of),
+            "2021-03",
+        )
+        self.assertEqual(
+            _expected_competition_history_month("00919", as_of=as_of),
+            "2022-10",
+        )
+        self.assertFalse(
+            _competition_coverage_is_complete(
+                "0056",
+                {
+                    "start": "2025-06-02",
+                    "end": "2026-08-20",
+                    "complete_month_coverage": True,
+                },
+                as_of=as_of,
+            )
+        )
+        self.assertTrue(
+            _competition_coverage_is_complete(
+                "0056",
+                {
+                    "start": "2021-03-02",
+                    "end": "2026-08-20",
+                    "complete_month_coverage": True,
+                },
+                as_of=as_of,
+            )
+        )
 
     def test_unlisted_segment_keeps_symbol_allocation_in_cash(self) -> None:
         prepared = _prepare_frame(_synthetic_frame(0.0))

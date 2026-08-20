@@ -276,7 +276,7 @@ function formatPeriodSpan(
 }
 
 
-const COMPETITION_CACHE_KEY = "ai-stock-competition-v2";
+const COMPETITION_CACHE_KEY = "ai-stock-competition-v3";
 const COMPETITION_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 
@@ -367,7 +367,7 @@ function CompetitionLoader({ elapsedSeconds }: { elapsedSeconds: number }) {
         <i className="robot-runner runner-four" />
       </div>
       <strong>{competitionLoadingStage(elapsedSeconds)}</strong>
-      <p>首次更新約需 1～3 分鐘；完成後會快取，之後開啟可直接顯示。</p>
+      <p>首次完整更新約需 2～4 分鐘；完成後會快取，之後開啟可直接顯示。</p>
       <small>已執行 {formatElapsedTime(elapsedSeconds)}，請保持此頁開啟</small>
     </div>
   );

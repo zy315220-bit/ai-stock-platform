@@ -1124,6 +1124,48 @@ def _competition_official_months(
     return min(requested, max(1, months_since_listing))
 
 
+def _expected_competition_history_month(
+    stock_code: str,
+    *,
+    as_of: date | None = None,
+) -> str:
+    current = as_of or date.today()
+    month_count = _competition_official_months(stock_code, as_of=current)
+    current_month_index = current.year * 12 + current.month - 1
+    expected_month_index = current_month_index - month_count + 1
+    listing = COMPETITION_LISTING_DATES.get(stock_code)
+
+    if listing is not None:
+        listing_month_index = listing.year * 12 + listing.month - 1
+        expected_month_index = max(expected_month_index, listing_month_index)
+
+    year, zero_based_month = divmod(expected_month_index, 12)
+    return f"{year:04d}-{zero_based_month + 1:02d}"
+
+
+def _competition_coverage_is_complete(
+    stock_code: str,
+    item: dict[str, Any],
+    *,
+    as_of: date | None = None,
+) -> bool:
+    current = as_of or date.today()
+    expected_start_month = _expected_competition_history_month(
+        stock_code,
+        as_of=current,
+    )
+    start = item.get("start")
+    end = item.get("end")
+
+    if not start or not end or not item.get("complete_month_coverage"):
+        return False
+
+    actual_start_month = str(start)[:7]
+    fresh_cutoff = pd.Timestamp(current) - pd.Timedelta(days=10)
+    actual_end = pd.Timestamp(str(end)).normalize()
+    return actual_start_month <= expected_start_month and actual_end >= fresh_cutoff
+
+
 def _download_competition_frames() -> tuple[
     dict[str, pd.DataFrame],
     dict[str, str],
@@ -1139,17 +1181,39 @@ def _download_competition_frames() -> tuple[
     for index, code in enumerate(COMPETITION_UNIVERSE):
         if index:
             time.sleep(COMPETITION_DOWNLOAD_PAUSE_SECONDS)
-        frame = download_stock(
-            code,
-            prefer_official=True,
-            update_with_intraday=False,
-            official_months=_competition_official_months(code),
-            include_corporate_actions=True,
-        )
-        sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
-        prepared = _prepare_frame(frame)
-        frames[code] = prepared
-        coverage[code] = frame_coverage(prepared)
+        requested_months = _competition_official_months(code)
+        for attempt in range(2):
+            frame = download_stock(
+                code,
+                prefer_official=True,
+                update_with_intraday=False,
+                official_months=requested_months,
+                force_official_refresh=attempt > 0,
+                include_corporate_actions=True,
+            )
+            prepared = _prepare_frame(frame)
+            item = frame_coverage(prepared)
+            required_start_month = _expected_competition_history_month(code)
+            item["required_start_month"] = required_start_month
+            item["requested_span_complete"] = _competition_coverage_is_complete(
+                code,
+                item,
+            )
+
+            if item["requested_span_complete"]:
+                sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
+                frames[code] = prepared
+                coverage[code] = item
+                break
+
+            if attempt == 0:
+                time.sleep(2)
+                continue
+
+            raise TimeoutError(
+                f"{code} 官方歷史資料不完整："
+                f"需要從 {required_start_month} 起，實際僅有 {item.get('start') or '無資料'} 起。"
+            )
     return frames, sources, coverage
 
 

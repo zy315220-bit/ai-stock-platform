@@ -1391,6 +1391,10 @@ export default function Dashboard() {
     setError("");
     setAnalysisCanRetry(false);
 
+    if (openAnalysisPage) {
+      setActivePage("analysis");
+    }
+
     try {
       const response =
         await fetchAnalysis(
@@ -1416,9 +1420,6 @@ export default function Dashboard() {
         ),
       });
 
-      if (openAnalysisPage) {
-        setActivePage("analysis");
-      }
     } catch (reason) {
       if (
         isAbortError(reason) ||

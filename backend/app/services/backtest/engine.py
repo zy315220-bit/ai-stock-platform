@@ -16,6 +16,7 @@ from app.services.research_history import frame_coverage
 from indicators import add_indicators
 from score_engine.calculate import calculate_score
 from stock import download_stock
+from corporate_actions import dividends_by_ex_date
 
 from .benchmark import _calculate_buy_and_hold
 from .drawdown import (
@@ -141,6 +142,7 @@ def backtest_stock(
         prefer_official=True,
         update_with_intraday=False,
         official_months=RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS,
+        include_corporate_actions=True,
     )
 
     if df is None or df.empty:
@@ -151,6 +153,12 @@ def backtest_stock(
         )
 
     data_source = str(df.attrs.get("source", "未知"))
+    corporate_action_attrs = {
+        "dividends": list(df.attrs.get("dividends", [])),
+        "split_adjustments": list(df.attrs.get("split_adjustments", [])),
+        "dividend_source": df.attrs.get("dividend_source"),
+        "price_basis": df.attrs.get("price_basis"),
+    }
 
     df = _prepare_stock_data(
         df=df,
@@ -174,9 +182,11 @@ def backtest_stock(
             drop=True
         )
     )
+    df.attrs.update(corporate_action_attrs)
 
     requested_start_timestamp = pd.Timestamp(effective_start_date).normalize()
     df = df.loc[df["Date"] >= requested_start_timestamp].reset_index(drop=True)
+    df.attrs.update(corporate_action_attrs)
 
     if len(df) < 61:
         raise ValueError(
@@ -214,6 +224,9 @@ def backtest_stock(
 
     total_commission = 0.0
     total_transaction_tax = 0.0
+    total_dividends = 0.0
+    position_dividends = 0.0
+    dividend_schedule = dividends_by_ex_date(df)
 
     for index in range(
         60,
@@ -239,10 +252,6 @@ def backtest_stock(
             score_result
         )
 
-        signal_date = _get_row_date(
-            current_row
-        )
-
         next_date = _get_row_date(
             next_row
         )
@@ -251,12 +260,21 @@ def backtest_stock(
             next_row["Open"]
         )
 
-        current_close = float(
-            current_row["Close"]
+        next_close = float(
+            next_row["Close"]
         )
 
         if next_open <= 0:
             continue
+
+        # 除息日開盤前已持有者享有配息；先入帳再處理當日開盤賣出，
+        # 當日才買進者不會錯領該次配息。
+        dividend_per_share = dividend_schedule.get(next_date, 0.0)
+        if shares > 0 and dividend_per_share > 0:
+            received_dividend = shares * dividend_per_share
+            cash += received_dividend
+            total_dividends += received_dividend
+            position_dividends += received_dividend
 
         # ==========================================
         # 進場
@@ -380,6 +398,7 @@ def backtest_stock(
                 sell_result[
                     "net_amount"
                 ]
+                + position_dividends
                 - entry_total_cost
             )
 
@@ -482,6 +501,7 @@ def backtest_stock(
                     "exit_reason": (
                         "score_below_exit_threshold"
                     ),
+                    "dividends": round(position_dividends, 2),
                 }
             )
 
@@ -493,17 +513,18 @@ def backtest_stock(
             entry_gross_amount = 0.0
             entry_commission = 0.0
             entry_total_cost = 0.0
+            position_dividends = 0.0
 
         equity = (
             cash
             + shares
-            * current_close
+            * next_close
         )
 
         equity_curve.append(
             {
                 "date": (
-                    signal_date
+                    next_date
                 ),
                 "equity": round(
                     equity,
@@ -515,7 +536,7 @@ def backtest_stock(
                 ),
                 "shares": shares,
                 "close": round(
-                    current_close,
+                    next_close,
                     2,
                 ),
                 "score": round(
@@ -581,6 +602,7 @@ def backtest_stock(
             sell_result[
                 "net_amount"
             ]
+            + position_dividends
             - entry_total_cost
         )
 
@@ -680,10 +702,16 @@ def backtest_stock(
                 "exit_reason": (
                     "end_of_backtest"
                 ),
+                "dividends": round(position_dividends, 2),
             }
         )
 
         shares = 0
+
+        if equity_curve:
+            equity_curve[-1]["equity"] = round(cash, 2)
+            equity_curve[-1]["cash"] = round(cash, 2)
+            equity_curve[-1]["shares"] = 0
 
     final_capital = float(
         cash
@@ -851,6 +879,13 @@ def backtest_stock(
                 2,
             )
         ),
+        "total_dividends": round(total_dividends, 2),
+        "corporate_actions": {
+            "price_basis": corporate_action_attrs.get("price_basis"),
+            "split_adjustments": corporate_action_attrs.get("split_adjustments", []),
+            "dividend_source": corporate_action_attrs.get("dividend_source"),
+            "dividend_event_count": len(corporate_action_attrs.get("dividends", [])),
+        },
         "total_transaction_cost": (
             round(
                 total_commission

@@ -51,6 +51,7 @@ class BacktestHistoryTests(unittest.TestCase):
         self.assertTrue(calls[0]["prefer_official"])
         self.assertFalse(calls[0]["update_with_intraday"])
         self.assertEqual(calls[0]["official_months"], 66)
+        self.assertTrue(calls[0]["include_corporate_actions"])
         self.assertEqual(result["requested_start_date"], "2021-08-20")
         self.assertEqual(result["actual_start_date"], "2021-08-20")
         self.assertEqual(result["actual_end_date"], "2026-08-20")
@@ -99,6 +100,45 @@ class BacktestHistoryTests(unittest.TestCase):
 
         self.assertEqual(result["actual_start_date"], "2021-08-20")
         self.assertEqual(result["actual_end_date"], "2026-08-20")
+
+    def test_strategy_and_benchmark_include_distributions(self) -> None:
+        dates = pd.bdate_range("2024-01-02", periods=220)
+        prices = np.full(len(dates), 20.0)
+        frame = pd.DataFrame(
+            {
+                "Open": prices,
+                "High": prices + 0.2,
+                "Low": prices - 0.2,
+                "Close": prices,
+                "Volume": np.full(len(dates), 1_000_000),
+            },
+            index=dates,
+        )
+        ex_date = dates[180].strftime("%Y-%m-%d")
+        frame.attrs["dividends"] = [{"ex_date": ex_date, "amount": 1.0}]
+
+        with (
+            patch(
+                "app.services.backtest.engine.download_stock",
+                return_value=frame,
+            ),
+            patch(
+                "app.services.backtest.engine.calculate_score",
+                return_value={"total_score": 100},
+            ),
+        ):
+            result = backtest_stock(
+                "0050",
+                start_date=dates[0].strftime("%Y-%m-%d"),
+                initial_capital=10_000,
+                commission_rate=0.0,
+                transaction_tax_rate=0.0,
+            )
+
+        self.assertEqual(result["total_dividends"], 500.0)
+        self.assertEqual(result["trades"][0]["dividends"], 500.0)
+        self.assertEqual(result["buy_and_hold"]["total_dividends"], 500.0)
+        self.assertEqual(result["total_return_percent"], 5.0)
 
 
 if __name__ == "__main__":

@@ -241,8 +241,22 @@ export type BacktestResponse = {
   win_rate_percent: number;
   max_drawdown_percent: number;
   alpha_percent: number;
+  total_dividends: number;
+  corporate_actions: {
+    price_basis: string | null;
+    split_adjustments: Array<{
+      effective_date: string;
+      ratio: number;
+      source: string;
+    }>;
+    dividend_source: string | null;
+    dividend_event_count: number;
+  };
   buy_and_hold: {
     return_percent: number;
+    total_dividends: number;
+    dividend_per_share: number;
+    return_basis: string;
   };
 };
 
@@ -262,6 +276,7 @@ export type CompetitionTrade = {
   entry_commission: number;
   exit_commission: number;
   transaction_tax: number;
+  dividends: number;
   stop_price: number;
   target_price: number;
 };
@@ -276,6 +291,7 @@ export type CompetitionSegment = {
   max_drawdown_percent: number;
   total_commission: number;
   total_transaction_tax: number;
+  total_dividends: number;
   trades: CompetitionTrade[];
   equity_curve: Array<{ date: string; equity: number }>;
 };

@@ -4,6 +4,8 @@ from typing import Any
 
 import pandas as pd
 
+from corporate_actions import dividends_by_ex_date
+
 from .report import _get_row_date
 from .trades import (
     _calculate_buy_cost,
@@ -26,6 +28,7 @@ def _calculate_buy_and_hold(
     - 最後一個交易日收盤賣出
     - 計入買進、賣出手續費
     - 計入賣出交易稅
+    - 計入持有期間現金配息（股價分割後單位基礎）
     """
 
     if df is None or df.empty:
@@ -42,6 +45,9 @@ def _calculate_buy_and_hold(
             "exit_commission": 0.0,
             "transaction_tax": 0.0,
             "total_transaction_cost": 0.0,
+            "total_dividends": 0.0,
+            "dividend_per_share": 0.0,
+            "return_basis": "split_adjusted_total_return",
         }
 
     first_row = df.iloc[0]
@@ -70,6 +76,9 @@ def _calculate_buy_and_hold(
             "exit_commission": 0.0,
             "transaction_tax": 0.0,
             "total_transaction_cost": 0.0,
+            "total_dividends": 0.0,
+            "dividend_per_share": 0.0,
+            "return_basis": "split_adjusted_total_return",
         }
 
     buy_cost = _calculate_buy_cost(
@@ -90,9 +99,19 @@ def _calculate_buy_and_hold(
         transaction_tax_rate=transaction_tax_rate,
     )
 
+    entry_date = pd.Timestamp(_get_row_date(first_row))
+    exit_date = pd.Timestamp(_get_row_date(final_row))
+    dividend_per_share = sum(
+        amount
+        for event_date, amount in dividends_by_ex_date(df).items()
+        if entry_date < pd.Timestamp(event_date) <= exit_date
+    )
+    total_dividends = shares * dividend_per_share
+
     final_capital = (
         remaining_cash
         + sell_result["net_amount"]
+        + total_dividends
     )
 
     profit = (
@@ -139,4 +158,7 @@ def _calculate_buy_and_hold(
             total_transaction_cost,
             2,
         ),
+        "total_dividends": round(total_dividends, 2),
+        "dividend_per_share": round(dividend_per_share, 6),
+        "return_basis": "split_adjusted_total_return",
     }

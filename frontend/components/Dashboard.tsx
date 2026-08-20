@@ -2002,11 +2002,13 @@ export default function Dashboard() {
                 <MetricCard
                   label="策略報酬"
                   value={`${formatNumber(backtest.total_return_percent)}%`}
+                  detail={`含配息 NT$${formatInteger(backtest.total_dividends)}`}
                   tone={backtest.total_return_percent >= 0 ? "positive" : "negative"}
                 />
                 <MetricCard
-                  label="同期持有"
+                  label="同期持有（含息）"
                   value={`${formatNumber(backtest.buy_and_hold.return_percent)}%`}
+                  detail={`配息 NT$${formatInteger(backtest.buy_and_hold.total_dividends)}`}
                   tone={backtest.buy_and_hold.return_percent >= 0 ? "positive" : "negative"}
                 />
                 <MetricCard
@@ -2025,7 +2027,7 @@ export default function Dashboard() {
                 />
               </div>
               <p className="backtest-note">
-                過去績效不代表未來結果；若策略報酬低於同期持有，代表目前規則仍需調整，不能因名稱含 AI 就視為有效。
+                已依股價分割調整歷史價格，並納入證交所公告配息；過去績效不代表未來結果。若策略報酬低於同期持有，代表目前規則仍需調整，不能因名稱含 AI 就視為有效。
               </p>
             </>
           ) : (

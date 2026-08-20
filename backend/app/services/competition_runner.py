@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
+from corporate_actions import dividends_by_ex_date
 from indicators import add_indicators
 
 from app.services.competition_service import (
@@ -711,6 +712,12 @@ def _date_text(value: Any) -> str:
 def _prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if frame is None or frame.empty:
         raise ValueError("競賽股票資料為空白。")
+    corporate_action_attrs = {
+        "dividends": list(frame.attrs.get("dividends", [])),
+        "split_adjustments": list(frame.attrs.get("split_adjustments", [])),
+        "dividend_source": frame.attrs.get("dividend_source"),
+        "price_basis": frame.attrs.get("price_basis"),
+    }
     prepared = add_indicators(frame.copy()).sort_index()
     prepared["Prior20High"] = (
         prepared["High"].shift(1).rolling(window=20, min_periods=20).max()
@@ -724,7 +731,9 @@ def _prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     prepared["Return126"] = (
         prepared["Close"] / prepared["Close"].shift(126) - 1
     )
-    return prepared.replace([math.inf, -math.inf], math.nan)
+    prepared = prepared.replace([math.inf, -math.inf], math.nan)
+    prepared.attrs.update(corporate_action_attrs)
+    return prepared
 
 
 def _close_position(
@@ -772,6 +781,7 @@ def _simulate_symbol(
             "final_capital": round(initial_capital, 2),
             "total_commission": 0.0,
             "total_transaction_tax": 0.0,
+            "total_dividends": 0.0,
             "trades": [],
             "equity_curve": [
                 {"date": _date_text(start), "equity": round(initial_capital, 2)},
@@ -794,6 +804,9 @@ def _simulate_symbol(
     equity_curve: list[dict[str, Any]] = []
     total_commission = 0.0
     total_transaction_tax = 0.0
+    total_dividends = 0.0
+    position_dividends = 0.0
+    dividend_schedule = dividends_by_ex_date(frame)
 
     first_position = positions[0]
     if first_position > 0:
@@ -816,6 +829,15 @@ def _simulate_symbol(
         if not _all_finite(open_price, high_price, low_price, close_price):
             continue
 
+        # The holder before the ex-date open receives the distribution.  This
+        # runs before open exits/entries so same-day buyers cannot receive it.
+        dividend_per_share = dividend_schedule.get(session_date, 0.0)
+        if shares > 0 and dividend_per_share > 0:
+            received_dividend = shares * dividend_per_share
+            cash += received_dividend
+            total_dividends += received_dividend
+            position_dividends += received_dividend
+
         if pending_exit and shares > 0:
             cash, sale = _close_position(
                 cash=cash,
@@ -824,7 +846,7 @@ def _simulate_symbol(
                 commission_rate=commission_rate,
                 transaction_tax_rate=transaction_tax_rate,
             )
-            profit = sale["net_amount"] - entry_total_cost
+            profit = sale["net_amount"] + position_dividends - entry_total_cost
             trades.append(
                 {
                     "robot_id": robot_id,
@@ -845,6 +867,7 @@ def _simulate_symbol(
                     "entry_commission": round(entry_commission, 2),
                     "exit_commission": round(sale["commission"], 2),
                     "transaction_tax": round(sale["transaction_tax"], 2),
+                    "dividends": round(position_dividends, 2),
                     "stop_price": round(stop_price or 0.0, 4),
                     "target_price": round(target_price or 0.0, 4),
                 }
@@ -859,6 +882,7 @@ def _simulate_symbol(
             stop_price = None
             target_price = None
             pending_exit = None
+            position_dividends = 0.0
 
         if pending_entry and shares == 0:
             reason, signal_atr = pending_entry
@@ -901,7 +925,7 @@ def _simulate_symbol(
                 commission_rate=commission_rate,
                 transaction_tax_rate=transaction_tax_rate,
             )
-            profit = sale["net_amount"] - entry_total_cost
+            profit = sale["net_amount"] + position_dividends - entry_total_cost
             trades.append(
                 {
                     "robot_id": robot_id,
@@ -922,6 +946,7 @@ def _simulate_symbol(
                     "entry_commission": round(entry_commission, 2),
                     "exit_commission": round(sale["commission"], 2),
                     "transaction_tax": round(sale["transaction_tax"], 2),
+                    "dividends": round(position_dividends, 2),
                     "stop_price": round(stop_price, 4),
                     "target_price": round(target_price, 4),
                 }
@@ -935,6 +960,7 @@ def _simulate_symbol(
             entry_commission = 0.0
             stop_price = None
             target_price = None
+            position_dividends = 0.0
 
         equity_curve.append(
             {
@@ -968,7 +994,7 @@ def _simulate_symbol(
             commission_rate=commission_rate,
             transaction_tax_rate=transaction_tax_rate,
         )
-        profit = sale["net_amount"] - entry_total_cost
+        profit = sale["net_amount"] + position_dividends - entry_total_cost
         trades.append(
             {
                 "robot_id": robot_id,
@@ -989,6 +1015,7 @@ def _simulate_symbol(
                 "entry_commission": round(entry_commission, 2),
                 "exit_commission": round(sale["commission"], 2),
                 "transaction_tax": round(sale["transaction_tax"], 2),
+                "dividends": round(position_dividends, 2),
                 "stop_price": round(stop_price or 0.0, 4),
                 "target_price": round(target_price or 0.0, 4),
             }
@@ -1007,6 +1034,7 @@ def _simulate_symbol(
         "final_capital": round(cash, 2),
         "total_commission": round(total_commission, 2),
         "total_transaction_tax": round(total_transaction_tax, 2),
+        "total_dividends": round(total_dividends, 2),
         "trades": trades,
         "equity_curve": equity_curve,
     }
@@ -1066,6 +1094,10 @@ def _aggregate_portfolio(
             sum(float(result["total_transaction_tax"]) for result in symbol_results),
             2,
         ),
+        "total_dividends": round(
+            sum(float(result.get("total_dividends", 0.0)) for result in symbol_results),
+            2,
+        ),
         "trades": trades,
         "equity_curve": equity_curve,
     }
@@ -1112,6 +1144,7 @@ def _download_competition_frames() -> tuple[
             prefer_official=True,
             update_with_intraday=False,
             official_months=_competition_official_months(code),
+            include_corporate_actions=True,
         )
         sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
         prepared = _prepare_frame(frame)
@@ -1184,7 +1217,7 @@ def run_competition_on_frames(
                 "initial_capital": capital,
                 "period_start": _date_text(forward_start),
                 "period_end": _date_text(latest_date),
-                "cost_model_id": "TWSE-ETF-0.1425-0.1-v1",
+                "cost_model_id": "TWSE-ETF-0.1425-0.1-CORP-ACTIONS-v2",
                 "risk_model_id": "ATR-2R-STOP-4R-TARGET-v1",
                 "market_universe_id": "TW-ETF-CORE-4-v1",
                 "trade_count": forward["trade_count"],
@@ -1221,6 +1254,7 @@ def run_competition_on_frames(
         "latest_date": _date_text(latest_date),
         "capital": capital,
         "universe": list(COMPETITION_UNIVERSE),
+        "corporate_actions_version": "TWSE-SPLIT-DIVIDEND-v1",
         "fingerprints": [robot["rule_fingerprint"] for robot in robot_outputs],
     }
     run_id = hashlib.sha256(
@@ -1281,6 +1315,7 @@ def run_competition_on_frames(
             "競賽優先使用五年資料：前 4 年做固定規則歷史檢查，最後 1 年做 walk-forward 樣本外排名。",
             "成立未滿五年的 ETF 只會使用上市後的真實資料，不會補造不存在的行情。",
             "個別 ETF 在尚無行情的區間，其等額配置會保留為現金；所有機器人適用完全相同規則。",
+            "歷史價格會依 ETF 分割／反分割調整，持有期間並納入證交所公告的現金配息。",
             "最後 1 年區間是 walk-forward 歷史模擬，不冒充部署後累積的真實實盤前瞻紀錄。",
             "EMA、RSI、MACD、布林通道、KD、成交量與 ATR 的具體期間／門檻是固定的 v1 實證參數，不代表論文證明其為最優值。",
             "現階段只做多、無槓桿，且每檔 ETF 使用固定等額資金；所有交易均保存進出場與成本。",

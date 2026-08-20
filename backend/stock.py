@@ -17,6 +17,7 @@ import pandas as pd
 import yfinance as yf
 
 from official_data import download_official_history
+from corporate_actions import apply_split_adjustments, attach_official_dividends
 
 
 REQUIRED_OHLCV_COLUMNS = [
@@ -425,6 +426,7 @@ def download_stock(
     intraday_interval: str = "5m",
     prefer_official: bool = False,
     official_months: int = 10,
+    include_corporate_actions: bool = False,
 ) -> pd.DataFrame:
     """
     下載股票日線資料。
@@ -456,6 +458,10 @@ def download_stock(
     official_months:
         官方月資料的查詢月數。互動式分析只需足夠計算指標的期間，
         可縮短首次查詢時間；回測則可保留較長期間。
+
+    include_corporate_actions:
+        是否附加證交所 ETF 配息資料。拆分調整無論此選項皆會套用，
+        避免歷史圖表與技術指標產生非經濟性的價格斷層。
 
     Returns
     -------
@@ -536,6 +542,17 @@ def download_stock(
             timezone="Asia/Taipei",
             remove_timezone=True,
         )
+
+        daily = apply_split_adjustments(
+            daily,
+            normalize_stock_code(ticker),
+        )
+
+        if include_corporate_actions:
+            daily = attach_official_dividends(
+                daily,
+                normalize_stock_code(ticker),
+            )
 
         # ==========================================
         # 2. 使用盤中資料更新最新交易日

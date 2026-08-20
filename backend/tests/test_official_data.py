@@ -19,7 +19,7 @@ class OfficialDataParsingTests(unittest.TestCase):
         self.assertEqual(MAX_MONTH_WORKERS, 5)
         self.assertEqual(LONG_HISTORY_MONTH_THRESHOLD, 24)
         self.assertEqual(_month_worker_count(13), 5)
-        self.assertEqual(_month_worker_count(66), 1)
+        self.assertEqual(_month_worker_count(66), 2)
 
     def test_transient_missing_month_is_retried(self) -> None:
         calls: dict[str, int] = {}

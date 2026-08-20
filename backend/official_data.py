@@ -51,7 +51,7 @@ def _month_worker_count(month_count: int) -> int:
     if month_count <= 0:
         return 1
     if month_count > LONG_HISTORY_MONTH_THRESHOLD:
-        return 1
+        return 2
     return min(MAX_MONTH_WORKERS, month_count)
 
 

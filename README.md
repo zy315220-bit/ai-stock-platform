@@ -63,6 +63,9 @@ FastAPI 後端。Vercel 專案設定需要使用：
 `BACKEND_URL`、`BACKEND_API_URL`，最後使用
 `http://127.0.0.1:8000`。
 
+五年回測的 FastAPI 服務與前端代理均允許最長 300 秒執行時間，
+避免官方月資料冷啟動時被預設短逾時提前中斷。
+
 ## 4. 真實資料與 Demo 模式
 
 `backend/.env` 預設使用真實資料：

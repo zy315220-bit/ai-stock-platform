@@ -3645,7 +3645,7 @@ export default function Dashboard() {
               <div className="sector-mini-list">
                 {topSectors.map((sector) => (
                   <div key={sector.index_name}>
-                    <span>{sector.rank}</span>
+                    <span>{trendAvailable ? sector.trend_rank ?? "—" : sector.rank}</span>
                     <strong>{sector.name}</strong>
                     <b className={(trendAvailable ? sector.return_20d ?? 0 : sector.change_percent) >= 0 ? "positive" : "negative"}>
                       {trendAvailable ? "20日 " : ""}

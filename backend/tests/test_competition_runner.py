@@ -4,6 +4,7 @@ import math
 import sys
 import types
 import unittest
+from datetime import date
 
 import pandas as pd
 
@@ -14,6 +15,7 @@ from app.services.competition_runner import (
     COMPETITION_UNIVERSE,
     ROBOT_SPECS,
     SIGNAL_FUNCTIONS,
+    _competition_official_months,
     _prepare_frame,
     run_competition_on_frames,
 )
@@ -39,6 +41,11 @@ def _synthetic_frame(offset: float) -> pd.DataFrame:
 
 
 class CompetitionRunnerTests(unittest.TestCase):
+    def test_history_months_respect_etf_listing_date(self) -> None:
+        as_of = date(2026, 8, 20)
+        self.assertEqual(_competition_official_months("00878", as_of=as_of), 66)
+        self.assertEqual(_competition_official_months("00919", as_of=as_of), 47)
+
     def test_robot_rule_fingerprints_are_stable_and_unique(self) -> None:
         self.assertEqual(len(ROBOT_SPECS), 16)
         fingerprints = [

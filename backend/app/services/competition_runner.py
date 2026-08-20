@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from functools import lru_cache
 import hashlib
 import json
 import math
+import time
 from typing import Any, Callable
 
 import pandas as pd
@@ -33,9 +33,13 @@ ETF_TRANSACTION_TAX_RATE = 0.001
 STOP_ATR_MULTIPLE = 2.0
 TARGET_ATR_MULTIPLE = 4.0
 MIN_FORWARD_TRADES_FOR_CHAMPION = 30
-# 長期 official_data 每檔使用 2 個月查詢 worker；股票層同時兩檔，
-# 將總官方請求併發限制在 4，兼顧完整性與冷啟動時間。
-COMPETITION_DOWNLOAD_WORKERS = 2
+COMPETITION_LISTING_DATES = {
+    "0050": date(2003, 6, 25),
+    "0056": date(2007, 12, 26),
+    "00878": date(2020, 7, 20),
+    "00919": date(2022, 10, 20),
+}
+COMPETITION_DOWNLOAD_PAUSE_SECONDS = 1.0
 
 BROCK_REFERENCE = {
     "title": "Simple Technical Trading Rules and the Stochastic Properties of Stock Returns",
@@ -1050,6 +1054,27 @@ def _aggregate_portfolio(
     }
 
 
+def _competition_official_months(
+    stock_code: str,
+    *,
+    as_of: date | None = None,
+) -> int:
+    current = as_of or date.today()
+    requested = RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS
+    listing = COMPETITION_LISTING_DATES.get(stock_code)
+
+    if listing is None:
+        return requested
+
+    months_since_listing = (
+        (current.year - listing.year) * 12
+        + current.month
+        - listing.month
+        + 1
+    )
+    return min(requested, max(1, months_since_listing))
+
+
 def _download_competition_frames() -> tuple[
     dict[str, pd.DataFrame],
     dict[str, str],
@@ -1060,27 +1085,21 @@ def _download_competition_frames() -> tuple[
     frames: dict[str, pd.DataFrame] = {}
     sources: dict[str, str] = {}
     coverage: dict[str, dict[str, Any]] = {}
-    with ThreadPoolExecutor(max_workers=COMPETITION_DOWNLOAD_WORKERS) as executor:
-        futures = {
-            executor.submit(
-                download_stock,
-                code,
-                prefer_official=True,
-                update_with_intraday=False,
-                official_months=(
-                    RESEARCH_HISTORY_MONTHS
-                    + BACKTEST_WARMUP_MONTHS
-                ),
-            ): code
-            for code in COMPETITION_UNIVERSE
-        }
-        for future in as_completed(futures):
-            code = futures[future]
-            frame = future.result()
-            sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
-            prepared = _prepare_frame(frame)
-            frames[code] = prepared
-            coverage[code] = frame_coverage(prepared)
+    # 每檔內部保留受控月份並行，但股票之間依序抓取並稍作停頓；
+    # 同時依上市日裁掉不存在的月份，避免無效重試觸發官方限流。
+    for index, code in enumerate(COMPETITION_UNIVERSE):
+        if index:
+            time.sleep(COMPETITION_DOWNLOAD_PAUSE_SECONDS)
+        frame = download_stock(
+            code,
+            prefer_official=True,
+            update_with_intraday=False,
+            official_months=_competition_official_months(code),
+        )
+        sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
+        prepared = _prepare_frame(frame)
+        frames[code] = prepared
+        coverage[code] = frame_coverage(prepared)
     return frames, sources, coverage
 
 

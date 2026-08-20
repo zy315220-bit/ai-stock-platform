@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-from functools import lru_cache
+from datetime import datetime, timezone
 import hashlib
 import json
 import math
@@ -10,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from app.services import competition_runner as legacy
+from app.services.research_dataset import load_shared_research_dataset
 from app.services.selection_bias import selection_bias_diagnostics
 from app.services.trading_costs import TAIWAN_ETF_COST_MODEL
 
@@ -110,11 +110,12 @@ def run_competition_on_frames(frames: dict[str, pd.DataFrame], *, initial_capita
     }
 
 
-@lru_cache(maxsize=8)
-def _run_competition_cached(initial_capital: float, cache_date: str) -> dict[str, Any]:
-    frames, sources = legacy._download_competition_frames()
-    return run_competition_on_frames(frames, initial_capital=initial_capital, sources=sources)
-
-
 def run_competition(initial_capital: float = DEFAULT_INITIAL_CAPITAL) -> dict[str, Any]:
-    return _run_competition_cached(round(float(initial_capital), 2), date.today().isoformat())
+    dataset = load_shared_research_dataset()
+    result = run_competition_on_frames(
+        dataset["frames"],
+        initial_capital=initial_capital,
+        sources=dataset["sources"],
+    )
+    result["research_history"] = dataset["universe_coverage"]
+    return result

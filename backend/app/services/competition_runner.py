@@ -33,7 +33,9 @@ ETF_TRANSACTION_TAX_RATE = 0.001
 STOP_ATR_MULTIPLE = 2.0
 TARGET_ATR_MULTIPLE = 4.0
 MIN_FORWARD_TRADES_FOR_CHAMPION = 30
-COMPETITION_DOWNLOAD_WORKERS = 2
+# official_data 每檔內部已使用 5 個月查詢 worker；股票層改為依序下載，
+# 避免四檔疊加併發後被官方來源限流，只留下近期月份。
+COMPETITION_DOWNLOAD_WORKERS = 1
 
 BROCK_REFERENCE = {
     "title": "Simple Technical Trading Rules and the Stochastic Properties of Stock Returns",

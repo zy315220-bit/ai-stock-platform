@@ -22,10 +22,10 @@ router = APIRouter()
 
 @router.get(
     "/run",
-    summary="執行四個固定規則機器人的公平競賽",
+    summary="執行 16 個固定規則機器人的公平競賽",
     description=(
         "使用相同股票池、初始資金、交易成本與 ATR 風控，"
-        "執行 2 個月歷史檢查及 1 個月 walk-forward 模擬；"
+        "執行前 4 年歷史檢查及最後 1 年 walk-forward 模擬；"
         "正式排序只使用 forward 區間。"
     ),
 )

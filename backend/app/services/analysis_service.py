@@ -11,11 +11,13 @@ from typing import Any, Callable, Optional
 import pandas as pd
 
 from app.core.config import settings
+from app.services.history_policy import INTERACTIVE_HISTORY_MONTHS
 from app.services.market_context import build_perspectives
+from app.services.research_history import frame_coverage
 from app.services.stock_code import base_stock_code
 
 
-CHART_ROWS = 180
+CHART_ROWS = 260
 MINIMUM_DAILY_ROWS = 65
 MINIMUM_HOURLY_ROWS = 30
 POSITION_STATUSES = {"not_holding", "holding"}
@@ -191,6 +193,83 @@ def _validate_daily_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("日線資料清理後沒有可用資料。")
 
     return cleaned.sort_index()
+
+
+def _download_interactive_daily_history(
+    download_stock: Callable[..., pd.DataFrame],
+    stock_code: str,
+) -> pd.DataFrame:
+    """Return enough daily history for indicators, recovering partial responses.
+
+    The exchange month endpoints can occasionally return only a few successful
+    months while still producing a non-empty frame.  A non-empty frame is not
+    necessarily complete enough for EMA60, so retry the official source once
+    and then try the long-history source before allowing validation to fail.
+    """
+
+    attempts = (
+        {
+            "prefer_official": True,
+            "update_with_intraday": False,
+            "official_months": INTERACTIVE_HISTORY_MONTHS,
+        },
+        {
+            "prefer_official": True,
+            "update_with_intraday": False,
+            "official_months": INTERACTIVE_HISTORY_MONTHS,
+            "force_official_refresh": True,
+        },
+        {
+            "prefer_official": False,
+            "update_with_intraday": False,
+            "daily_period": "1y",
+            "official_months": INTERACTIVE_HISTORY_MONTHS,
+        },
+    )
+    best_frame = pd.DataFrame()
+    errors: list[str] = []
+    initial_rows = 0
+    method_names = (
+        "official",
+        "official_refresh",
+        "long_history_fallback",
+    )
+
+    for attempt_index, options in enumerate(attempts):
+        try:
+            candidate = download_stock(stock_code, **options)
+        except Exception as error:
+            errors.append(str(error))
+            continue
+
+        if attempt_index == 0:
+            initial_rows = len(candidate) if candidate is not None else 0
+
+        if candidate is not None and len(candidate) > len(best_frame):
+            best_frame = candidate
+
+        if candidate is not None and len(candidate) >= MINIMUM_DAILY_ROWS:
+            candidate.attrs["history_recovery"] = {
+                "recovered": attempt_index > 0,
+                "attempts": attempt_index + 1,
+                "initial_rows": initial_rows,
+                "final_rows": len(candidate),
+                "method": method_names[attempt_index],
+            }
+            return candidate
+
+    if not best_frame.empty:
+        best_frame.attrs["history_recovery"] = {
+            "recovered": len(attempts) > 1,
+            "attempts": len(attempts),
+            "initial_rows": initial_rows,
+            "final_rows": len(best_frame),
+            "method": "best_available",
+        }
+        return best_frame
+
+    detail = "；".join(message for message in errors if message)
+    raise ValueError(detail or "找不到股票日線資料。")
 
 
 def _prepare_hourly_dataframe(
@@ -486,13 +565,12 @@ def _real_response(stock_code: str, position_status: str) -> dict:
     code = _normalize_code(stock_code)
 
     # 官方歷史資料與即時行情互不相依，同時取得可避免兩段網路等待
-    # 疊加。六個月日線已足夠 EMA60 與目前圖表／評分使用。
+    # 疊加。額外取得一個月可確保圖表涵蓋完整的一年交易日。
     with ThreadPoolExecutor(max_workers=2) as executor:
         daily_future = executor.submit(
+            _download_interactive_daily_history,
             download_stock,
             code,
-            prefer_official=True,
-            official_months=6,
         )
         realtime_future = executor.submit(get_realtime_price, code)
 
@@ -504,6 +582,8 @@ def _real_response(stock_code: str, position_status: str) -> dict:
             realtime = None
 
     daily_source = str(raw_daily_df.attrs.get("source", ""))
+    history_recovery = dict(raw_daily_df.attrs.get("history_recovery", {}))
+    history_coverage = frame_coverage(raw_daily_df)
     daily_df = _validate_daily_dataframe(add_indicators(raw_daily_df))
 
     # 官方月報提供穩定的免費日線，但不提供60分鐘K線。避免在已知
@@ -648,6 +728,9 @@ def _real_response(stock_code: str, position_status: str) -> dict:
             "hourly_available": hourly_df is not None and not hourly_df.empty,
             "analysis_engine": "Score Engine V2",
             "daily_source": daily_source or "未知",
+            "history_coverage": history_coverage,
+            "history_recovery": history_recovery,
+            "requested_history_months": INTERACTIVE_HISTORY_MONTHS,
         },
         "demo": False,
     }

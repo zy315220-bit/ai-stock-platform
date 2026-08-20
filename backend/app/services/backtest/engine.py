@@ -5,10 +5,18 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.history_policy import (
+    BACKTEST_WARMUP_MONTHS,
+    RESEARCH_HISTORY_MONTHS,
+    default_research_start_date,
+)
+from app.services.research_history import frame_coverage
+
 # 這三個模組位於 backend 根目錄
 from indicators import add_indicators
 from score_engine.calculate import calculate_score
 from stock import download_stock
+from corporate_actions import dividends_by_ex_date
 
 from .benchmark import _calculate_buy_and_hold
 from .drawdown import (
@@ -35,10 +43,119 @@ from .trades import (
 
 MAX_INITIAL_CAPITAL = 2_000_000
 
+# 回測只應因「實際交易與核心評分所需」欄位缺值而刪除日期。
+# add_indicators 也會產生輔助診斷欄位；其中任一欄位偶發 NaN 時，
+# 若使用無條件 dropna()，會把原本有效的多年行情誤裁成較短期間。
+BACKTEST_REQUIRED_COLUMNS = [
+    "Date",
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume",
+    "EMA20",
+    "EMA60",
+    "ATR",
+]
+
+
+def _download_backtest_history(
+    stock_code: str,
+    *,
+    required_start_date: str,
+    required_end_date: str | None,
+) -> pd.DataFrame:
+    """Choose the most complete long-horizon frame from controlled sources."""
+
+    required_start = pd.Timestamp(required_start_date).normalize()
+    required_end = pd.Timestamp(
+        required_end_date or pd.Timestamp.today()
+    ).normalize()
+    attempts = (
+        {
+            "prefer_official": False,
+            "daily_period": "10y",
+            "force_official_refresh": False,
+        },
+        {
+            "prefer_official": True,
+            "daily_period": "max",
+            "force_official_refresh": True,
+        },
+    )
+    best_frame = pd.DataFrame()
+    best_key: tuple[int, int, int, int, int, int] | None = None
+    initial_rows = 0
+    errors: list[str] = []
+
+    for attempt_index, options in enumerate(attempts):
+        try:
+            candidate = download_stock(
+                stock_code,
+                prefer_official=bool(options["prefer_official"]),
+                daily_period=str(options["daily_period"]),
+                update_with_intraday=False,
+                official_months=RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS,
+                force_official_refresh=bool(options["force_official_refresh"]),
+                include_corporate_actions=True,
+            )
+        except Exception as error:
+            errors.append(str(error))
+            continue
+
+        if attempt_index == 0:
+            initial_rows = len(candidate) if candidate is not None else 0
+
+        if candidate is None or candidate.empty:
+            continue
+
+        coverage = frame_coverage(candidate)
+        actual_start = pd.Timestamp(candidate.index.min()).normalize()
+        actual_end = pd.Timestamp(candidate.index.max()).normalize()
+        covers_start = actual_start <= required_start
+        covers_end = actual_end >= required_end - pd.Timedelta(days=10)
+        complete_months = bool(coverage["complete_month_coverage"])
+        covers_requested_span = covers_start and covers_end and complete_months
+        key = (
+            int(covers_requested_span),
+            int(complete_months),
+            int(covers_end),
+            -int(actual_start.value),
+            int(actual_end.value),
+            len(candidate),
+        )
+
+        if best_key is None or key > best_key:
+            best_key = key
+            best_frame = candidate
+
+        if covers_requested_span:
+            candidate.attrs["history_recovery"] = {
+                "recovered": attempt_index > 0,
+                "attempts": attempt_index + 1,
+                "initial_rows": initial_rows,
+                "final_rows": len(candidate),
+                "method": "long_history" if attempt_index == 0 else "official_refresh",
+            }
+            return candidate
+
+    if not best_frame.empty:
+        best_frame.attrs["history_recovery"] = {
+            "recovered": len(attempts) > 1,
+            "attempts": len(attempts),
+            "initial_rows": initial_rows,
+            "final_rows": len(best_frame),
+            "method": "best_available",
+        }
+        return best_frame
+
+    detail = "；".join(message for message in errors if message)
+    raise ValueError(detail or f"找不到 {stock_code} 的歷史資料。")
+
 
 def backtest_stock(
     stock_code: str,
-    start_date: str = "2023-01-01",
+    start_date: str | None = None,
     end_date: str | None = None,
     entry_score: float = 75,
     exit_score: float = 55,
@@ -108,12 +225,17 @@ def backtest_stock(
             "交易稅率必須介於 0 到 1 之間。"
         )
 
-    df = download_stock(
-        normalized_code,
-        prefer_official=True,
-    )
+    effective_start_date = start_date or default_research_start_date().isoformat()
+    warmup_start_date = (
+        pd.Timestamp(effective_start_date)
+        - pd.DateOffset(months=BACKTEST_WARMUP_MONTHS)
+    ).strftime("%Y-%m-%d")
 
-    data_source = str(df.attrs.get("source", "未知"))
+    df = _download_backtest_history(
+        normalized_code,
+        required_start_date=warmup_start_date,
+        required_end_date=end_date,
+    )
 
     if df is None or df.empty:
         raise ValueError(
@@ -122,9 +244,18 @@ def backtest_stock(
             "的歷史資料。"
         )
 
+    data_source = str(df.attrs.get("source", "未知"))
+    history_recovery = dict(df.attrs.get("history_recovery", {}))
+    corporate_action_attrs = {
+        "dividends": list(df.attrs.get("dividends", [])),
+        "split_adjustments": list(df.attrs.get("split_adjustments", [])),
+        "dividend_source": df.attrs.get("dividend_source"),
+        "price_basis": df.attrs.get("price_basis"),
+    }
+
     df = _prepare_stock_data(
         df=df,
-        start_date=start_date,
+        start_date=warmup_start_date,
         end_date=end_date,
     )
 
@@ -139,11 +270,16 @@ def backtest_stock(
 
     df = (
         df
-        .dropna()
+        .dropna(subset=BACKTEST_REQUIRED_COLUMNS)
         .reset_index(
             drop=True
         )
     )
+    df.attrs.update(corporate_action_attrs)
+
+    requested_start_timestamp = pd.Timestamp(effective_start_date).normalize()
+    df = df.loc[df["Date"] >= requested_start_timestamp].reset_index(drop=True)
+    df.attrs.update(corporate_action_attrs)
 
     if len(df) < 61:
         raise ValueError(
@@ -181,6 +317,9 @@ def backtest_stock(
 
     total_commission = 0.0
     total_transaction_tax = 0.0
+    total_dividends = 0.0
+    position_dividends = 0.0
+    dividend_schedule = dividends_by_ex_date(df)
 
     for index in range(
         60,
@@ -206,10 +345,6 @@ def backtest_stock(
             score_result
         )
 
-        signal_date = _get_row_date(
-            current_row
-        )
-
         next_date = _get_row_date(
             next_row
         )
@@ -218,12 +353,21 @@ def backtest_stock(
             next_row["Open"]
         )
 
-        current_close = float(
-            current_row["Close"]
+        next_close = float(
+            next_row["Close"]
         )
 
         if next_open <= 0:
             continue
+
+        # 除息日開盤前已持有者享有配息；先入帳再處理當日開盤賣出，
+        # 當日才買進者不會錯領該次配息。
+        dividend_per_share = dividend_schedule.get(next_date, 0.0)
+        if shares > 0 and dividend_per_share > 0:
+            received_dividend = shares * dividend_per_share
+            cash += received_dividend
+            total_dividends += received_dividend
+            position_dividends += received_dividend
 
         # ==========================================
         # 進場
@@ -347,6 +491,7 @@ def backtest_stock(
                 sell_result[
                     "net_amount"
                 ]
+                + position_dividends
                 - entry_total_cost
             )
 
@@ -449,6 +594,7 @@ def backtest_stock(
                     "exit_reason": (
                         "score_below_exit_threshold"
                     ),
+                    "dividends": round(position_dividends, 2),
                 }
             )
 
@@ -460,17 +606,18 @@ def backtest_stock(
             entry_gross_amount = 0.0
             entry_commission = 0.0
             entry_total_cost = 0.0
+            position_dividends = 0.0
 
         equity = (
             cash
             + shares
-            * current_close
+            * next_close
         )
 
         equity_curve.append(
             {
                 "date": (
-                    signal_date
+                    next_date
                 ),
                 "equity": round(
                     equity,
@@ -482,7 +629,7 @@ def backtest_stock(
                 ),
                 "shares": shares,
                 "close": round(
-                    current_close,
+                    next_close,
                     2,
                 ),
                 "score": round(
@@ -548,6 +695,7 @@ def backtest_stock(
             sell_result[
                 "net_amount"
             ]
+            + position_dividends
             - entry_total_cost
         )
 
@@ -647,10 +795,16 @@ def backtest_stock(
                 "exit_reason": (
                     "end_of_backtest"
                 ),
+                "dividends": round(position_dividends, 2),
             }
         )
 
         shares = 0
+
+        if equity_curve:
+            equity_curve[-1]["equity"] = round(cash, 2)
+            equity_curve[-1]["cash"] = round(cash, 2)
+            equity_curve[-1]["shares"] = 0
 
     final_capital = float(
         cash
@@ -700,6 +854,8 @@ def backtest_stock(
             df.iloc[-1]
         )
     )
+
+    history_coverage = frame_coverage(df.set_index("Date"))
 
     buy_and_hold = _calculate_buy_and_hold(
         df=df,
@@ -765,7 +921,7 @@ def backtest_stock(
         ),
         "data_source": data_source,
         "requested_start_date": (
-            start_date
+            effective_start_date
         ),
         "requested_end_date": (
             end_date
@@ -776,6 +932,9 @@ def backtest_stock(
         "actual_end_date": (
             actual_end_date
         ),
+        "history_coverage": history_coverage,
+        "history_recovery": history_recovery,
+        "requested_history_months": RESEARCH_HISTORY_MONTHS,
         "entry_score": (
             entry_score
         ),
@@ -814,6 +973,13 @@ def backtest_stock(
                 2,
             )
         ),
+        "total_dividends": round(total_dividends, 2),
+        "corporate_actions": {
+            "price_basis": corporate_action_attrs.get("price_basis"),
+            "split_adjustments": corporate_action_attrs.get("split_adjustments", []),
+            "dividend_source": corporate_action_attrs.get("dividend_source"),
+            "dividend_event_count": len(corporate_action_attrs.get("dividends", [])),
+        },
         "total_transaction_cost": (
             round(
                 total_commission

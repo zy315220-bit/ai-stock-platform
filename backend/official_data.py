@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from functools import lru_cache
 import re
+import time
 from typing import Any, Callable
 
 import pandas as pd
@@ -21,6 +22,11 @@ TWSE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY"
 TPEX_URL = "https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock"
 DEFAULT_MONTHS = 10
 REQUEST_TIMEOUT_SECONDS = 8
+MAX_MONTH_WORKERS = 5
+LONG_HISTORY_MONTH_THRESHOLD = 24
+MONTH_MAX_ATTEMPTS = 3
+MONTH_RETRY_DELAY_SECONDS = 0.6
+LONG_HISTORY_REQUEST_DELAY_SECONDS = 0.25
 
 _HEADERS = {
     "Accept": "application/json, text/plain, */*",
@@ -40,6 +46,14 @@ def _month_starts(as_of: date, months: int) -> list[date]:
         output.append(date(year, zero_based_month + 1, 1))
 
     return output
+
+
+def _month_worker_count(month_count: int) -> int:
+    if month_count <= 0:
+        return 1
+    if month_count > LONG_HISTORY_MONTH_THRESHOLD:
+        return 1
+    return min(MAX_MONTH_WORKERS, month_count)
 
 
 def _number(value: Any) -> float | None:
@@ -175,17 +189,42 @@ def _download_market(
     frames: list[pd.DataFrame] = []
     name = ""
 
-    with ThreadPoolExecutor(max_workers=min(6, len(months))) as executor:
+    def fetch_month(month: date) -> tuple[pd.DataFrame, str]:
+        fetched_name = ""
+
+        for attempt in range(MONTH_MAX_ATTEMPTS):
+            if len(months) > LONG_HISTORY_MONTH_THRESHOLD:
+                time.sleep(LONG_HISTORY_REQUEST_DELAY_SECONDS)
+            try:
+                frame, current_name = fetcher(stock_code, month)
+            except (requests.RequestException, ValueError, TypeError):
+                frame, current_name = pd.DataFrame(), ""
+
+            if current_name:
+                fetched_name = current_name
+
+            if not frame.empty:
+                return frame, fetched_name
+
+            if attempt + 1 < MONTH_MAX_ATTEMPTS:
+                time.sleep(MONTH_RETRY_DELAY_SECONDS)
+
+        return pd.DataFrame(), fetched_name
+
+    # TWSE／TPEx 對長期間大量月查詢會暫時限流，且可能只留下近期月份。
+    # 兩年內互動圖表維持並行；超過兩年的研究／競賽資料改為單線程並節流，
+    # 避免官方端限流後只留下少數近期月份，卻被誤當成完整歷史。
+    worker_count = _month_worker_count(len(months))
+    with ThreadPoolExecutor(
+        max_workers=worker_count
+    ) as executor:
         futures = {
-            executor.submit(fetcher, stock_code, month): month
+            executor.submit(fetch_month, month): month
             for month in months
         }
 
         for future in as_completed(futures):
-            try:
-                frame, fetched_name = future.result()
-            except (requests.RequestException, ValueError, TypeError):
-                continue
+            frame, fetched_name = future.result()
 
             if not frame.empty:
                 frames.append(frame)
@@ -241,10 +280,13 @@ def download_official_history(
     *,
     market: str,
     months: int = DEFAULT_MONTHS,
+    force_refresh: bool = False,
 ) -> pd.DataFrame:
     """Download official daily OHLCV data and return an independent copy."""
 
     code = str(stock_code).strip().upper()
     current_month = date.today().strftime("%Y-%m")
+    if force_refresh:
+        _download_cached.cache_clear()
     frame = _download_cached(code, market, months, current_month)
     return frame.copy()

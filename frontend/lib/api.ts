@@ -37,17 +37,21 @@ export async function fetchHealth(options: RequestOptions = {}): Promise<HealthR
 export async function fetchAnalysis(stockCode: string, positionStatus: PositionStatus = "not_holding", options: RequestOptions = {}): Promise<AnalysisResponse> { const query = new URLSearchParams({ position_status: positionStatus }); return fetchJson<AnalysisResponse>(`${API_BASE_URL}/api/stocks/${encodeURIComponent(stockCode)}/analysis?${query.toString()}`, { ...options, timeoutMs: 65_000, timeoutError: "分析時間過長，請稍後重試。", networkError: "目前無法連接分析服務，請稍後再試。", fallbackError: "分析服務錯誤" }); }
 export async function fetchBacktest(stockCode: string, initialCapital: number, options: RequestOptions = {}): Promise<BacktestResponse> { const query = new URLSearchParams({ initial_capital: String(initialCapital) }); return fetchJson<BacktestResponse>(`${API_BASE_URL}/api/stocks/${encodeURIComponent(stockCode)}/backtest?${query.toString()}`, { ...options, timeoutMs: 115_000, timeoutError: "回測時間過長，請縮短期間或稍後重試。", networkError: "目前無法連接回測服務，請稍後再試。", fallbackError: "回測服務錯誤" }); }
 export async function fetchDailyScanner(options: RequestOptions = {}): Promise<ScannerResponse> { return fetchJson<ScannerResponse>(`${API_BASE_URL}/api/stocks/scanner/daily`, { ...options, timeoutMs: 20_000, timeoutError: "每日選股池更新逾時，請稍後再試。", networkError: "目前無法連接每日選股服務。", fallbackError: "每日選股服務錯誤" }); }
-export async function fetchCompetition(initialCapital = 100_000, options: RequestOptions = {}): Promise<CompetitionResponse> { const query = new URLSearchParams({ initial_capital: String(initialCapital) }); return fetchJson<CompetitionResponse>(`${API_BASE_URL}/api/competition/run?${query.toString()}`, { ...options, timeoutMs: 120_000, timeoutError: "機器人競賽執行時間過長，請稍後再試。", networkError: "目前無法連接機器人競賽服務。", fallbackError: "機器人競賽執行失敗" }); }
+export async function fetchCompetition(initialCapital = 100_000, options: RequestOptions = {}): Promise<CompetitionResponse> { const query = new URLSearchParams({ initial_capital: String(initialCapital) }); return fetchJson<CompetitionResponse>(`${API_BASE_URL}/api/competition/run?${query.toString()}`, { ...options, timeoutMs: 180_000, timeoutError: "長期機器人競賽執行時間過長，請稍後再試。", networkError: "目前無法連接機器人競賽服務。", fallbackError: "機器人競賽執行失敗" }); }
 
 export async function fetchCompetitionPbo(
   initialCapital = 100_000,
   options: RequestOptions = {},
 ): Promise<CompetitionPboResponse> {
-  const query = new URLSearchParams({ initial_capital: String(initialCapital), slice_months: "1", max_slices: "12" });
+  const query = new URLSearchParams({
+    initial_capital: String(initialCapital),
+    slice_months: "1",
+    max_slices: "60",
+  });
   return fetchJson<CompetitionPboResponse>(`${API_BASE_URL}/api/competition/pbo?${query.toString()}`, {
     ...options,
-    timeoutMs: 180_000,
-    timeoutError: "跨時間穩定性檢驗時間過長，請稍後再試。",
+    timeoutMs: 300_000,
+    timeoutError: "5 年跨時間穩定性檢驗時間過長，請稍後再試。",
     networkError: "目前無法連接 CSCV/PBO 分析服務。",
     fallbackError: "跨時間穩定性檢驗失敗",
   });

@@ -313,6 +313,7 @@ export type CompetitionResponse = {
   status: "completed";
   executed_at: string;
   requested_history_months: number;
+  data_sources: Record<string, string>;
   history_coverage: Record<string, {
     start: string | null;
     end: string | null;

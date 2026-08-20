@@ -1176,19 +1176,34 @@ def _download_competition_frames() -> tuple[
     frames: dict[str, pd.DataFrame] = {}
     sources: dict[str, str] = {}
     coverage: dict[str, dict[str, Any]] = {}
-    # 每檔內部保留受控月份並行，但股票之間依序抓取並稍作停頓；
-    # 同時依上市日裁掉不存在的月份，避免無效重試觸發官方限流。
+    # 長期行情優先一次下載，避免官方免費逐月介面在冷啟動時因大量查詢遭限流；
+    # 分割與配息仍由證交所資料校正。只有長期來源不完整時才受控回退官方逐月資料。
     for index, code in enumerate(COMPETITION_UNIVERSE):
         if index:
             time.sleep(COMPETITION_DOWNLOAD_PAUSE_SECONDS)
         requested_months = _competition_official_months(code)
-        for attempt in range(2):
+        candidates = (
+            {
+                "prefer_official": False,
+                "daily_period": "10y",
+                "force_official_refresh": False,
+            },
+            {
+                "prefer_official": True,
+                "daily_period": "max",
+                "force_official_refresh": True,
+            },
+        )
+        last_item: dict[str, Any] = {}
+
+        for candidate in candidates:
             frame = download_stock(
                 code,
-                prefer_official=True,
+                daily_period=str(candidate["daily_period"]),
+                prefer_official=bool(candidate["prefer_official"]),
                 update_with_intraday=False,
                 official_months=requested_months,
-                force_official_refresh=attempt > 0,
+                force_official_refresh=bool(candidate["force_official_refresh"]),
                 include_corporate_actions=True,
             )
             prepared = _prepare_frame(frame)
@@ -1199,20 +1214,17 @@ def _download_competition_frames() -> tuple[
                 code,
                 item,
             )
+            last_item = item
 
             if item["requested_span_complete"]:
                 sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
                 frames[code] = prepared
                 coverage[code] = item
                 break
-
-            if attempt == 0:
-                time.sleep(2)
-                continue
-
+        else:
             raise TimeoutError(
-                f"{code} 官方歷史資料不完整："
-                f"需要從 {required_start_month} 起，實際僅有 {item.get('start') or '無資料'} 起。"
+                f"{code} 歷史資料不完整："
+                f"需要從 {required_start_month} 起，實際僅有 {last_item.get('start') or '無資料'} 起。"
             )
     return frames, sources, coverage
 
@@ -1380,6 +1392,8 @@ def run_competition_on_frames(
         "robots": robot_outputs,
         "disclosures": [
             "競賽優先使用五年資料：前 4 年做固定規則歷史檢查，最後 1 年做 walk-forward 樣本外排名。",
+            "長期 OHLCV 會逐檔揭露實際來源；現行優先一次下載 Yahoo Finance 未調整行情，ETF 分割與現金配息仍使用證交所資料校正。",
+            "每檔資料必須涵蓋要求的起始月份且中間沒有缺月，否則整場競賽直接中止，不會用殘缺資料產生排名。",
             "成立未滿五年的 ETF 只會使用上市後的真實資料，不會補造不存在的行情。",
             "個別 ETF 在尚無行情的區間，其等額配置會保留為現金；所有機器人適用完全相同規則。",
             "歷史價格會依 ETF 分割／反分割調整，持有期間並納入證交所公告的現金配息。",

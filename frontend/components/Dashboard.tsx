@@ -337,7 +337,7 @@ function clearCompetitionCache(): void {
 
 function competitionLoadingStage(elapsedSeconds: number): string {
   if (elapsedSeconds < 12) {
-    return "連線並檢查官方 ETF 資料";
+    return "連線並檢查 ETF 歷史資料";
   }
   if (elapsedSeconds < 55) {
     return "整理五年行情、分割與配息";
@@ -2858,7 +2858,7 @@ export default function Dashboard() {
         <PageHeader
           eyebrow="ROBOT COMPETITION"
           title="AI 策略機器人競賽"
-          description="16 個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；以前 4 年做歷史檢查，再以最後 1 年 walk-forward 樣本外模擬排名。"
+          description="16 個固定規則機器人使用同一批完整 ETF 歷史資料與相同資金、成本、風控；行情來源逐檔揭露，以前 4 年檢查，再用最後 1 年 walk-forward 模擬排名。"
         />
 
         <section className="metrics-grid">
@@ -3014,6 +3014,13 @@ export default function Dashboard() {
                 <li>
                   實際資料起點：{Object.entries(competition.history_coverage)
                     .map(([code, coverage]) => `${code} ${coverage.start ?? "無資料"}`)
+                    .join("、")}
+                </li>
+              ) : null}
+              {competition ? (
+                <li>
+                  行情來源：{Object.entries(competition.data_sources)
+                    .map(([code, source]) => `${code} ${source}`)
                     .join("、")}
                 </li>
               ) : null}

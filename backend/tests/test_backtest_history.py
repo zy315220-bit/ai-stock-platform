@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from app.services.backtest.engine import backtest_stock
+from indicators import add_indicators as real_add_indicators
 
 
 class BacktestHistoryTests(unittest.TestCase):
@@ -55,6 +56,49 @@ class BacktestHistoryTests(unittest.TestCase):
         self.assertEqual(result["actual_end_date"], "2026-08-20")
         self.assertEqual(result["history_coverage"]["available_years"], 5.0)
         self.assertTrue(result["history_coverage"]["long_horizon_qualified"])
+
+    def test_optional_indicator_nan_does_not_shorten_backtest_period(self) -> None:
+        dates = pd.bdate_range("2021-01-01", "2026-08-20")
+        phase = np.linspace(0, 24 * np.pi, len(dates))
+        prices = 27 + np.sin(phase) + np.linspace(0, 5, len(dates))
+        frame = pd.DataFrame(
+            {
+                "Open": prices,
+                "High": prices + 0.5,
+                "Low": prices - 0.5,
+                "Close": prices,
+                "Volume": np.full(len(dates), 1_000_000),
+            },
+            index=dates,
+        )
+
+        def indicators_with_optional_nan(data: pd.DataFrame) -> pd.DataFrame:
+            enriched = real_add_indicators(data)
+            enriched["OptionalDiagnostic"] = np.nan
+            return enriched
+
+        with (
+            patch(
+                "app.services.backtest.engine.download_stock",
+                return_value=frame,
+            ),
+            patch(
+                "app.services.backtest.engine.add_indicators",
+                side_effect=indicators_with_optional_nan,
+            ),
+            patch(
+                "app.services.backtest.engine.calculate_score",
+                return_value={"total_score": 0},
+            ),
+        ):
+            result = backtest_stock(
+                "00878",
+                start_date="2021-08-20",
+                initial_capital=80_000,
+            )
+
+        self.assertEqual(result["actual_start_date"], "2021-08-20")
+        self.assertEqual(result["actual_end_date"], "2026-08-20")
 
 
 if __name__ == "__main__":

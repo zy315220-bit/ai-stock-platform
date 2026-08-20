@@ -15,9 +15,11 @@ TWSE_INDEX_URL = "https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX"
 TWSE_QUOTES_URL = (
     "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
 )
-TPEX_INDEX_URL = "https://www.tpex.org.tw/openapi/v1/tpex_index"
-TPEX_QUOTES_URL = (
-    "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"
+TWSE_COMPANY_PROFILE_URL = (
+    "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+)
+TPEX_MARKET_URL = (
+    "https://www.tpex.org.tw/openapi/v1/tpex_mainborad_highlight"
 )
 TWSE_TRADING_CALENDAR_URL = (
     "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK"
@@ -51,6 +53,26 @@ SECTOR_INDICES = (
     ("化學生技", "化學生技醫療類指數"),
     ("塑膠", "塑膠類指數"),
 )
+
+# 證交所公開資訊觀測站的官方產業代碼。電子類指數涵蓋其下所有電子次產業；
+# 化學生技醫療類指數則涵蓋化學與生技醫療兩個產業代碼。
+SECTOR_INDUSTRY_CODES = {
+    "半導體": {"24"},
+    "電子": {"24", "25", "26", "27", "28", "29", "30", "31"},
+    "電腦週邊": {"25"},
+    "電子零組件": {"28"},
+    "光電": {"26"},
+    "通信網路": {"27"},
+    "資訊服務": {"30"},
+    "金融保險": {"17"},
+    "航運": {"15"},
+    "鋼鐵": {"10"},
+    "電機機械": {"05"},
+    "汽車": {"12"},
+    "生技醫療": {"22"},
+    "化學生技": {"21", "22"},
+    "塑膠": {"03"},
+}
 
 
 def _safe_float(value: Any) -> float | None:
@@ -98,6 +120,13 @@ def _request_rows(url: str) -> list[dict[str, Any]]:
     return [item for item in payload if isinstance(item, dict)]
 
 
+def _request_optional_rows(url: str) -> list[dict[str, Any]]:
+    try:
+        return _request_rows(url)
+    except (requests.RequestException, RuntimeError, ValueError):
+        return []
+
+
 def _request_payload(
     url: str,
     *,
@@ -119,6 +148,17 @@ def _request_payload(
         raise RuntimeError("交易所歷史指數格式不正確。")
 
     return payload
+
+
+def _request_optional_payload(
+    url: str,
+    *,
+    params: dict[str, str],
+) -> dict[str, Any] | None:
+    try:
+        return _request_payload(url, params=params)
+    except (requests.RequestException, RuntimeError, ValueError):
+        return None
 
 
 def _iso_market_date(value: Any) -> str:
@@ -156,6 +196,92 @@ def _calendar_dates_from_payload(payload: dict[str, Any]) -> list[date]:
             continue
 
     return trading_dates
+
+
+def _turnover_rows_from_calendar_payload(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    fields = payload.get("fields")
+    rows = payload.get("data")
+    if not isinstance(fields, list) or not isinstance(rows, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, list):
+            continue
+
+        item = dict(zip(fields, row, strict=False))
+        market_date = _iso_market_date(item.get("日期"))
+        turnover = _safe_float(item.get("成交金額"))
+        if not market_date or turnover is None:
+            continue
+
+        normalized.append(
+            {
+                "date": market_date,
+                "turnover_billion": round(turnover / 1_000_000_000, 2),
+            }
+        )
+
+    return normalized
+
+
+def _leading_int(value: Any) -> int | None:
+    matched = re.search(r"-?[\d,]+", str(value or ""))
+    if not matched:
+        return None
+
+    try:
+        return int(matched.group(0).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _market_breadth_row_from_payload(
+    payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    payload_date = _iso_market_date(payload.get("date"))
+
+    for table in payload.get("tables", []):
+        if not isinstance(table, dict) or table.get("title") != "漲跌證券數合計":
+            continue
+
+        fields = table.get("fields")
+        rows = table.get("data")
+        if not isinstance(fields, list) or not isinstance(rows, list):
+            continue
+
+        values: dict[str, int] = {}
+        for row in rows:
+            if not isinstance(row, list):
+                continue
+            item = dict(zip(fields, row, strict=False))
+            category = str(item.get("類型", ""))
+            stock_count = _leading_int(item.get("股票"))
+            if stock_count is not None:
+                values[category] = stock_count
+
+        advancing = values.get("上漲(漲停)")
+        declining = values.get("下跌(跌停)")
+        unchanged = values.get("持平")
+        if advancing is None or declining is None or unchanged is None:
+            return None
+
+        directional = advancing + declining
+        return {
+            "date": payload_date,
+            "advancing": advancing,
+            "declining": declining,
+            "unchanged": unchanged,
+            "advance_ratio": (
+                round(advancing / directional * 100, 2)
+                if directional
+                else None
+            ),
+        }
+
+    return None
 
 
 def _price_index_rows_from_payload(
@@ -208,12 +334,10 @@ def _recent_month_starts(as_of: date, count: int = 3) -> list[date]:
     return starts
 
 
-def _load_sector_trend_history(as_of_text: str) -> dict[str, Any]:
-    as_of = date.fromisoformat(as_of_text)
-    month_starts = _recent_month_starts(as_of)
-
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        calendar_payloads = list(
+def _load_calendar_payloads(reference_date: date) -> list[dict[str, Any]]:
+    month_starts = _recent_month_starts(reference_date, count=2)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        return list(
             executor.map(
                 lambda month_start: _request_payload(
                     TWSE_TRADING_CALENDAR_URL,
@@ -225,6 +349,15 @@ def _load_sector_trend_history(as_of_text: str) -> dict[str, Any]:
                 month_starts,
             )
         )
+
+
+def _load_sector_trend_history(
+    as_of_text: str,
+    calendar_payloads: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    as_of = date.fromisoformat(as_of_text)
+    if calendar_payloads is None:
+        calendar_payloads = _load_calendar_payloads(as_of)
 
     trading_dates = sorted(
         {
@@ -241,21 +374,54 @@ def _load_sector_trend_history(as_of_text: str) -> dict[str, Any]:
     five_session_start = trading_dates[-6]
     twenty_session_start = trading_dates[-21]
     anchor_dates = (five_session_start, twenty_session_start)
+    rolling_dates = trading_dates[-20:]
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        anchor_payloads = list(
-            executor.map(
-                lambda anchor_date: _request_payload(
-                    TWSE_DAILY_INDEX_URL,
-                    params={
-                        "date": anchor_date.strftime("%Y%m%d"),
-                        "type": "IND",
-                        "response": "json",
-                    },
-                ),
-                anchor_dates,
+    with ThreadPoolExecutor(max_workers=22) as executor:
+        anchor_futures = [
+            executor.submit(
+                _request_payload,
+                TWSE_DAILY_INDEX_URL,
+                params={
+                    "date": anchor_date.strftime("%Y%m%d"),
+                    "type": "IND",
+                    "response": "json",
+                },
             )
-        )
+            for anchor_date in anchor_dates
+        ]
+        breadth_futures = [
+            executor.submit(
+                _request_optional_payload,
+                TWSE_DAILY_INDEX_URL,
+                params={
+                    "date": trading_date.strftime("%Y%m%d"),
+                    "type": "MS",
+                    "response": "json",
+                },
+            )
+            for trading_date in rolling_dates
+        ]
+        anchor_payloads = [future.result() for future in anchor_futures]
+        breadth_payloads = [
+            payload
+            for future in breadth_futures
+            if (payload := future.result()) is not None
+        ]
+
+    breadth_rows = [
+        row
+        for payload in breadth_payloads
+        if (row := _market_breadth_row_from_payload(payload)) is not None
+    ]
+    turnover_rows = sorted(
+        (
+            row
+            for payload in calendar_payloads
+            for row in _turnover_rows_from_calendar_payload(payload)
+            if date.fromisoformat(row["date"]) <= as_of
+        ),
+        key=lambda row: row["date"],
+    )[-20:]
 
     return {
         "as_of": as_of.isoformat(),
@@ -263,7 +429,13 @@ def _load_sector_trend_history(as_of_text: str) -> dict[str, Any]:
         "twenty_session_start": twenty_session_start.isoformat(),
         "five_session_rows": _price_index_rows_from_payload(anchor_payloads[0]),
         "twenty_session_rows": _price_index_rows_from_payload(anchor_payloads[1]),
+        "market_breadth_rows": sorted(
+            breadth_rows,
+            key=lambda row: row["date"],
+        ),
+        "turnover_rows": turnover_rows,
     }
+
 
 def _index_entry(
     rows: list[dict[str, Any]],
@@ -292,8 +464,8 @@ def _tpex_index_entry(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         return None
 
     item = max(rows, key=lambda row: str(row.get("Date", "")))
-    close = _safe_float(item.get("Close"))
-    change = _safe_float(item.get("Change"))
+    close = _safe_float(item.get("Close") or item.get("CloseIndex"))
+    change = _safe_float(item.get("Change") or item.get("IndexChange"))
     previous_close = (
         close - change
         if close is not None and change is not None
@@ -362,6 +534,275 @@ def _breadth(
     }
 
 
+def _tpex_breadth(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    highlight = next(
+        (
+            item
+            for item in rows
+            if item.get("PriceRiseCompanyNumbers") is not None
+        ),
+        None,
+    )
+    if highlight is None:
+        return _breadth(
+            rows,
+            code_key="SecuritiesCompanyCode",
+            change_key="Change",
+            value_key="TransactionAmount",
+        )
+
+    advancing = _leading_int(highlight.get("PriceRiseCompanyNumbers")) or 0
+    declining = _leading_int(highlight.get("PriceDeclineCompanyNumbers")) or 0
+    unchanged = _leading_int(highlight.get("PriceFlatCompanyNumbers")) or 0
+    daily_value_million = _safe_float(highlight.get("DailyTradingValue")) or 0.0
+    return {
+        "advancing": advancing,
+        "declining": declining,
+        "unchanged": unchanged,
+        "counted": advancing + declining + unchanged,
+        "turnover": daily_value_million * 1_000_000,
+    }
+
+
+def _sector_breadth(
+    twse_quotes: list[dict[str, Any]],
+    company_profiles: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    industry_by_code = {
+        str(item.get("公司代號", "")).strip(): str(item.get("產業別", "")).strip()
+        for item in company_profiles
+        if _equity_code.fullmatch(str(item.get("公司代號", "")).strip())
+    }
+    quote_by_code = {
+        str(item.get("Code", "")).strip(): item
+        for item in twse_quotes
+        if _equity_code.fullmatch(str(item.get("Code", "")).strip())
+    }
+    total_turnover = sum(
+        trade_value
+        for item in quote_by_code.values()
+        if (trade_value := _safe_float(item.get("TradeValue"))) is not None
+        and trade_value > 0
+    )
+    result: dict[str, dict[str, Any]] = {}
+
+    for sector_name, industry_codes in SECTOR_INDUSTRY_CODES.items():
+        advancing = 0
+        declining = 0
+        unchanged = 0
+        turnover = 0.0
+
+        for code, industry_code in industry_by_code.items():
+            if industry_code not in industry_codes:
+                continue
+
+            quote = quote_by_code.get(code)
+            if quote is None:
+                continue
+
+            change = _safe_float(quote.get("Change"))
+            trade_value = _safe_float(quote.get("TradeValue"))
+            if change is None:
+                continue
+
+            if change > 0:
+                advancing += 1
+            elif change < 0:
+                declining += 1
+            else:
+                unchanged += 1
+
+            if trade_value is not None and trade_value > 0:
+                turnover += trade_value
+
+        directional = advancing + declining
+        advance_ratio = (
+            round(advancing / directional * 100, 1)
+            if directional
+            else None
+        )
+        result[sector_name] = {
+            "advancing": advancing,
+            "declining": declining,
+            "unchanged": unchanged,
+            "advance_ratio": advance_ratio,
+            "turnover_share_pct": (
+                round(turnover / total_turnover * 100, 2)
+                if total_turnover > 0
+                else None
+            ),
+        }
+
+    return result
+
+
+def _sector_breadth_label(
+    price_change: float,
+    advance_ratio: float | None,
+) -> str:
+    if advance_ratio is None:
+        return "個股資料不足"
+    if price_change > 0 and advance_ratio < 45:
+        return "少數權值股帶動"
+    if price_change < 0 and advance_ratio > 55:
+        return "多數個股抗跌"
+    if advance_ratio >= 65:
+        return "多數個股同步轉強"
+    if advance_ratio >= 55:
+        return "擴散偏強"
+    if advance_ratio >= 45:
+        return "漲跌分歧"
+    if advance_ratio >= 35:
+        return "擴散偏弱"
+    return "多數個股同步轉弱"
+
+
+def _average_last(
+    rows: list[dict[str, Any]],
+    count: int,
+    key: str,
+) -> float | None:
+    if len(rows) < count:
+        return None
+
+    values = [
+        float(row[key])
+        for row in rows[-count:]
+        if row.get(key) is not None
+    ]
+    if len(values) < count:
+        return None
+
+    return sum(values) / len(values)
+
+
+def _positive_breadth_days(
+    rows: list[dict[str, Any]],
+    count: int,
+) -> int | None:
+    if len(rows) < count:
+        return None
+
+    return sum(
+        int(row["advancing"]) > int(row["declining"])
+        for row in rows[-count:]
+    )
+
+
+def _net_advance_ratio(
+    rows: list[dict[str, Any]],
+    count: int,
+) -> float | None:
+    if len(rows) < count:
+        return None
+
+    selected = rows[-count:]
+    advancing = sum(int(row["advancing"]) for row in selected)
+    declining = sum(int(row["declining"]) for row in selected)
+    directional = advancing + declining
+    if not directional:
+        return None
+
+    return round((advancing - declining) / directional * 100, 1)
+
+
+def _market_history_summary(
+    history: dict[str, Any],
+    benchmark_return_20d: float | None,
+) -> dict[str, Any]:
+    breadth_rows = sorted(
+        history.get("market_breadth_rows") or [],
+        key=lambda row: row["date"],
+    )
+    turnover_rows = sorted(
+        history.get("turnover_rows") or [],
+        key=lambda row: row["date"],
+    )
+    average_5d = _average_last(breadth_rows, 5, "advance_ratio")
+    average_20d = _average_last(breadth_rows, 20, "advance_ratio")
+    latest_ratio = (
+        float(breadth_rows[-1]["advance_ratio"])
+        if breadth_rows and breadth_rows[-1].get("advance_ratio") is not None
+        else None
+    )
+    turnover_current = (
+        float(turnover_rows[-1]["turnover_billion"])
+        if turnover_rows
+        else None
+    )
+    turnover_average_5d = _average_last(
+        turnover_rows,
+        5,
+        "turnover_billion",
+    )
+    turnover_average_20d = _average_last(
+        turnover_rows,
+        20,
+        "turnover_billion",
+    )
+    turnover_ratio_20d = (
+        round(turnover_current / turnover_average_20d, 2)
+        if turnover_current is not None and turnover_average_20d not in {None, 0}
+        else None
+    )
+
+    if average_5d is None:
+        breadth_label = "多日廣度資料不足"
+    elif average_20d is not None and average_5d >= average_20d + 3 and average_5d >= 50:
+        breadth_label = "廣度正在擴張"
+    elif average_20d is not None and average_5d <= average_20d - 3 and average_5d < 50:
+        breadth_label = "廣度正在收縮"
+    elif average_5d >= 55:
+        breadth_label = "多數股票偏強"
+    elif average_5d <= 45:
+        breadth_label = "多數股票偏弱"
+    else:
+        breadth_label = "廣度中性"
+
+    if turnover_ratio_20d is None or benchmark_return_20d is None:
+        volume_label = "量價資料不足"
+    elif benchmark_return_20d > 0 and turnover_ratio_20d >= 1.1:
+        volume_label = "上漲且量能放大"
+    elif benchmark_return_20d > 0 and turnover_ratio_20d < 0.8:
+        volume_label = "上漲但量能偏低"
+    elif benchmark_return_20d < 0 and turnover_ratio_20d >= 1.1:
+        volume_label = "下跌且量能放大"
+    elif benchmark_return_20d < 0 and turnover_ratio_20d < 0.8:
+        volume_label = "下跌但量能縮小"
+    else:
+        volume_label = "量能接近 20 日均值"
+
+    return {
+        "available": average_5d is not None or turnover_ratio_20d is not None,
+        "breadth_complete": len(breadth_rows) >= 20,
+        "volume_complete": len(turnover_rows) >= 20,
+        "as_of": history.get("as_of"),
+        "five_session_start": (
+            breadth_rows[-5]["date"] if len(breadth_rows) >= 5 else None
+        ),
+        "twenty_session_start": (
+            breadth_rows[-20]["date"] if len(breadth_rows) >= 20 else None
+        ),
+        "latest_advance_ratio": round(latest_ratio, 1) if latest_ratio is not None else None,
+        "average_advance_ratio_5d": round(average_5d, 1) if average_5d is not None else None,
+        "average_advance_ratio_20d": round(average_20d, 1) if average_20d is not None else None,
+        "positive_breadth_days_5d": _positive_breadth_days(breadth_rows, 5),
+        "positive_breadth_days_20d": _positive_breadth_days(breadth_rows, 20),
+        "net_advance_ratio_5d": _net_advance_ratio(breadth_rows, 5),
+        "net_advance_ratio_20d": _net_advance_ratio(breadth_rows, 20),
+        "breadth_label": breadth_label,
+        "turnover_current_billion": round(turnover_current, 1) if turnover_current is not None else None,
+        "turnover_average_5d_billion": round(turnover_average_5d, 1) if turnover_average_5d is not None else None,
+        "turnover_average_20d_billion": round(turnover_average_20d, 1) if turnover_average_20d is not None else None,
+        "turnover_ratio_20d": turnover_ratio_20d,
+        "volume_label": volume_label,
+        "method": (
+            "多日廣度以證交所上市股票每日上漲家數除以上漲加下跌家數；"
+            "量能以集中市場全部有價證券成交金額比較最近 20 個交易日平均。"
+        ),
+    }
+
+
 def _return_percent(current: float | None, previous: float | None) -> float | None:
     if current is None or previous in {None, 0}:
         return None
@@ -422,6 +863,7 @@ def _sector_rows(
     *,
     five_session_rows: list[dict[str, Any]] | None = None,
     twenty_session_rows: list[dict[str, Any]] | None = None,
+    sector_breadth: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     sectors: list[dict[str, Any]] = []
     benchmark_current = _index_entry(index_rows, "發行量加權股價指數")
@@ -462,6 +904,8 @@ def _sector_rows(
             if return_20d is not None and benchmark_return_20d is not None
             else None
         )
+        participation = (sector_breadth or {}).get(sector_name, {})
+        advance_ratio = participation.get("advance_ratio")
         sectors.append(
             {
                 "name": sector_name,
@@ -483,6 +927,15 @@ def _sector_rows(
                 "trend_score": None,
                 "trend_rank": None,
                 "trend_label": _trend_label(return_5d, return_20d, excess_20d),
+                "advancing": participation.get("advancing"),
+                "declining": participation.get("declining"),
+                "unchanged": participation.get("unchanged"),
+                "advance_ratio": advance_ratio,
+                "turnover_share_pct": participation.get("turnover_share_pct"),
+                "breadth_label": _sector_breadth_label(
+                    change_percent,
+                    advance_ratio,
+                ),
             }
         )
 
@@ -558,6 +1011,7 @@ def build_market_overview(
     tpex_indices: list[dict[str, Any]],
     tpex_quotes: list[dict[str, Any]],
     sector_history: dict[str, Any] | None = None,
+    company_profiles: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     twse_index = _index_entry(twse_indices, "發行量加權股價指數")
     tpex_index = _tpex_index_entry(tpex_indices)
@@ -569,12 +1023,7 @@ def build_market_overview(
         change_key="Change",
         value_key="TradeValue",
     )
-    tpex_breadth = _breadth(
-        tpex_quotes,
-        code_key="SecuritiesCompanyCode",
-        change_key="Change",
-        value_key="TransactionAmount",
-    )
+    tpex_breadth = _tpex_breadth(tpex_quotes)
 
     advancing = twse_breadth["advancing"] + tpex_breadth["advancing"]
     declining = twse_breadth["declining"] + tpex_breadth["declining"]
@@ -586,10 +1035,15 @@ def build_market_overview(
         declining,
     )
     history = sector_history or {}
+    participation = _sector_breadth(
+        twse_quotes,
+        company_profiles or [],
+    )
     sectors = _sector_rows(
         twse_indices,
         five_session_rows=history.get("five_session_rows"),
         twenty_session_rows=history.get("twenty_session_rows"),
+        sector_breadth=participation,
     )
     trend_available = bool(
         sectors and all(item["trend_score"] is not None for item in sectors)
@@ -600,6 +1054,18 @@ def build_market_overview(
             for item in indices
             if item.get("date")
         }
+    )
+    benchmark_20d = _index_entry(
+        history.get("twenty_session_rows") or [],
+        "發行量加權股價指數",
+    )
+    benchmark_return_20d = _return_percent(
+        twse_index.get("close") if twse_index else None,
+        benchmark_20d.get("close") if benchmark_20d else None,
+    )
+    market_trend = _market_history_summary(
+        history,
+        benchmark_return_20d,
     )
 
     return {
@@ -624,6 +1090,7 @@ def build_market_overview(
             "regime_score": regime_score,
             "regime_reason": regime_reason,
         },
+        "market_trend": market_trend,
         "sectors": sectors,
         "sector_trend": {
             "available": trend_available,
@@ -642,7 +1109,7 @@ def build_market_overview(
         "method": (
             "盤後資料取自證交所與櫃買中心 OpenAPI；市場狀態綜合加權指數、"
             "櫃買指數與上市櫃普通股漲跌家數。產業頁同時揭露當日、5 日、"
-            "20 日價格表現與相對大盤超額報酬。"
+            "20 日價格表現、相對大盤超額報酬與產業內上市個股漲跌擴散。"
         ),
         "sources": [
             {
@@ -665,18 +1132,46 @@ def get_market_overview() -> dict[str, Any]:
         if _market_cache and now - _market_cache[0] < CACHE_SECONDS:
             return _market_cache[1]
 
-    urls = (
-        TWSE_INDEX_URL,
-        TWSE_QUOTES_URL,
-        TPEX_INDEX_URL,
-        TPEX_QUOTES_URL,
-    )
-
     try:
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            twse_indices, twse_quotes, tpex_indices, tpex_quotes = list(
-                executor.map(_request_rows, urls)
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            twse_indices_future = executor.submit(_request_rows, TWSE_INDEX_URL)
+            twse_quotes_future = executor.submit(_request_rows, TWSE_QUOTES_URL)
+            tpex_market_future = executor.submit(_request_rows, TPEX_MARKET_URL)
+            company_profile_future = executor.submit(
+                _request_optional_rows,
+                TWSE_COMPANY_PROFILE_URL,
             )
+            calendar_future = executor.submit(
+                _load_calendar_payloads,
+                date.today(),
+            )
+
+            twse_indices = twse_indices_future.result()
+            twse_index = _index_entry(
+                twse_indices,
+                "發行量加權股價指數",
+            )
+            try:
+                calendar_payloads = calendar_future.result()
+            except (requests.RequestException, RuntimeError, ValueError):
+                calendar_payloads = None
+
+            history_future = (
+                executor.submit(
+                    _load_sector_trend_history,
+                    twse_index["date"],
+                    calendar_payloads,
+                )
+                if twse_index and calendar_payloads
+                else None
+            )
+            twse_quotes = twse_quotes_future.result()
+            tpex_market = tpex_market_future.result()
+            company_profiles = company_profile_future.result()
+            try:
+                sector_history = history_future.result() if history_future else None
+            except (requests.RequestException, RuntimeError, ValueError):
+                sector_history = None
     except (requests.RequestException, RuntimeError, ValueError) as error:
         with _cache_lock:
             if _market_cache:
@@ -684,28 +1179,13 @@ def get_market_overview() -> dict[str, Any]:
 
         raise RuntimeError("官方市場資料暫時無法取得，請稍後再試。") from error
 
-    basic_result = build_market_overview(
-        twse_indices,
-        twse_quotes,
-        tpex_indices,
-        tpex_quotes,
-    )
-
-    sector_history: dict[str, Any] | None = None
-    if basic_result["indices"]["twse"]:
-        try:
-            sector_history = _load_sector_trend_history(
-                basic_result["indices"]["twse"]["date"]
-            )
-        except (requests.RequestException, RuntimeError, ValueError):
-            sector_history = None
-
     result = build_market_overview(
         twse_indices,
         twse_quotes,
-        tpex_indices,
-        tpex_quotes,
+        tpex_market,
+        tpex_market,
         sector_history=sector_history,
+        company_profiles=company_profiles,
     )
 
     with _cache_lock:

@@ -1,6 +1,8 @@
 from app.services.market_overview_service import (
     _calendar_dates_from_payload,
+    _market_breadth_row_from_payload,
     _price_index_rows_from_payload,
+    _turnover_rows_from_calendar_payload,
     build_market_overview,
 )
 
@@ -93,6 +95,27 @@ def test_market_overview_marks_mismatched_exchange_dates() -> None:
     assert result["indices"]["twse"]["change"] == -100
 
 
+def test_tpex_highlight_supplies_index_breadth_and_turnover() -> None:
+    highlight = [
+        {
+            "Date": "1150820",
+            "CloseIndex": "389.96",
+            "IndexChange": "5.17",
+            "PriceRiseCompanyNumbers": "485",
+            "PriceDeclineCompanyNumbers": "293",
+            "PriceFlatCompanyNumbers": "89",
+            "DailyTradingValue": "184302",
+        }
+    ]
+    result = build_market_overview([], [], highlight, highlight)
+
+    assert result["indices"]["tpex"]["close"] == 389.96
+    assert result["indices"]["tpex"]["change_percent"] == 1.34
+    assert result["market"]["advancing"] == 485
+    assert result["market"]["declining"] == 293
+    assert result["market"]["turnover_billion"] == 184.3
+
+
 def test_market_overview_builds_multi_session_sector_ranking() -> None:
     current_indices = [
         {
@@ -178,3 +201,116 @@ def test_official_history_payload_parsers() -> None:
     ]
     assert rows[0]["指數"] == "半導體類指數"
     assert rows[0]["日期"] == "2026-08-20"
+
+
+def test_market_breadth_and_turnover_payload_parsers() -> None:
+    breadth = _market_breadth_row_from_payload(
+        {
+            "date": "20260820",
+            "tables": [
+                {
+                    "title": "漲跌證券數合計",
+                    "fields": ["類型", "整體市場", "股票"],
+                    "data": [
+                        ["上漲(漲停)", "3,000(20)", "480(8)"],
+                        ["下跌(跌停)", "2,000(10)", "320(1)"],
+                        ["持平", "600", "100"],
+                    ],
+                }
+            ],
+        }
+    )
+    turnover = _turnover_rows_from_calendar_payload(
+        {
+            "fields": ["日期", "成交金額"],
+            "data": [["115/08/20", "1,250,000,000,000"]],
+        }
+    )
+
+    assert breadth == {
+        "date": "2026-08-20",
+        "advancing": 480,
+        "declining": 320,
+        "unchanged": 100,
+        "advance_ratio": 60.0,
+    }
+    assert turnover == [
+        {"date": "2026-08-20", "turnover_billion": 1250.0}
+    ]
+
+
+def test_market_overview_adds_multi_day_breadth_volume_and_sector_participation() -> None:
+    breadth_rows = [
+        {
+            "date": f"2026-08-{day:02d}",
+            "advancing": 600 if day >= 16 else 450,
+            "declining": 400 if day >= 16 else 550,
+            "unchanged": 100,
+            "advance_ratio": 60.0 if day >= 16 else 45.0,
+        }
+        for day in range(1, 21)
+    ]
+    turnover_rows = [
+        {
+            "date": f"2026-08-{day:02d}",
+            "turnover_billion": 1200.0 if day == 20 else 1000.0,
+        }
+        for day in range(1, 21)
+    ]
+    result = build_market_overview(
+        twse_indices=[
+            {
+                "日期": "1150820",
+                "指數": "發行量加權股價指數",
+                "收盤指數": "1100",
+                "漲跌百分比": "1.0",
+            },
+            {
+                "日期": "1150820",
+                "指數": "半導體類指數",
+                "收盤指數": "220",
+                "漲跌百分比": "2.0",
+            },
+        ],
+        twse_quotes=[
+            {"Code": "2330", "Change": "5", "TradeValue": "300"},
+            {"Code": "2303", "Change": "-1", "TradeValue": "100"},
+            {"Code": "2454", "Change": "2", "TradeValue": "100"},
+        ],
+        tpex_indices=[],
+        tpex_quotes=[],
+        sector_history={
+            "as_of": "2026-08-20",
+            "five_session_start": "2026-08-13",
+            "twenty_session_start": "2026-07-23",
+            "five_session_rows": [
+                {"日期": "1150813", "指數": "發行量加權股價指數", "收盤指數": "1050"},
+                {"日期": "1150813", "指數": "半導體類指數", "收盤指數": "200"},
+            ],
+            "twenty_session_rows": [
+                {"日期": "1150723", "指數": "發行量加權股價指數", "收盤指數": "1000"},
+                {"日期": "1150723", "指數": "半導體類指數", "收盤指數": "180"},
+            ],
+            "market_breadth_rows": breadth_rows,
+            "turnover_rows": turnover_rows,
+        },
+        company_profiles=[
+            {"公司代號": "2330", "產業別": "24"},
+            {"公司代號": "2303", "產業別": "24"},
+            {"公司代號": "2454", "產業別": "24"},
+        ],
+    )
+
+    semiconductor = result["sectors"][0]
+    market_trend = result["market_trend"]
+
+    assert semiconductor["advance_ratio"] == 66.7
+    assert semiconductor["advancing"] == 2
+    assert semiconductor["declining"] == 1
+    assert semiconductor["breadth_label"] == "多數個股同步轉強"
+    assert market_trend["breadth_complete"] is True
+    assert market_trend["average_advance_ratio_5d"] == 60.0
+    assert market_trend["positive_breadth_days_5d"] == 5
+    assert market_trend["breadth_label"] == "廣度正在擴張"
+    assert market_trend["turnover_ratio_20d"] == 1.19
+    assert market_trend["volume_label"] == "上漲且量能放大"

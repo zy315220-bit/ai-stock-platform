@@ -381,10 +381,13 @@ function marketLoadingStage(elapsedSeconds: number): string {
   if (elapsedSeconds < 7) {
     return "取得證交所與櫃買中心盤後資料";
   }
-  if (elapsedSeconds < 16) {
+  if (elapsedSeconds < 14) {
     return "定位最近 5／20 個交易日";
   }
-  return "計算產業相對強弱與趨勢排名";
+  if (elapsedSeconds < 22) {
+    return "統計市場廣度與 20 日量能";
+  }
+  return "確認產業個股擴散與趨勢排名";
 }
 
 
@@ -474,7 +477,7 @@ function DataLoadingPanel({
           {isBacktest
             ? "系統會先確認長期資料完整度，再計入分割、配息與交易成本。"
             : isMarket
-              ? "產業趨勢只使用官方價格指數，並分開顯示當日、5 日與 20 日結果。"
+              ? "系統會分開計算價格趨勢、上市股票廣度與量能，不把少數權值股上漲當成全產業同步。"
               : "系統正在交叉檢查資料完整度；若筆數不足會自動改用長期來源重抓。"}
         </p>
         <small>已執行 {formatElapsedTime(elapsedSeconds)}</small>
@@ -3420,6 +3423,7 @@ export default function Dashboard() {
     const twse = marketOverview?.indices.twse ?? null;
     const tpex = marketOverview?.indices.tpex ?? null;
     const market = marketOverview?.market ?? null;
+    const marketTrend = marketOverview?.market_trend ?? null;
     const trendAvailable = marketOverview?.sector_trend.available ?? false;
     const topSectors = marketOverview
       ? trendAvailable
@@ -3434,7 +3438,7 @@ export default function Dashboard() {
         <PageHeader
           eyebrow="MARKET OVERVIEW"
           title="台股市場總覽"
-          description="整合證交所與櫃買中心官方盤後指數、成交金額、漲跌家數與市場環境。"
+          description="整合官方盤後指數、單日漲跌家數、上市 5／20 日市場廣度與量價確認。"
         />
 
         <div className="market-page-actions">
@@ -3582,6 +3586,49 @@ export default function Dashboard() {
               </div>
 
               <p>{market.regime_reason}</p>
+
+              {marketTrend?.available ? (
+                <div className="breadth-trend-grid">
+                  <span>
+                    <small>上市 5 日平均上漲比</small>
+                    <strong className={(marketTrend.average_advance_ratio_5d ?? 0) >= 50 ? "positive" : "negative"}>
+                      {formatNumber(marketTrend.average_advance_ratio_5d, 1)}%
+                    </strong>
+                    <em>
+                      {marketTrend.positive_breadth_days_5d ?? "—"}／5 日上漲家數較多
+                    </em>
+                  </span>
+                  <span>
+                    <small>上市 20 日平均上漲比</small>
+                    <strong className={(marketTrend.average_advance_ratio_20d ?? 0) >= 50 ? "positive" : "negative"}>
+                      {marketTrend.average_advance_ratio_20d === null
+                        ? "—"
+                        : `${formatNumber(marketTrend.average_advance_ratio_20d, 1)}%`}
+                    </strong>
+                    <em>
+                      {marketTrend.positive_breadth_days_20d ?? "—"}／20 日正廣度
+                    </em>
+                  </span>
+                  <span>
+                    <small>上市成交值／20 日均值</small>
+                    <strong className={(marketTrend.turnover_ratio_20d ?? 1) >= 1 ? "positive" : "negative"}>
+                      {marketTrend.turnover_ratio_20d === null
+                        ? "—"
+                        : `${formatNumber(marketTrend.turnover_ratio_20d, 2)} 倍`}
+                    </strong>
+                    <em>{marketTrend.volume_label}</em>
+                  </span>
+                </div>
+              ) : null}
+
+              {marketTrend?.available ? (
+                <div className="breadth-trend-verdict">
+                  <strong>{marketTrend.breadth_label}</strong>
+                  <small>
+                    多日口徑截至 {marketTrend.as_of}；與上方上市櫃單日家數分開計算。
+                  </small>
+                </div>
+              ) : null}
             </article>
 
             <article className="panel sector-leaders-panel">
@@ -3616,6 +3663,9 @@ export default function Dashboard() {
           <article className="market-method-note">
             <strong>計算方式</strong>
             <p>{marketOverview.method}</p>
+            {marketOverview.market_trend.available ? (
+              <p>{marketOverview.market_trend.method}</p>
+            ) : null}
             {!marketOverview.dates_aligned ? (
               <small>
                 注意：兩個交易所目前回傳日期不同（{marketOverview.source_dates.join("、")}），畫面分別標示各自日期，不把它包裝成同步即時行情。
@@ -3660,7 +3710,7 @@ export default function Dashboard() {
         <PageHeader
           eyebrow="INDUSTRY ANALYSIS"
           title="產業分析"
-          description="以證交所官方產業價格指數比較當日、5 日與 20 日表現，並揭露相對加權指數的超額報酬。"
+          description="比較官方產業指數 1／5／20 日表現，並檢查產業內上市個股是否同步上漲。"
         />
 
         <div className="market-page-actions">
@@ -3750,9 +3800,16 @@ export default function Dashboard() {
           />
 
           <MetricCard
-            label="本日產業廣度"
-            value={sectors.length ? `${advancingSectors}／${sectors.length}` : "—"}
-            detail={averageChange === null ? undefined : `平均 ${averageChange >= 0 ? "+" : ""}${formatNumber(averageChange)}%`}
+            label="最強產業個股擴散"
+            value={strongest?.advance_ratio === null || strongest?.advance_ratio === undefined
+              ? "—"
+              : `${formatNumber(strongest.advance_ratio, 1)}%`}
+            detail={strongest?.advancing === null || strongest?.declining === null
+              ? averageChange === null
+                ? undefined
+                : `${advancingSectors}／${sectors.length} 個產業上漲`
+              : `${strongest.advancing} 漲／${strongest.declining} 跌｜${strongest.breadth_label}`}
+            tone={(strongest?.advance_ratio ?? 50) >= 50 ? "positive" : "negative"}
           />
         </section>
 
@@ -3801,7 +3858,14 @@ export default function Dashboard() {
                   <span className="sector-rank-number">
                     {effectiveRankingView === "trend" ? sector.trend_rank ?? "—" : sector.rank}
                   </span>
-                  <strong>{sector.name}</strong>
+                  <div className="sector-name-cell">
+                    <strong>{sector.name}</strong>
+                    <small>
+                      {sector.advance_ratio === null
+                        ? "個股擴散資料不足"
+                        : `${sector.advancing} 漲／${sector.declining} 跌 · ${sector.breadth_label}`}
+                    </small>
+                  </div>
                   <b className={sector.change_percent >= 0 ? "positive" : "negative"}>
                     {sector.change_percent >= 0 ? "+" : ""}{formatNumber(sector.change_percent)}%
                   </b>
@@ -3826,7 +3890,7 @@ export default function Dashboard() {
             <strong>多日趨勢怎麼算？</strong>
             <p>
               {marketOverview.sector_trend.available
-                ? `${marketOverview.sector_trend.method} 資料期間 ${marketOverview.sector_trend.twenty_session_start} 至 ${marketOverview.sector_trend.as_of}。這是價格相對強弱，不等同資金流入，也不是買進建議。`
+                ? `${marketOverview.sector_trend.method} 資料期間 ${marketOverview.sector_trend.twenty_session_start} 至 ${marketOverview.sector_trend.as_of}。個股擴散只用來確認是否由少數權值股帶動，不納入排名分數；這不是資金流向或買進建議。`
                 : "官方歷史產業指數暫時不完整，因此本次只顯示當日排名，不用缺漏資料冒充多日趨勢。"}
             </p>
           </article>

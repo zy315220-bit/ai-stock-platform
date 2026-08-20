@@ -214,6 +214,12 @@ export type SectorSnapshot = {
   trend_score: number | null;
   trend_rank: number | null;
   trend_label: string;
+  advancing: number | null;
+  declining: number | null;
+  unchanged: number | null;
+  advance_ratio: number | null;
+  turnover_share_pct: number | null;
+  breadth_label: string;
 };
 
 export type MarketOverviewResponse = {
@@ -233,6 +239,28 @@ export type MarketOverviewResponse = {
     regime: "偏多" | "偏空" | "中性";
     regime_score: number;
     regime_reason: string;
+  };
+  market_trend: {
+    available: boolean;
+    breadth_complete: boolean;
+    volume_complete: boolean;
+    as_of: string | null;
+    five_session_start: string | null;
+    twenty_session_start: string | null;
+    latest_advance_ratio: number | null;
+    average_advance_ratio_5d: number | null;
+    average_advance_ratio_20d: number | null;
+    positive_breadth_days_5d: number | null;
+    positive_breadth_days_20d: number | null;
+    net_advance_ratio_5d: number | null;
+    net_advance_ratio_20d: number | null;
+    breadth_label: string;
+    turnover_current_billion: number | null;
+    turnover_average_5d_billion: number | null;
+    turnover_average_20d_billion: number | null;
+    turnover_ratio_20d: number | null;
+    volume_label: string;
+    method: string;
   };
   sectors: SectorSnapshot[];
   sector_trend: {

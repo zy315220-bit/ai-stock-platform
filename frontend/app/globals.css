@@ -1833,6 +1833,46 @@ button, input, select { font: inherit; }
   font-size: 11px;
   line-height: 1.65;
 }
+.breadth-trend-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.breadth-trend-grid > span {
+  min-width: 0;
+  padding: 10px;
+  display: grid;
+  gap: 5px;
+  border: 1px solid #203247;
+  border-radius: 9px;
+  background: #0a121c;
+}
+.breadth-trend-grid small {
+  color: #6f8295;
+  font-size: 8px;
+  line-height: 1.4;
+}
+.breadth-trend-grid strong { font-size: 16px; }
+.breadth-trend-grid em {
+  overflow: hidden;
+  color: #8798a9;
+  font-size: 8px;
+  font-style: normal;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+.breadth-trend-verdict {
+  margin-top: 10px;
+  padding: 9px 11px;
+  display: grid;
+  gap: 3px;
+  border-left: 2px solid #5eead4;
+  border-radius: 5px;
+  background: rgba(45, 212, 191, 0.06);
+}
+.breadth-trend-verdict strong { color: #c7fff5; font-size: 11px; }
+.breadth-trend-verdict small { color: #78909f; font-size: 8px; line-height: 1.5; }
 .sector-mini-list { display: grid; gap: 8px; }
 .sector-mini-list > div {
   min-height: 42px;
@@ -1909,6 +1949,19 @@ button, input, select { font: inherit; }
 .sector-ranking-list strong { font-size: 12px; }
 .sector-ranking-list span { color: #8ea0b2; font-size: 10px; }
 .sector-ranking-list b { font-size: 11px; }
+.sector-name-cell {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.sector-name-cell small {
+  overflow: hidden;
+  color: #708397;
+  font-size: 8px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sector-trend-cell { display: grid; gap: 3px; }
 .sector-trend-cell strong { color: #dbe7ff; }
 .sector-trend-cell small { color: #71839a; font-size: 8px; }
@@ -2056,6 +2109,7 @@ button, input, select { font: inherit; }
   .competition-method,
   .robot-card-grid { grid-template-columns: 1fr; }
   .market-overview-grid { grid-template-columns: 1fr; }
+  .breadth-trend-grid { grid-template-columns: 1fr 1fr 1fr; }
   .sector-ranking-head { display: none; }
   .sector-ranking-list > div {
     grid-template-columns: 28px minmax(92px, 1fr) minmax(58px, .7fr) minmax(58px, .7fr);
@@ -2125,6 +2179,12 @@ button, input, select { font: inherit; }
   .market-page-actions { align-items: stretch; flex-direction: column; }
   .market-page-actions button { width: 100%; }
   .breadth-values { grid-template-columns: 1fr 1fr 1fr; }
+  .breadth-trend-grid { grid-template-columns: 1fr; }
+  .breadth-trend-grid > span {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .breadth-trend-grid > span em { grid-column: 1 / -1; }
   .perspective-grid { grid-template-columns: 1fr; }
   .fundamental-metrics { grid-template-columns: 1fr; }
 }

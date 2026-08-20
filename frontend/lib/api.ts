@@ -2,6 +2,7 @@ import type {
   AnalysisResponse,
   BacktestResponse,
   CompetitionResponse,
+  MarketOverviewResponse,
   PositionStatus,
   ScannerResponse,
 } from "@/types/stock";
@@ -195,6 +196,21 @@ export async function fetchDailyScanner(
       timeoutError: "每日選股池更新逾時，請稍後再試。",
       networkError: "目前無法連接每日選股服務。",
       fallbackError: "每日選股服務錯誤",
+    },
+  );
+}
+
+export async function fetchMarketOverview(
+  options: RequestOptions = {},
+): Promise<MarketOverviewResponse> {
+  return fetchJson<MarketOverviewResponse>(
+    `${API_BASE_URL}/api/stocks/market/overview`,
+    {
+      ...options,
+      timeoutMs: 30_000,
+      timeoutError: "官方市場總覽更新逾時，請稍後再試。",
+      networkError: "目前無法連接市場總覽服務。",
+      fallbackError: "市場總覽服務錯誤",
     },
   );
 }

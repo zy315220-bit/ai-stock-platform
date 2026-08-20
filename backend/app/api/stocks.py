@@ -18,6 +18,7 @@ from app.services.backtest_service import (
     MAX_INITIAL_CAPITAL,
     backtest_stock,
 )
+from app.services.market_overview_service import get_market_overview
 from app.services.scanner_service import get_daily_scanner
 from app.services.stock_code import normalize_stock_code
 
@@ -25,6 +26,31 @@ from app.services.stock_code import normalize_stock_code
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get(
+    "/market/overview",
+    summary="取得台股市場與產業總覽",
+    description=(
+        "整合證交所與櫃買中心盤後資料，回傳主要指數、上市櫃普通股"
+        "漲跌家數、成交金額、市場狀態與產業類指數強弱排名。"
+    ),
+)
+async def get_stock_market_overview() -> dict[str, Any]:
+    try:
+        result = await run_in_threadpool(get_market_overview)
+    except Exception as error:
+        _raise_service_http_error(
+            error,
+            stock_code="MARKET",
+            service_name="市場總覽",
+        )
+
+    return _validate_service_result(
+        result,
+        stock_code="MARKET",
+        service_name="市場總覽",
+    )
 
 
 @router.get(

@@ -167,6 +167,51 @@ export type ScannerResponse = {
   candidates: ScannerCandidate[];
 };
 
+export type MarketIndexSnapshot = {
+  name: string;
+  date: string;
+  close: number | null;
+  change: number | null;
+  change_percent: number | null;
+  source: string;
+};
+
+export type SectorSnapshot = {
+  name: string;
+  index_name: string;
+  date: string;
+  close: number | null;
+  change_percent: number;
+  direction: "上漲" | "下跌" | "持平";
+  rank: number;
+};
+
+export type MarketOverviewResponse = {
+  updated_at: string;
+  source_dates: string[];
+  dates_aligned: boolean;
+  indices: {
+    twse: MarketIndexSnapshot | null;
+    tpex: MarketIndexSnapshot | null;
+  };
+  market: {
+    turnover_billion: number;
+    advancing: number;
+    declining: number;
+    unchanged: number;
+    breadth_ratio: number | null;
+    regime: "偏多" | "偏空" | "中性";
+    regime_score: number;
+    regime_reason: string;
+  };
+  sectors: SectorSnapshot[];
+  method: string;
+  sources: Array<{
+    name: string;
+    url: string;
+  }>;
+};
+
 export type BacktestResponse = {
   stock_code: string;
   data_source: string;

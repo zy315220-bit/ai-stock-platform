@@ -18,6 +18,7 @@ import {
   fetchCompetition,
   fetchDailyScanner,
   fetchHealth,
+  fetchMarketOverview,
   isRetryableRequestError,
 } from "@/lib/api";
 import {
@@ -28,6 +29,7 @@ import type {
   AnalysisResponse,
   BacktestResponse,
   CompetitionResponse,
+  MarketOverviewResponse,
   PositionStatus,
   ScannerCandidate,
   ScannerResponse,
@@ -639,6 +641,18 @@ export default function Dashboard() {
   const [competitionTradeSegment, setCompetitionTradeSegment] =
     useState<"backtest" | "forward">("forward");
 
+  const [marketOverview, setMarketOverview] =
+    useState<MarketOverviewResponse | null>(null);
+
+  const [marketLoading, setMarketLoading] =
+    useState(false);
+
+  const [marketError, setMarketError] =
+    useState("");
+
+  const [marketRefreshKey, setMarketRefreshKey] =
+    useState(0);
+
   const scannerAnalysesRef =
     useRef<Record<string, ScannerAnalysisEntry>>({});
 
@@ -658,6 +672,9 @@ export default function Dashboard() {
     useRef<AbortController | null>(null);
 
   const healthControllerRef =
+    useRef<AbortController | null>(null);
+
+  const marketControllerRef =
     useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -893,6 +910,62 @@ export default function Dashboard() {
 
 
   useEffect(() => {
+    if (
+      !["market", "industry"].includes(activePage) ||
+      marketOverview
+    ) {
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+    marketControllerRef.current = controller;
+    const timer = window.setTimeout(() => {
+      setMarketLoading(true);
+      setMarketError("");
+
+      void fetchMarketOverview({ signal: controller.signal })
+        .then((response) => {
+          if (!active) {
+            return;
+          }
+
+          setMarketOverview(response);
+          track("market_overview_loaded", {
+            updated_at: response.updated_at,
+            sectors: response.sectors.length,
+          });
+        })
+        .catch((reason: unknown) => {
+          if (!active || isAbortError(reason)) {
+            return;
+          }
+
+          setMarketError(
+            reason instanceof Error
+              ? reason.message
+              : "市場總覽更新失敗。",
+          );
+        })
+        .finally(() => {
+          if (active) {
+            setMarketLoading(false);
+          }
+        });
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+      if (marketControllerRef.current === controller) {
+        marketControllerRef.current = null;
+      }
+    };
+  }, [activePage, marketOverview, marketRefreshKey]);
+
+
+  useEffect(() => {
     let active = true;
 
     async function checkService() {
@@ -968,6 +1041,7 @@ export default function Dashboard() {
       analysisControllerRef.current?.abort();
       backtestControllerRef.current?.abort();
       competitionControllerRef.current?.abort();
+      marketControllerRef.current?.abort();
     };
   }, []);
 
@@ -1155,6 +1229,13 @@ export default function Dashboard() {
     setScanner(null);
     setScannerError("");
     setScannerRefreshKey((value) => value + 1);
+  }
+
+
+  function refreshMarketOverview() {
+    setMarketOverview(null);
+    setMarketError("");
+    setMarketRefreshKey((value) => value + 1);
   }
 
 
@@ -2887,92 +2968,352 @@ export default function Dashboard() {
 
 
   function renderMarketPage() {
+    const twse = marketOverview?.indices.twse ?? null;
+    const tpex = marketOverview?.indices.tpex ?? null;
+    const market = marketOverview?.market ?? null;
+    const topSectors = marketOverview?.sectors.slice(0, 5) ?? [];
+
     return (
       <>
         <PageHeader
           eyebrow="MARKET OVERVIEW"
           title="台股市場總覽"
-          description="整合加權指數、櫃買指數、成交量、漲跌家數與市場環境。"
+          description="整合證交所與櫃買中心官方盤後指數、成交金額、漲跌家數與市場環境。"
         />
+
+        <div className="market-page-actions">
+          <span>
+            {marketOverview
+              ? `最新資料：${marketOverview.updated_at || "交易所最新盤後"}`
+              : "等待官方盤後資料"}
+          </span>
+          <button
+            disabled={marketLoading}
+            onClick={refreshMarketOverview}
+            type="button"
+          >
+            {marketLoading ? "更新中…" : "重新整理"}
+          </button>
+        </div>
+
+        {marketError ? (
+          <div className="error-banner" role="alert">
+            <span>{marketError}</span>
+            <button
+              disabled={marketLoading}
+              onClick={refreshMarketOverview}
+              type="button"
+            >
+              重新嘗試
+            </button>
+          </div>
+        ) : null}
+
+        {marketLoading && !marketOverview ? <LoadingPanel /> : null}
 
         <section className="metrics-grid">
           <MetricCard
             label="加權指數"
-            value="—"
+            value={formatNumber(twse?.close)}
+            detail={
+              twse?.change_percent === null || twse?.change_percent === undefined
+                ? twse?.date
+                : `${twse.change_percent >= 0 ? "+" : ""}${formatNumber(twse.change_percent)}%｜${twse.date}`
+            }
+            tone={
+              (twse?.change_percent ?? 0) >= 0
+                ? "positive"
+                : "negative"
+            }
           />
 
           <MetricCard
             label="櫃買指數"
-            value="—"
+            value={formatNumber(tpex?.close)}
+            detail={
+              tpex?.change_percent === null || tpex?.change_percent === undefined
+                ? tpex?.date
+                : `${tpex.change_percent >= 0 ? "+" : ""}${formatNumber(tpex.change_percent)}%｜${tpex.date}`
+            }
+            tone={
+              (tpex?.change_percent ?? 0) >= 0
+                ? "positive"
+                : "negative"
+            }
           />
 
           <MetricCard
-            label="台指期近月"
-            value="—"
+            label="上市櫃股票成交金額"
+            value={
+              market
+                ? `NT$${formatNumber(market.turnover_billion * 10, 0)}億`
+                : "—"
+            }
+            detail="僅統計四位數普通股"
           />
 
           <MetricCard
-            label="市場趨勢"
-            value="待串接"
+            label="上漲／下跌家數"
+            value={
+              market
+                ? `${market.advancing}／${market.declining}`
+                : "—"
+            }
+            detail={
+              market
+                ? `平盤 ${market.unchanged} 家`
+                : undefined
+            }
           />
 
           <MetricCard
-            label="市場廣度"
-            value="待串接"
+            label="市場環境"
+            value={market?.regime ?? "—"}
+            detail={
+              market
+                ? `綜合分數 ${formatNumber(market.regime_score, 1)}`
+                : undefined
+            }
+            tone={
+              market?.regime === "偏多"
+                ? "positive"
+                : market?.regime === "偏空"
+                  ? "negative"
+                  : "default"
+            }
           />
         </section>
 
-        <EmptyPanel
-          eyebrow="MARKET DATA"
-          title="市場指數尚未連線"
-          description="已移除容易誤導的固定示範數字；正式連接可靠來源前不再顯示假即時行情。"
-        />
+        {marketOverview && market ? (
+          <section className="market-overview-grid">
+            <article className="panel market-breadth-panel">
+              <div className="panel-header">
+                <div>
+                  <span className="panel-kicker">MARKET BREADTH</span>
+                  <h2>市場廣度</h2>
+                </div>
+                <span className={`data-badge ${market.regime === "中性" ? "neutral" : ""}`}>
+                  {market.regime}
+                </span>
+              </div>
+
+              <div className="breadth-bar" aria-label="上市櫃上漲與下跌家數比例">
+                <span
+                  className="breadth-up"
+                  style={{
+                    width: `${Math.max(
+                      3,
+                      market.advancing + market.declining > 0
+                        ? market.advancing / (market.advancing + market.declining) * 100
+                        : 50,
+                    )}%`,
+                  }}
+                />
+                <span className="breadth-down" />
+              </div>
+
+              <div className="breadth-values">
+                <span><i className="up" />上漲<strong>{market.advancing}</strong></span>
+                <span><i className="flat" />平盤<strong>{market.unchanged}</strong></span>
+                <span><i className="down" />下跌<strong>{market.declining}</strong></span>
+              </div>
+
+              <p>{market.regime_reason}</p>
+            </article>
+
+            <article className="panel sector-leaders-panel">
+              <div className="panel-header">
+                <div>
+                  <span className="panel-kicker">SECTOR LEADERS</span>
+                  <h2>今日產業強弱前五名</h2>
+                </div>
+                <button onClick={() => changePage("industry")} type="button">
+                  查看完整排名
+                </button>
+              </div>
+
+              <div className="sector-mini-list">
+                {topSectors.map((sector) => (
+                  <div key={sector.index_name}>
+                    <span>{sector.rank}</span>
+                    <strong>{sector.name}</strong>
+                    <b className={sector.change_percent >= 0 ? "positive" : "negative"}>
+                      {sector.change_percent >= 0 ? "+" : ""}{formatNumber(sector.change_percent)}%
+                    </b>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        ) : null}
+
+        {marketOverview ? (
+          <article className="market-method-note">
+            <strong>計算方式</strong>
+            <p>{marketOverview.method}</p>
+            {!marketOverview.dates_aligned ? (
+              <small>
+                注意：兩個交易所目前回傳日期不同（{marketOverview.source_dates.join("、")}），畫面分別標示各自日期，不把它包裝成同步即時行情。
+              </small>
+            ) : null}
+            <div>
+              {marketOverview.sources.map((source) => (
+                <a href={source.url} key={source.url} rel="noreferrer" target="_blank">
+                  {source.name}
+                </a>
+              ))}
+            </div>
+          </article>
+        ) : null}
       </>
     );
   }
 
 
   function renderIndustryPage() {
+    const sectors = marketOverview?.sectors ?? [];
+    const strongest = sectors[0] ?? null;
+    const weakest = sectors.at(-1) ?? null;
+    const advancingSectors = sectors.filter(
+      (sector) => sector.change_percent > 0,
+    ).length;
+    const averageChange = sectors.length
+      ? sectors.reduce(
+          (sum, sector) => sum + sector.change_percent,
+          0,
+        ) / sectors.length
+      : null;
+
     return (
       <>
         <PageHeader
           eyebrow="INDUSTRY ANALYSIS"
           title="產業分析"
-          description="比較半導體、電子、金融、航運與其他產業的強弱及資金輪動。"
+          description="以證交所官方產業類指數比較半導體、電子、金融、航運與其他產業的當日相對強弱。"
         />
+
+        <div className="market-page-actions">
+          <span>
+            {marketOverview
+              ? `產業指數日期：${strongest?.date ?? marketOverview.updated_at}`
+              : "等待官方產業指數"}
+          </span>
+          <button
+            disabled={marketLoading}
+            onClick={refreshMarketOverview}
+            type="button"
+          >
+            {marketLoading ? "更新中…" : "重新整理"}
+          </button>
+        </div>
+
+        {marketError ? (
+          <div className="error-banner" role="alert">
+            <span>{marketError}</span>
+            <button
+              disabled={marketLoading}
+              onClick={refreshMarketOverview}
+              type="button"
+            >
+              重新嘗試
+            </button>
+          </div>
+        ) : null}
+
+        {marketLoading && !marketOverview ? <LoadingPanel /> : null}
 
         <section className="metrics-grid">
           <MetricCard
             label="最強產業"
-            value="待分析"
+            value={strongest?.name ?? "—"}
+            detail={
+              strongest
+                ? `${strongest.change_percent >= 0 ? "+" : ""}${formatNumber(strongest.change_percent)}%`
+                : undefined
+            }
+            tone="positive"
           />
 
           <MetricCard
-            label="資金流入"
-            value="待分析"
+            label="最弱產業"
+            value={weakest?.name ?? "—"}
+            detail={
+              weakest
+                ? `${weakest.change_percent >= 0 ? "+" : ""}${formatNumber(weakest.change_percent)}%`
+                : undefined
+            }
+            tone="negative"
           />
 
           <MetricCard
-            label="產業動能"
-            value="待分析"
+            label="上漲產業"
+            value={sectors.length ? `${advancingSectors}／${sectors.length}` : "—"}
+            detail="官方產業類指數樣本"
           />
 
           <MetricCard
-            label="領先股票"
-            value="待分析"
+            label="產業平均漲跌"
+            value={
+              averageChange === null
+                ? "—"
+                : `${averageChange >= 0 ? "+" : ""}${formatNumber(averageChange)}%`
+            }
+            tone={
+              (averageChange ?? 0) >= 0
+                ? "positive"
+                : "negative"
+            }
           />
 
           <MetricCard
             label="更新時間"
-            value="尚未執行"
+            value={strongest?.date ?? "—"}
+            detail="盤後資料"
           />
         </section>
 
-        <EmptyPanel
-          eyebrow="SECTOR ROTATION"
-          title="產業輪動模型準備中"
-          description="後續會依據產業指數、相對強弱、成交量與個股分數建立產業排名。"
-        />
+        {marketOverview ? (
+          <article className="panel sector-ranking-panel">
+            <div className="panel-header">
+              <div>
+                <span className="panel-kicker">SECTOR STRENGTH</span>
+                <h2>產業強弱完整排名</h2>
+              </div>
+              <span className="data-badge neutral">依當日漲跌幅</span>
+            </div>
+
+            <div className="sector-ranking-head" aria-hidden="true">
+              <span>排名</span>
+              <span>產業</span>
+              <span>指數</span>
+              <span>當日漲跌</span>
+              <span>方向</span>
+            </div>
+
+            <div className="sector-ranking-list">
+              {sectors.map((sector) => (
+                <div key={sector.index_name}>
+                  <span className="sector-rank-number">{sector.rank}</span>
+                  <strong>{sector.name}</strong>
+                  <span>{formatNumber(sector.close)}</span>
+                  <b className={sector.change_percent >= 0 ? "positive" : "negative"}>
+                    {sector.change_percent >= 0 ? "+" : ""}{formatNumber(sector.change_percent)}%
+                  </b>
+                  <span>{sector.direction}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {marketOverview ? (
+          <article className="market-method-note">
+            <strong>目前排名代表什麼？</strong>
+            <p>
+              這一版只比較官方產業類指數的當日價格強弱，不把單日上漲直接說成資金流入，也不冒充長期產業趨勢。下一階段再加入多日相對強弱、成交量與產業內個股廣度。
+            </p>
+          </article>
+        ) : null}
       </>
     );
   }

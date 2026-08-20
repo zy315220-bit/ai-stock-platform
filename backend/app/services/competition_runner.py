@@ -1296,6 +1296,9 @@ def run_competition_on_frames(
         },
         "ranking": {
             "primary_metric": "forward Wilson 95% win-rate lower bound",
+            "objective": ranking["objective"],
+            "method": ranking["ranking_method"],
+            "return_role": "總報酬只在 Wilson 下界與原始勝率同分時作為下一順位比較。",
             "minimum_forward_trades_for_champion": MIN_FORWARD_TRADES_FOR_CHAMPION,
             "leader_status": "qualified" if qualified else "provisional",
         },

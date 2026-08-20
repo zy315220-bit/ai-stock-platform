@@ -20,7 +20,7 @@ from app.services.competition_runner import (
     _simulate_symbol,
     run_competition_on_frames,
 )
-from app.services.competition_service import freeze_robot_spec
+from app.services.competition_service import freeze_robot_spec, rank_robot_results
 
 
 def _synthetic_frame(offset: float) -> pd.DataFrame:
@@ -127,6 +127,46 @@ class CompetitionRunnerTests(unittest.TestCase):
                 self.assertGreaterEqual(trade["entry_commission"], 0)
                 self.assertGreaterEqual(trade["exit_commission"], 0)
                 self.assertGreaterEqual(trade["transaction_tax"], 0)
+
+    def test_ranking_prioritizes_wilson_win_evidence_over_return(self) -> None:
+        shared = {
+            "robot_version": "1",
+            "rule_fingerprint": "fixed-rule",
+            "initial_capital": 100_000,
+            "period_start": "2025-08-20",
+            "period_end": "2026-08-20",
+            "cost_model_id": "same-cost",
+            "risk_model_id": "same-risk",
+            "market_universe_id": "same-universe",
+            "max_drawdown_percent": 5,
+        }
+        result = rank_robot_results(
+            [
+                {
+                    **shared,
+                    "robot_id": "higher-win-evidence",
+                    "trade_count": 27,
+                    "winning_trade_count": 19,
+                    "total_return_percent": 19.24,
+                },
+                {
+                    **shared,
+                    "robot_id": "higher-return",
+                    "trade_count": 42,
+                    "winning_trade_count": 25,
+                    "total_return_percent": 22.01,
+                },
+            ]
+        )
+
+        self.assertEqual(
+            [row["robot_id"] for row in result["robots"]],
+            ["higher-win-evidence", "higher-return"],
+        )
+        self.assertGreater(
+            result["robots"][0]["wilson_lower_percent"],
+            result["robots"][1]["wilson_lower_percent"],
+        )
 
     def test_126_session_return_uses_only_current_and_past_closes(self) -> None:
         prepared = _prepare_frame(_synthetic_frame(0.0))

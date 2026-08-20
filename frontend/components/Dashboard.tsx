@@ -276,6 +276,104 @@ function formatPeriodSpan(
 }
 
 
+const COMPETITION_CACHE_KEY = "ai-stock-competition-v2";
+const COMPETITION_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+
+function readCompetitionCache(): CompetitionResponse | null {
+  try {
+    const stored = window.localStorage.getItem(COMPETITION_CACHE_KEY);
+    if (!stored) {
+      return null;
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("savedAt" in parsed) ||
+      typeof parsed.savedAt !== "number" ||
+      !("data" in parsed) ||
+      typeof parsed.data !== "object" ||
+      parsed.data === null ||
+      !("status" in parsed.data) ||
+      parsed.data.status !== "completed" ||
+      !("robots" in parsed.data) ||
+      !Array.isArray(parsed.data.robots) ||
+      Date.now() - parsed.savedAt > COMPETITION_CACHE_MAX_AGE_MS
+    ) {
+      window.localStorage.removeItem(COMPETITION_CACHE_KEY);
+      return null;
+    }
+
+    return parsed.data as CompetitionResponse;
+  } catch {
+    window.localStorage.removeItem(COMPETITION_CACHE_KEY);
+    return null;
+  }
+}
+
+
+function writeCompetitionCache(data: CompetitionResponse): void {
+  try {
+    window.localStorage.setItem(
+      COMPETITION_CACHE_KEY,
+      JSON.stringify({ savedAt: Date.now(), data }),
+    );
+  } catch {
+    // The cache is an optional speed-up; a storage quota error must not block results.
+  }
+}
+
+
+function clearCompetitionCache(): void {
+  try {
+    window.localStorage.removeItem(COMPETITION_CACHE_KEY);
+  } catch {
+    // Private browsing can disable storage; the network refresh still works.
+  }
+}
+
+
+function competitionLoadingStage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 12) {
+    return "連線並檢查官方 ETF 資料";
+  }
+  if (elapsedSeconds < 55) {
+    return "整理五年行情、分割與配息";
+  }
+  if (elapsedSeconds < 105) {
+    return "16 台機器人逐筆模擬交易";
+  }
+  return "統計勝率區間並建立排行榜";
+}
+
+
+function formatElapsedTime(elapsedSeconds: number): string {
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+
+function CompetitionLoader({ elapsedSeconds }: { elapsedSeconds: number }) {
+  return (
+    <div className="competition-loader" role="status" aria-live="polite">
+      <div className="competition-loader-arena" aria-hidden="true">
+        <span className="competition-loader-trophy">♜</span>
+        <i className="robot-runner runner-one" />
+        <i className="robot-runner runner-two" />
+        <i className="robot-runner runner-three" />
+        <i className="robot-runner runner-four" />
+      </div>
+      <strong>{competitionLoadingStage(elapsedSeconds)}</strong>
+      <p>首次更新約需 1～3 分鐘；完成後會快取，之後開啟可直接顯示。</p>
+      <small>已執行 {formatElapsedTime(elapsedSeconds)}，請保持此頁開啟</small>
+    </div>
+  );
+}
+
+
 const stateLabels: Record<string, string> = {
   LONG: "偏多",
   SHORT: "偏空",
@@ -664,6 +762,12 @@ export default function Dashboard() {
   const [competitionRefreshKey, setCompetitionRefreshKey] =
     useState(0);
 
+  const [competitionLoadingSeconds, setCompetitionLoadingSeconds] =
+    useState(0);
+
+  const [competitionRankingView, setCompetitionRankingView] =
+    useState<"confidence" | "return">("confidence");
+
   const [competitionTradeRobotId, setCompetitionTradeRobotId] =
     useState("TECHNICAL-v1");
 
@@ -891,19 +995,35 @@ export default function Dashboard() {
       return;
     }
 
+    if (competitionRefreshKey === 0) {
+      const cachedCompetition = readCompetitionCache();
+      if (cachedCompetition) {
+        const cachedTimer = window.setTimeout(() => {
+          setCompetition(cachedCompetition);
+        }, 0);
+        return () => window.clearTimeout(cachedTimer);
+      }
+    }
+
     let active = true;
     const controller = new AbortController();
     competitionControllerRef.current = controller;
     const timer = window.setTimeout(() => {
+      setCompetitionLoadingSeconds(0);
       setCompetitionLoading(true);
       setCompetitionError("");
 
-      void fetchCompetition(100_000, { signal: controller.signal })
+      void fetchCompetition(100_000, {
+        signal: controller.signal,
+        cache: competitionRefreshKey ? "no-store" : "default",
+        refreshKey: competitionRefreshKey || undefined,
+      })
         .then((response) => {
           if (!active) {
             return;
           }
           setCompetition(response);
+          writeCompetitionCache(response);
           track("robot_competition_completed", {
             run_id: response.run_id,
             leader: response.leader.robot_id,
@@ -936,6 +1056,19 @@ export default function Dashboard() {
       }
     };
   }, [activePage, competition, competitionRefreshKey]);
+
+
+  useEffect(() => {
+    if (!competitionLoading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setCompetitionLoadingSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [competitionLoading]);
 
 
   useEffect(() => {
@@ -2680,6 +2813,14 @@ export default function Dashboard() {
 
   function renderCompetitionPage() {
     const leaderRobot = competition?.robots[0] ?? null;
+    const displayedCompetitionRobots = competition
+      ? competitionRankingView === "confidence"
+        ? competition.robots
+        : [...competition.robots].sort((left, right) =>
+            right.forward.total_return_percent - left.forward.total_return_percent ||
+            right.wilson_lower_percent - left.wilson_lower_percent,
+          )
+      : [];
     const selectedTradeRobot =
       competition?.robots.find(
         (robot) => robot.robot_id === competitionTradeRobotId,
@@ -2706,6 +2847,7 @@ export default function Dashboard() {
 
     function rerunCompetition() {
       competitionControllerRef.current?.abort();
+      clearCompetitionCache();
       setCompetition(null);
       setCompetitionError("");
       setCompetitionRefreshKey((value) => value + 1);
@@ -2740,18 +2882,25 @@ export default function Dashboard() {
         </section>
 
         <div className="competition-runbar">
-          <div>
+          <div className="competition-run-copy">
             <strong>
               {competitionLoading
-                ? "16 個機器人正在讀取官方資料並逐筆模擬交易"
+                ? competitionLoadingStage(competitionLoadingSeconds)
                 : competition
                   ? `資料期間：${competition.periods.backtest.start} 至 ${competition.periods.forward.end}`
                   : "尚未取得本次競賽結果"}
             </strong>
-            <span>收盤產生訊號、下一交易日開盤成交；每筆交易計入手續費與 ETF 證交稅。</span>
+            <span>
+              {competitionLoading
+                ? `已執行 ${formatElapsedTime(competitionLoadingSeconds)}；首次更新較久，完成後會快取。`
+                : "收盤產生訊號、下一交易日開盤成交；每筆交易計入手續費與 ETF 證交稅。"}
+            </span>
+            {competitionLoading ? (
+              <span className="competition-loading-track" aria-hidden="true"><i /></span>
+            ) : null}
           </div>
           <button disabled={competitionLoading} onClick={rerunCompetition} type="button">
-            {competitionLoading ? "競賽執行中…" : competition ? "重新執行" : "執行公平競賽"}
+            {competitionLoading ? "競賽執行中…" : competition ? "更新當日結果" : "執行公平競賽"}
           </button>
         </div>
 
@@ -2767,29 +2916,63 @@ export default function Dashboard() {
             <div className="panel-header">
               <div>
                 <span className="panel-kicker">WALK-FORWARD LEADERBOARD</span>
-                <h2>前瞻勝率排行榜</h2>
+                <h2>{competitionRankingView === "confidence" ? "前瞻勝率證據排行榜" : "前瞻報酬率比較"}</h2>
               </div>
               <span className={`data-badge ${competition?.leader.qualified ? "" : "neutral"}`}>
-                {competition?.leader.qualified ? "已達樣本門檻" : "暫定排名"}
+                {competitionRankingView === "return"
+                  ? "比較檢視"
+                  : competition?.leader.qualified
+                    ? "已達樣本門檻"
+                    : "暫定排名"}
+              </span>
+            </div>
+            <div className="ranking-view-tabs" aria-label="選擇排行榜檢視">
+              <button
+                className={competitionRankingView === "confidence" ? "active" : ""}
+                onClick={() => setCompetitionRankingView("confidence")}
+                type="button"
+              >
+                正式勝率排名
+              </button>
+              <button
+                className={competitionRankingView === "return" ? "active" : ""}
+                onClick={() => setCompetitionRankingView("return")}
+                type="button"
+              >
+                報酬率比較
+              </button>
+            </div>
+            <div className="ranking-method-note">
+              <strong>
+                {competitionRankingView === "confidence"
+                  ? "名次先比 Wilson 95% 下界，不是先比報酬率"
+                  : "此處只按前瞻總報酬排序，不會改變正式冠軍"}
+              </strong>
+              <span>
+                {competitionRankingView === "confidence"
+                  ? (
+                    <>
+                      Wilson（1927）提供勝率與樣本數的統計區間；平台依「勝率優先」目標採下界排序，同分才比較報酬。
+                      <a href="https://doi.org/10.1080/01621459.1927.10502953" rel="noreferrer" target="_blank">查看原始論文</a>
+                    </>
+                  )
+                  : "切回正式勝率排名，可查看以勝率證據為目標的競賽結果。"}
               </span>
             </div>
             {competitionLoading && !competition ? (
-              <div className="ranking-empty">
-                <strong>正在執行 16 套固定策略</strong>
-                <p>逐檔讀取最多五年的 0050、0056、00878、00919 官方日線，完成後會顯示逐筆交易與排名。</p>
-              </div>
+              <CompetitionLoader elapsedSeconds={competitionLoadingSeconds} />
             ) : competition ? (
               <div className="leaderboard-table">
                 <div className="leaderboard-row leaderboard-head">
                   <span>名次／機器人</span>
                   <span>前瞻交易／勝率</span>
-                  <span>Wilson 下界</span>
-                  <span>報酬／回撤</span>
+                  <span>{competitionRankingView === "confidence" ? "排名分數：Wilson 下界" : "Wilson 下界"}</span>
+                  <span>{competitionRankingView === "return" ? "比較分數：報酬" : "報酬／回撤"}</span>
                 </div>
-                {competition.robots.map((robot) => (
+                {displayedCompetitionRobots.map((robot, index) => (
                   <div className="leaderboard-row" key={robot.robot_id}>
                     <span className="leaderboard-name">
-                      <b>#{robot.rank}</b>
+                      <b>#{competitionRankingView === "confidence" ? robot.rank : index + 1}</b>
                       <span><strong>{robot.name}</strong><small>{robot.robot_id}</small></span>
                     </span>
                     <span>
@@ -2848,42 +3031,6 @@ export default function Dashboard() {
           </article>
         </section>
 
-        <article className="panel robot-registry">
-          <div className="panel-header">
-            <div>
-              <span className="panel-kicker">ROBOT REGISTRY</span>
-              <h2>固定規則機器人</h2>
-            </div>
-            <span className="data-badge neutral">
-              {competition ? "本次規則指紋已驗證" : "等待執行"}
-            </span>
-          </div>
-          <div className="robot-card-grid">
-            {robotSpecs.map((robot) => {
-              const result = competition?.robots.find((item) => item.robot_id === robot.id);
-              return (
-                <article className="robot-card" key={robot.id}>
-                  <div>
-                    <span className="robot-focus">{robot.focus}</span>
-                    <span className="robot-status">規則已固定</span>
-                  </div>
-                  <h3>{robot.name}</h3>
-                  <p>{robot.rule}</p>
-                  <code>{robot.id}{result ? ` ・ ${result.rule_fingerprint.slice(0, 10)}` : ""}</code>
-                  {result ? (
-                    <div className="robot-result-line">
-                      <span>前瞻損益</span>
-                      <strong className={result.forward.total_return_percent >= 0 ? "positive" : "negative"}>
-                        {result.forward.total_return_percent >= 0 ? "+" : ""}{formatNumber(result.forward.total_return_percent)}%
-                      </strong>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        </article>
-
         <article className="panel competition-trades">
           <div className="panel-header">
             <div>
@@ -2896,18 +3043,21 @@ export default function Dashboard() {
           </div>
 
           <div className="trade-ledger-controls">
-            <div className="trade-robot-tabs" aria-label="選擇機器人交易紀錄">
-              {(competition?.robots ?? []).map((robot) => (
-                <button
-                  className={selectedTradeRobot?.robot_id === robot.robot_id ? "active" : ""}
-                  key={robot.robot_id}
-                  onClick={() => setCompetitionTradeRobotId(robot.robot_id)}
-                  type="button"
-                >
-                  #{robot.rank} {robot.name}
-                </button>
-              ))}
-            </div>
+            <label className="trade-robot-select">
+              <span>查看機器人</span>
+              <select
+                disabled={!competition}
+                onChange={(event) => setCompetitionTradeRobotId(event.target.value)}
+                value={selectedTradeRobot?.robot_id ?? ""}
+              >
+                {!competition ? <option value="">等待競賽結果</option> : null}
+                {(competition?.robots ?? []).map((robot) => (
+                  <option key={robot.robot_id} value={robot.robot_id}>
+                    #{robot.rank} {robot.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="trade-segment-tabs" aria-label="選擇測試區間">
               <button
                 className={competitionTradeSegment === "backtest" ? "active" : ""}
@@ -2982,6 +3132,45 @@ export default function Dashboard() {
             </div>
           )}
         </article>
+
+        <details className="panel robot-registry">
+          <summary className="robot-registry-summary">
+            <span>
+              <small>策略稽核資料</small>
+              <strong>查看固定規則與驗證指紋</strong>
+            </span>
+            <span className="data-badge neutral">
+              {competition ? "16 套規則已驗證" : "等待執行"}
+            </span>
+          </summary>
+          <p className="robot-registry-note">
+            指紋只用來證明策略規則沒有在看到結果後被偷偷修改，不影響日常查看交易紀錄。
+          </p>
+          <div className="robot-card-grid">
+            {robotSpecs.map((robot) => {
+              const result = competition?.robots.find((item) => item.robot_id === robot.id);
+              return (
+                <article className="robot-card" key={robot.id}>
+                  <div>
+                    <span className="robot-focus">{robot.focus}</span>
+                    <span className="robot-status">規則已固定</span>
+                  </div>
+                  <h3>{robot.name}</h3>
+                  <p>{robot.rule}</p>
+                  <code>{robot.id}{result ? ` ・ ${result.rule_fingerprint.slice(0, 10)}` : ""}</code>
+                  {result ? (
+                    <div className="robot-result-line">
+                      <span>前瞻損益</span>
+                      <strong className={result.forward.total_return_percent >= 0 ? "positive" : "negative"}>
+                        {result.forward.total_return_percent >= 0 ? "+" : ""}{formatNumber(result.forward.total_return_percent)}%
+                      </strong>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        </details>
 
         {competition ? (
           <article className="panel competition-disclosures">

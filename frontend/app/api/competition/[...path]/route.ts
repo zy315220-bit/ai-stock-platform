@@ -4,6 +4,9 @@ import { BACKEND_API_URL } from "@/lib/server/backend";
 
 export const maxDuration = 300;
 
+const COMPETITION_CACHE_CONTROL =
+  "public, s-maxage=21600, stale-while-revalidate=604800";
+
 
 export async function GET(
   request: NextRequest,
@@ -38,7 +41,9 @@ export async function GET(
     return new Response(body, {
       status: response.status,
       headers: {
-        "cache-control": "no-store",
+        "cache-control": response.ok
+          ? COMPETITION_CACHE_CONTROL
+          : "no-store",
         "content-type": response.headers.get("content-type") ?? "application/json",
       },
     });

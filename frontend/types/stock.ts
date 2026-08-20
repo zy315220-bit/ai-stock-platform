@@ -341,6 +341,9 @@ export type CompetitionResponse = {
   };
   ranking: {
     primary_metric: string;
+    objective: string;
+    method: string;
+    return_role: string;
     minimum_forward_trades_for_champion: number;
     leader_status: "qualified" | "provisional";
   };

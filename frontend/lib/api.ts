@@ -12,6 +12,11 @@ const API_BASE_URL =
 
 type RequestOptions = {
   signal?: AbortSignal;
+  cache?: RequestCache;
+};
+
+type CompetitionRequestOptions = RequestOptions & {
+  refreshKey?: number;
 };
 
 export type HealthResponse = {
@@ -88,7 +93,7 @@ async function fetchJson<T>(
 
   try {
     response = await fetch(url, {
-      cache: "no-store",
+      cache: options.cache ?? "no-store",
       signal: controller.signal,
     });
   } catch {
@@ -217,16 +222,22 @@ export async function fetchMarketOverview(
 
 export async function fetchCompetition(
   initialCapital = 100_000,
-  options: RequestOptions = {},
+  options: CompetitionRequestOptions = {},
 ): Promise<CompetitionResponse> {
+  const { refreshKey, ...requestOptions } = options;
   const query = new URLSearchParams({
     initial_capital: String(initialCapital),
   });
 
+  if (refreshKey) {
+    query.set("refresh", String(refreshKey));
+  }
+
   return fetchJson<CompetitionResponse>(
     `${API_BASE_URL}/api/competition/run?${query.toString()}`,
     {
-      ...options,
+      ...requestOptions,
+      cache: requestOptions.cache ?? "default",
       timeoutMs: 275_000,
       timeoutError: "機器人競賽執行時間過長，請稍後再試。",
       networkError: "目前無法連接機器人競賽服務。",

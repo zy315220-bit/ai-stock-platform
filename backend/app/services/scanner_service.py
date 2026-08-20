@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from datetime import datetime
 from typing import Any
 
@@ -30,6 +31,9 @@ SCANNER_UNIVERSE = (
     "3231",
     "3711",
 )
+_REQUEST_TIMEOUTS = (4, 7, 10)
+_CACHE_TTL_SECONDS = 120
+_cache: dict[str, Any] = {"at": 0.0, "payload": None}
 
 
 def _safe_float(value: Any) -> float | None:
@@ -90,25 +94,48 @@ def _scanner_score(
     return round(max(0.0, min(100.0, score)), 1), reasons
 
 
-def get_daily_scanner() -> dict[str, Any]:
+def _fetch_messages() -> list[dict[str, Any]]:
+    now = time.monotonic()
+    cached = _cache.get("payload")
+    if (
+        isinstance(cached, list)
+        and now - float(_cache.get("at") or 0) < _CACHE_TTL_SECONDS
+    ):
+        return cached
+
     channels = "|".join(f"tse_{code}.tw" for code in SCANNER_UNIVERSE)
-    response = requests.get(
-        TWSE_MIS_URL,
-        params={"ex_ch": channels, "json": "1", "delay": "0"},
-        headers={
-            "Accept": "application/json,text/javascript,*/*;q=0.01",
-            "Referer": "https://mis.twse.com.tw/",
-            "User-Agent": "Mozilla/5.0 AI-Stock-Platform/2.0",
-        },
-        timeout=8,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    messages = payload.get("msgArray") if isinstance(payload, dict) else None
+    last_error: Exception | None = None
+    for attempt, timeout in enumerate(_REQUEST_TIMEOUTS):
+        try:
+            response = requests.get(
+                TWSE_MIS_URL,
+                params={"ex_ch": channels, "json": "1", "delay": "0"},
+                headers={
+                    "Accept": "application/json,text/javascript,*/*;q=0.01",
+                    "Referer": "https://mis.twse.com.tw/",
+                    "User-Agent": "Mozilla/5.0 AI-Stock-Platform/2.1",
+                },
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            messages = payload.get("msgArray") if isinstance(payload, dict) else None
+            if not isinstance(messages, list):
+                raise RuntimeError("每日選股行情格式不正確。")
+            _cache.update(at=time.monotonic(), payload=messages)
+            return messages
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            last_error = exc
+            if attempt < len(_REQUEST_TIMEOUTS) - 1:
+                time.sleep(0.25 * (2**attempt))
 
-    if not isinstance(messages, list):
-        raise RuntimeError("每日選股行情格式不正確。")
+    if isinstance(cached, list):
+        return cached
+    raise RuntimeError("每日選股行情來源暫時無法連線，請稍後再試。") from last_error
 
+
+def get_daily_scanner() -> dict[str, Any]:
+    messages = _fetch_messages()
     candidates: list[dict[str, Any]] = []
 
     for quote in messages:

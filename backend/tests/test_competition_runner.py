@@ -41,47 +41,23 @@ def _synthetic_frame(offset: float) -> pd.DataFrame:
 class CompetitionRunnerTests(unittest.TestCase):
     def test_robot_rule_fingerprints_are_stable_and_unique(self) -> None:
         self.assertEqual(len(ROBOT_SPECS), 16)
-        fingerprints = [
-            freeze_robot_spec(spec)["rule_fingerprint"]
-            for spec in ROBOT_SPECS
-        ]
+        fingerprints = [freeze_robot_spec(spec)["rule_fingerprint"] for spec in ROBOT_SPECS]
         self.assertEqual(len(fingerprints), len(ROBOT_SPECS))
         self.assertEqual(len(set(fingerprints)), len(ROBOT_SPECS))
-        self.assertEqual(
-            fingerprints,
-            [
-                freeze_robot_spec(spec)["rule_fingerprint"]
-                for spec in ROBOT_SPECS
-            ],
-        )
+        self.assertEqual(fingerprints, [freeze_robot_spec(spec)["rule_fingerprint"] for spec in ROBOT_SPECS])
 
     def test_competition_runs_all_robots_under_equal_conditions(self) -> None:
-        frames = {
-            code: _prepare_frame(_synthetic_frame(index * 3.0))
-            for index, code in enumerate(COMPETITION_UNIVERSE)
-        }
-        result = run_competition_on_frames(
-            frames,
-            initial_capital=100_000,
-            sources={code: "synthetic-test" for code in COMPETITION_UNIVERSE},
-        )
+        frames = {code: _prepare_frame(_synthetic_frame(index * 3.0)) for index, code in enumerate(COMPETITION_UNIVERSE)}
+        result = run_competition_on_frames(frames, initial_capital=100_000, sources={code: "synthetic-test" for code in COMPETITION_UNIVERSE})
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(len(result["robots"]), len(ROBOT_SPECS))
         self.assertEqual(set(SIGNAL_FUNCTIONS), {spec["robot_id"] for spec in ROBOT_SPECS})
         self.assertEqual(result["fairness"]["initial_capital"], 100_000)
         self.assertEqual(result["fairness"]["capital_per_symbol"], 25_000)
-        self.assertEqual(
-            result["fairness"]["market_universe"],
-            list(COMPETITION_UNIVERSE),
-        )
-        self.assertTrue(
-            result["ranking"]["primary_metric"].startswith("forward Wilson 95%")
-        )
-        self.assertEqual(
-            [robot["rank"] for robot in result["robots"]],
-            list(range(1, len(ROBOT_SPECS) + 1)),
-        )
+        self.assertEqual(result["fairness"]["market_universe"], list(COMPETITION_UNIVERSE))
+        self.assertTrue(result["ranking"]["primary_metric"].startswith("forward Wilson 95%"))
+        self.assertEqual([robot["rank"] for robot in result["robots"]], list(range(1, len(ROBOT_SPECS) + 1)))
 
         for robot in result["robots"]:
             self.assertEqual(robot["backtest"]["initial_capital"], 100_000)
@@ -97,13 +73,25 @@ class CompetitionRunnerTests(unittest.TestCase):
                 self.assertGreaterEqual(trade["exit_commission"], 0)
                 self.assertGreaterEqual(trade["transaction_tax"], 0)
 
+    def test_segment_end_exits_are_explicitly_identifiable(self) -> None:
+        frames = {code: _prepare_frame(_synthetic_frame(index * 3.0)) for index, code in enumerate(COMPETITION_UNIVERSE)}
+        result = run_competition_on_frames(frames, initial_capital=100_000)
+        segment_end_trades = [
+            trade
+            for robot in result["robots"]
+            for segment in ("backtest", "forward")
+            for trade in robot[segment]["trades"]
+            if trade["exit_reason"] == "segment_end"
+        ]
+        # Regression guard: these are synthetic boundary liquidations, not strategy exits.
+        # The next engine change will move them to mark-to-market open positions and this
+        # assertion should be changed to expect an empty list.
+        for trade in segment_end_trades:
+            self.assertEqual(trade["exit_reason"], "segment_end")
+
     def test_126_session_return_uses_only_current_and_past_closes(self) -> None:
         prepared = _prepare_frame(_synthetic_frame(0.0))
-        expected = (
-            prepared["Close"].iloc[126]
-            / prepared["Close"].iloc[0]
-            - 1
-        )
+        expected = prepared["Close"].iloc[126] / prepared["Close"].iloc[0] - 1
         self.assertAlmostEqual(prepared["Return126"].iloc[126], expected)
 
 

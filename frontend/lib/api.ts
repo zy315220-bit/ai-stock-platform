@@ -227,7 +227,7 @@ export async function fetchCompetition(
     `${API_BASE_URL}/api/competition/run?${query.toString()}`,
     {
       ...options,
-      timeoutMs: 120_000,
+      timeoutMs: 275_000,
       timeoutError: "機器人競賽執行時間過長，請稍後再試。",
       networkError: "目前無法連接機器人競賽服務。",
       fallbackError: "機器人競賽執行失敗",

@@ -16,6 +16,7 @@ class HistoryPolicyTests(unittest.TestCase):
         self.assertEqual(policy["interactive_history_months"], 13)
         self.assertEqual(policy["research_history_months"], 60)
         self.assertEqual(policy["backtest_warmup_months"], 6)
+        self.assertEqual(policy["forward_holdout_months"], 12)
 
     def test_default_start_is_five_calendar_years_earlier(self) -> None:
         self.assertEqual(

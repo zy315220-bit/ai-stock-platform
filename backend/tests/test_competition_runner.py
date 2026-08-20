@@ -21,7 +21,7 @@ from app.services.competition_service import freeze_robot_spec
 
 
 def _synthetic_frame(offset: float) -> pd.DataFrame:
-    dates = pd.bdate_range(end="2026-08-13", periods=190)
+    dates = pd.bdate_range(end="2026-08-13", periods=1_500)
     prices = [
         50.0 + offset + index * 0.06 + math.sin(index / 4.0) * 2.4
         for index in range(len(dates))
@@ -71,6 +71,11 @@ class CompetitionRunnerTests(unittest.TestCase):
         self.assertEqual(set(SIGNAL_FUNCTIONS), {spec["robot_id"] for spec in ROBOT_SPECS})
         self.assertEqual(result["fairness"]["initial_capital"], 100_000)
         self.assertEqual(result["fairness"]["capital_per_symbol"], 25_000)
+        self.assertEqual(result["requested_history_months"], 60)
+        self.assertEqual(result["periods"]["backtest"]["start"], "2021-08-13")
+        self.assertEqual(result["periods"]["backtest"]["end"], "2025-08-12")
+        self.assertEqual(result["periods"]["forward"]["start"], "2025-08-13")
+        self.assertEqual(result["periods"]["forward"]["end"], "2026-08-13")
         self.assertEqual(
             result["fairness"]["market_universe"],
             list(COMPETITION_UNIVERSE),

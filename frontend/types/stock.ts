@@ -296,6 +296,18 @@ export type CompetitionResponse = {
   run_id: string;
   status: "completed";
   executed_at: string;
+  requested_history_months: number;
+  history_coverage: Record<string, {
+    start: string | null;
+    end: string | null;
+    available_days: number;
+    available_years: number;
+    status: string;
+    long_horizon_qualified: boolean;
+    complete_month_coverage: boolean;
+    missing_months: string[];
+    row_count: number;
+  }>;
   periods: {
     backtest: { start: string; end: string; purpose: string };
     forward: { start: string; end: string; purpose: string };

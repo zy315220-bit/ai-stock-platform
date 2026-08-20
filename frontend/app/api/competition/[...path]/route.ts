@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 
 import { BACKEND_API_URL } from "@/lib/server/backend";
 
+export const maxDuration = 300;
+
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +17,7 @@ export async function GET(
   const timeout = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, 125_000);
+  }, 270_000);
 
   request.signal.addEventListener("abort", cancel, { once: true });
 

@@ -2685,7 +2685,7 @@ export default function Dashboard() {
         <PageHeader
           eyebrow="ROBOT COMPETITION"
           title="AI 策略機器人競賽"
-          description="16 個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；先做 2 個月歷史檢查，再以最後 1 個月 walk-forward 模擬排名。"
+          description="16 個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；以前 4 年做歷史檢查，再以最後 1 年 walk-forward 樣本外模擬排名。"
         />
 
         <section className="metrics-grid">
@@ -2745,7 +2745,7 @@ export default function Dashboard() {
             {competitionLoading && !competition ? (
               <div className="ranking-empty">
                 <strong>正在執行 16 套固定策略</strong>
-                <p>逐檔讀取 0050、0056、00878、00919 官方日線，完成後會顯示逐筆交易與排名。</p>
+                <p>逐檔讀取最多五年的 0050、0056、00878、00919 官方日線，完成後會顯示逐筆交易與排名。</p>
               </div>
             ) : competition ? (
               <div className="leaderboard-table">
@@ -2795,7 +2795,14 @@ export default function Dashboard() {
             </div>
             <ul className="fairness-list">
               <li>每個機器人相同本金：NT${competition ? formatInteger(competition.fairness.initial_capital) : "100,000"}</li>
-              <li>相同股票池：0050、0056、00878、00919</li>
+              <li>相同股票池：0050、0056、00878、00919（未滿五年者自上市日起）</li>
+              {competition ? (
+                <li>
+                  實際資料起點：{Object.entries(competition.history_coverage)
+                    .map(([code, coverage]) => `${code} ${coverage.start ?? "無資料"}`)
+                    .join("、")}
+                </li>
+              ) : null}
               <li>手續費 0.1425%，ETF 賣出稅 0.1%</li>
               <li>相同 2 ATR 停損、4 ATR 停利</li>
               <li>收盤訊號、下一交易日開盤成交</li>

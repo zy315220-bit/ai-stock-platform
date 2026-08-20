@@ -904,16 +904,22 @@ button, input, select { font: inherit; }
 .ranking-method-note a { margin-left: 7px; color: #aab4ff; font-weight: 800; }
 .competition-loader {
   min-height: 230px;
-  padding: 24px;
+  padding: 18px;
   display: grid;
-  place-items: center;
-  align-content: center;
-  text-align: center;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 18px;
+  align-items: center;
   border: 1px dashed #2a3a52;
   border-radius: 10px;
   background:
     radial-gradient(circle at 50% 42%, rgba(77, 98, 219, .18), transparent 32%),
     rgba(7, 11, 18, .45);
+}
+.competition-loader-status {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
 }
 .competition-loader-arena {
   width: 112px;
@@ -954,15 +960,66 @@ button, input, select { font: inherit; }
 .runner-two { animation-delay: -.75s; background: #55d6be; }
 .runner-three { animation-delay: -1.5s; background: #f17b9a; }
 .runner-four { animation-delay: -2.25s; background: #f1c75b; }
-.competition-loader > strong { color: #e4eaff; font-size: 14px; }
-.competition-loader > p {
+.competition-loader-status > strong { color: #e4eaff; font-size: 14px; }
+.competition-loader-status > p {
   max-width: 520px;
   margin: 7px 0 4px;
   color: #9ba8ba;
   font-size: 10px;
   line-height: 1.7;
 }
-.competition-loader > small { color: #66758d; font-size: 9px; }
+.competition-loader-status > small { color: #66758d; font-size: 9px; }
+.competition-music-video {
+  width: 132px;
+  display: grid;
+  gap: 6px;
+  justify-self: end;
+}
+.competition-music-video iframe,
+.competition-music-start {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  border: 1px solid rgba(115, 132, 255, .34);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 36%, rgba(241, 123, 154, .28), transparent 22%),
+    linear-gradient(160deg, #1d2857, #0a111d 64%);
+}
+.competition-music-video iframe { display: block; }
+.competition-music-start {
+  padding: 12px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  color: #eef2ff;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.competition-music-start span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #09111e;
+  background: #55d6be;
+  box-shadow: 0 0 22px rgba(85, 214, 190, .38);
+  animation: music-pulse 1.5s ease-in-out infinite;
+}
+.competition-music-video > strong {
+  color: #dce7ff;
+  font-size: 8px;
+  line-height: 1.5;
+}
+.competition-music-video > small {
+  color: #718099;
+  font-size: 7px;
+  line-height: 1.5;
+}
 @keyframes competition-progress {
   from { transform: translateX(-110%); }
   to { transform: translateX(280%); }
@@ -970,6 +1027,10 @@ button, input, select { font: inherit; }
 @keyframes robot-race {
   from { transform: rotate(0deg) translateX(50px) rotate(0deg); }
   to { transform: rotate(360deg) translateX(50px) rotate(-360deg); }
+}
+@keyframes music-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
 }
 .leaderboard-table { display: grid; gap: 7px; }
 .leaderboard-row {
@@ -1905,6 +1966,19 @@ button, input, select { font: inherit; }
 }
 
 @media (max-width: 520px) {
+  .competition-loader {
+    grid-template-columns: minmax(0, 1fr) 108px;
+    gap: 11px;
+    padding: 13px;
+  }
+  .competition-loader-arena {
+    width: 92px;
+    height: 92px;
+  }
+  .robot-runner {
+    animation-name: robot-race-mobile;
+  }
+  .competition-music-video { width: 108px; }
   .home-hero { padding: 25px 17px 17px; }
   .home-hero h1 { font-size: 39px; }
   .hero-status { margin-bottom: 21px; }
@@ -1941,4 +2015,12 @@ button, input, select { font: inherit; }
   .signal-line { stroke-dashoffset: 0; }
   .candle { opacity: 1; transform: none; }
   .hero-actions button { transition: none; }
+  .competition-loading-track i,
+  .robot-runner,
+  .competition-music-start span { animation: none !important; }
+}
+
+@keyframes robot-race-mobile {
+  from { transform: rotate(0deg) translateX(40px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
 }

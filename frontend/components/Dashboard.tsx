@@ -357,18 +357,45 @@ function formatElapsedTime(elapsedSeconds: number): string {
 
 
 function CompetitionLoader({ elapsedSeconds }: { elapsedSeconds: number }) {
+  const [showMusicVideo, setShowMusicVideo] = useState(false);
+
   return (
-    <div className="competition-loader" role="status" aria-live="polite">
-      <div className="competition-loader-arena" aria-hidden="true">
-        <span className="competition-loader-trophy">♜</span>
-        <i className="robot-runner runner-one" />
-        <i className="robot-runner runner-two" />
-        <i className="robot-runner runner-three" />
-        <i className="robot-runner runner-four" />
+    <div className="competition-loader">
+      <div className="competition-loader-status" role="status" aria-live="polite">
+        <div className="competition-loader-arena" aria-hidden="true">
+          <span className="competition-loader-trophy">♜</span>
+          <i className="robot-runner runner-one" />
+          <i className="robot-runner runner-two" />
+          <i className="robot-runner runner-three" />
+          <i className="robot-runner runner-four" />
+        </div>
+        <strong>{competitionLoadingStage(elapsedSeconds)}</strong>
+        <p>完整資料正在驗證；完成後會快取，之後開啟可直接顯示。</p>
+        <small>已執行 {formatElapsedTime(elapsedSeconds)}，請保持此頁開啟</small>
       </div>
-      <strong>{competitionLoadingStage(elapsedSeconds)}</strong>
-      <p>首次完整更新約需 2～4 分鐘；完成後會快取，之後開啟可直接顯示。</p>
-      <small>已執行 {formatElapsedTime(elapsedSeconds)}，請保持此頁開啟</small>
+
+      <aside className="competition-music-video">
+        {showMusicVideo ? (
+          <iframe
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            src="https://www.youtube-nocookie.com/embed/m7pL4FprmjI?autoplay=1&mute=0&loop=1&playlist=m7pL4FprmjI&playsinline=1&controls=1&rel=0"
+            title="夢的翅膀受了傷卡點舞配樂影片"
+          />
+        ) : (
+          <button
+            className="competition-music-start"
+            onClick={() => setShowMusicVideo(true)}
+            type="button"
+          >
+            <span aria-hidden="true">▶</span>
+            播放配樂舞蹈
+          </button>
+        )}
+        <strong>夢的翅膀受了傷・卡點舞</strong>
+        <small>手機禁止自動出聲，點一下才會播放音樂。</small>
+      </aside>
     </div>
   );
 }

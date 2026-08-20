@@ -195,6 +195,60 @@ def _validate_daily_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return cleaned.sort_index()
 
 
+def _download_interactive_daily_history(
+    download_stock: Callable[..., pd.DataFrame],
+    stock_code: str,
+) -> pd.DataFrame:
+    """Return enough daily history for indicators, recovering partial responses.
+
+    The exchange month endpoints can occasionally return only a few successful
+    months while still producing a non-empty frame.  A non-empty frame is not
+    necessarily complete enough for EMA60, so retry the official source once
+    and then try the long-history source before allowing validation to fail.
+    """
+
+    attempts = (
+        {
+            "prefer_official": True,
+            "update_with_intraday": False,
+            "official_months": INTERACTIVE_HISTORY_MONTHS,
+        },
+        {
+            "prefer_official": True,
+            "update_with_intraday": False,
+            "official_months": INTERACTIVE_HISTORY_MONTHS,
+            "force_official_refresh": True,
+        },
+        {
+            "prefer_official": False,
+            "update_with_intraday": False,
+            "daily_period": "1y",
+            "official_months": INTERACTIVE_HISTORY_MONTHS,
+        },
+    )
+    best_frame = pd.DataFrame()
+    errors: list[str] = []
+
+    for options in attempts:
+        try:
+            candidate = download_stock(stock_code, **options)
+        except Exception as error:
+            errors.append(str(error))
+            continue
+
+        if candidate is not None and len(candidate) > len(best_frame):
+            best_frame = candidate
+
+        if candidate is not None and len(candidate) >= MINIMUM_DAILY_ROWS:
+            return candidate
+
+    if not best_frame.empty:
+        return best_frame
+
+    detail = "；".join(message for message in errors if message)
+    raise ValueError(detail or "找不到股票日線資料。")
+
+
 def _prepare_hourly_dataframe(
     download_hourly_stock: Optional[Callable],
     add_indicators: Callable,
@@ -491,11 +545,9 @@ def _real_response(stock_code: str, position_status: str) -> dict:
     # 疊加。額外取得一個月可確保圖表涵蓋完整的一年交易日。
     with ThreadPoolExecutor(max_workers=2) as executor:
         daily_future = executor.submit(
+            _download_interactive_daily_history,
             download_stock,
             code,
-            prefer_official=True,
-            update_with_intraday=False,
-            official_months=INTERACTIVE_HISTORY_MONTHS,
         )
         realtime_future = executor.submit(get_realtime_price, code)
 

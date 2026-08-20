@@ -23,6 +23,7 @@ TPEX_URL = "https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock"
 DEFAULT_MONTHS = 10
 REQUEST_TIMEOUT_SECONDS = 8
 MAX_MONTH_WORKERS = 5
+LONG_HISTORY_MONTH_THRESHOLD = 24
 MONTH_MAX_ATTEMPTS = 2
 MONTH_RETRY_DELAY_SECONDS = 0.15
 
@@ -44,6 +45,14 @@ def _month_starts(as_of: date, months: int) -> list[date]:
         output.append(date(year, zero_based_month + 1, 1))
 
     return output
+
+
+def _month_worker_count(month_count: int) -> int:
+    if month_count <= 0:
+        return 1
+    if month_count > LONG_HISTORY_MONTH_THRESHOLD:
+        return 1
+    return min(MAX_MONTH_WORKERS, month_count)
 
 
 def _number(value: Any) -> float | None:
@@ -199,10 +208,12 @@ def _download_market(
 
         return pd.DataFrame(), fetched_name
 
-    # TWSE／TPEx 對同一來源的高併發月查詢偶爾只回傳部分月份；
-    # 限制並行數並對失敗月份重試，避免把缺月資料誤當成完整歷史。
+    # TWSE／TPEx 對長期間大量月查詢會暫時限流，且可能只留下近期月份。
+    # 兩年內互動圖表維持並行；超過兩年的研究／競賽資料依序下載，
+    # 避免不完整結果進入 LRU 快取後持續污染回測。
+    worker_count = _month_worker_count(len(months))
     with ThreadPoolExecutor(
-        max_workers=min(MAX_MONTH_WORKERS, len(months))
+        max_workers=worker_count
     ) as executor:
         futures = {
             executor.submit(fetch_month, month): month

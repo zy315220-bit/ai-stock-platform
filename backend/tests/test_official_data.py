@@ -4,8 +4,10 @@ import unittest
 from datetime import date
 
 from official_data import (
+    LONG_HISTORY_MONTH_THRESHOLD,
     MAX_MONTH_WORKERS,
     _download_market,
+    _month_worker_count,
     _number,
     _roc_date,
     _rows_to_frame,
@@ -15,6 +17,9 @@ from official_data import (
 class OfficialDataParsingTests(unittest.TestCase):
     def test_month_download_concurrency_stays_below_exchange_limit(self) -> None:
         self.assertEqual(MAX_MONTH_WORKERS, 5)
+        self.assertEqual(LONG_HISTORY_MONTH_THRESHOLD, 24)
+        self.assertEqual(_month_worker_count(13), 5)
+        self.assertEqual(_month_worker_count(66), 1)
 
     def test_transient_missing_month_is_retried(self) -> None:
         calls: dict[str, int] = {}

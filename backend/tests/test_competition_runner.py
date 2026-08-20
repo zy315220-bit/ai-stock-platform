@@ -17,6 +17,7 @@ from app.services.competition_runner import (
     SIGNAL_FUNCTIONS,
     _competition_official_months,
     _prepare_frame,
+    _simulate_symbol,
     run_competition_on_frames,
 )
 from app.services.competition_service import freeze_robot_spec
@@ -45,6 +46,24 @@ class CompetitionRunnerTests(unittest.TestCase):
         as_of = date(2026, 8, 20)
         self.assertEqual(_competition_official_months("00878", as_of=as_of), 66)
         self.assertEqual(_competition_official_months("00919", as_of=as_of), 47)
+
+    def test_unlisted_segment_keeps_symbol_allocation_in_cash(self) -> None:
+        prepared = _prepare_frame(_synthetic_frame(0.0))
+        result = _simulate_symbol(
+            frame=prepared,
+            stock_code="00919",
+            robot_id="EMA20-TREND-v1",
+            segment="backtest",
+            start=pd.Timestamp("2019-01-01"),
+            end=pd.Timestamp("2019-12-31"),
+            initial_capital=25_000,
+            commission_rate=0.001425,
+            transaction_tax_rate=0.001,
+        )
+
+        self.assertFalse(result["data_available"])
+        self.assertEqual(result["final_capital"], 25_000)
+        self.assertEqual(result["trades"], [])
 
     def test_robot_rule_fingerprints_are_stable_and_unique(self) -> None:
         self.assertEqual(len(ROBOT_SPECS), 16)

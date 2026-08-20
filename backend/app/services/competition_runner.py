@@ -763,7 +763,21 @@ def _simulate_symbol(
         if start <= pd.Timestamp(timestamp) <= end
     ]
     if not positions:
-        raise ValueError(f"{stock_code} 在指定競賽期間沒有資料。")
+        return {
+            "stock_code": stock_code,
+            "data_available": False,
+            "actual_start": None,
+            "actual_end": None,
+            "initial_capital": round(initial_capital, 2),
+            "final_capital": round(initial_capital, 2),
+            "total_commission": 0.0,
+            "total_transaction_tax": 0.0,
+            "trades": [],
+            "equity_curve": [
+                {"date": _date_text(start), "equity": round(initial_capital, 2)},
+                {"date": _date_text(end), "equity": round(initial_capital, 2)},
+            ],
+        }
 
     cash = float(initial_capital)
     shares = 0
@@ -986,6 +1000,9 @@ def _simulate_symbol(
 
     return {
         "stock_code": stock_code,
+        "data_available": True,
+        "actual_start": _date_text(frame.index[positions[0]]),
+        "actual_end": _date_text(frame.index[positions[-1]]),
         "initial_capital": round(initial_capital, 2),
         "final_capital": round(cash, 2),
         "total_commission": round(total_commission, 2),
@@ -1263,6 +1280,7 @@ def run_competition_on_frames(
         "disclosures": [
             "競賽優先使用五年資料：前 4 年做固定規則歷史檢查，最後 1 年做 walk-forward 樣本外排名。",
             "成立未滿五年的 ETF 只會使用上市後的真實資料，不會補造不存在的行情。",
+            "個別 ETF 在尚無行情的區間，其等額配置會保留為現金；所有機器人適用完全相同規則。",
             "最後 1 年區間是 walk-forward 歷史模擬，不冒充部署後累積的真實實盤前瞻紀錄。",
             "EMA、RSI、MACD、布林通道、KD、成交量與 ATR 的具體期間／門檻是固定的 v1 實證參數，不代表論文證明其為最優值。",
             "現階段只做多、無槓桿，且每檔 ETF 使用固定等額資金；所有交易均保存進出場與成本。",

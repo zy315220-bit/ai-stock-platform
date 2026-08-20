@@ -247,6 +247,35 @@ function formatInteger(
 }
 
 
+function formatPeriodSpan(
+  start: string | undefined,
+  end: string | undefined,
+): string {
+  if (!start || !end) {
+    return "";
+  }
+
+  const startTime = Date.parse(`${start}T00:00:00Z`);
+  const endTime = Date.parse(`${end}T00:00:00Z`);
+
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime < startTime) {
+    return "";
+  }
+
+  const inclusiveDays = Math.floor((endTime - startTime) / 86_400_000) + 1;
+  const years = inclusiveDays / 365.2425;
+
+  if (years >= 0.9) {
+    const roundedYears = Math.round(years);
+    return `${Math.abs(years - roundedYears) < 0.08 ? roundedYears : formatNumber(years, 1)} 年`;
+  }
+
+  const months = inclusiveDays / 30.436875;
+  const roundedMonths = Math.max(1, Math.round(months));
+  return `${roundedMonths} 個月`;
+}
+
+
 const stateLabels: Record<string, string> = {
   LONG: "偏多",
   SHORT: "偏空",
@@ -2885,14 +2914,18 @@ export default function Dashboard() {
                 onClick={() => setCompetitionTradeSegment("backtest")}
                 type="button"
               >
-                2 個月歷史段
+                {competition
+                  ? `${formatPeriodSpan(competition.periods.backtest.start, competition.periods.backtest.end)}歷史段`
+                  : "歷史段"}
               </button>
               <button
                 className={competitionTradeSegment === "forward" ? "active" : ""}
                 onClick={() => setCompetitionTradeSegment("forward")}
                 type="button"
               >
-                1 個月前瞻段
+                {competition
+                  ? `${formatPeriodSpan(competition.periods.forward.start, competition.periods.forward.end)}前瞻段`
+                  : "前瞻段"}
               </button>
             </div>
           </div>
@@ -2973,7 +3006,7 @@ export default function Dashboard() {
           <EmptyPanel
             eyebrow="ANTI-OVERFITTING"
             title="規則改變就建立新版本"
-            description="每個策略保存規則指紋。修改參數後不能沿用舊績效，並將最後 1 個月保留給 walk-forward 模擬。"
+            description="每個策略保存規則指紋。修改參數後不能沿用舊績效，並將最後 1 年保留給 walk-forward 模擬。"
           />
           <EmptyPanel
             eyebrow="AUDITABLE RESULTS"

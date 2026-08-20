@@ -20,8 +20,8 @@ class ChampionApiTests(unittest.TestCase):
         self, run_competition, load_dataset, analyze_pbo, evaluate_gate
     ) -> None:
         competition = {"run_id": "run-1", "leader": {"robot_id": "R1", "name": "Robot 1"}}
-        frames = {"0050": object()}
-        sources = {"0050": "official"}
+        frames = {code: object() for code in ("0050", "0056", "00878", "00919")}
+        sources = {code: "official" for code in frames}
         coverage = {"actual_years": 5.0, "long_horizon_qualified": True}
         pbo = {"pbo": {"pbo_percent": 12.5}, "slice_count": 12, "strategy_count": 16}
         champion = {"robot_id": "R1", "qualified": True, "status": "qualified_champion", "policy": "policy"}
@@ -55,9 +55,10 @@ class ChampionApiTests(unittest.TestCase):
         self, run_competition, load_dataset, analyze_pbo, evaluate_gate
     ) -> None:
         run_competition.return_value = {"run_id": "run-2", "leader": {"robot_id": "R1"}}
+        frames = {code: object() for code in ("0050", "0056", "00878", "00919")}
         load_dataset.return_value = {
-            "frames": {"0050": object()},
-            "sources": {"0050": "official"},
+            "frames": frames,
+            "sources": {code: "official" for code in frames},
             "universe_coverage": {"actual_years": 5.0, "long_horizon_qualified": True},
         }
         analyze_pbo.return_value = {"pbo": {"pbo_percent": 20.0}, "slice_count": 12, "strategy_count": 16}

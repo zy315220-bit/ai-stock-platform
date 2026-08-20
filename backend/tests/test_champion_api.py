@@ -14,18 +14,19 @@ class ChampionApiTests(unittest.TestCase):
 
     @patch("app.api.competition.evaluate_champion_gate")
     @patch("app.api.competition.analyze_historical_selection_overfit")
-    @patch("app.api.competition.legacy._download_competition_frames")
-    @patch("app.api.competition.run_competition")
+    @patch("app.api.competition.load_shared_research_dataset")
+    @patch("app.api.competition.run_competition_on_frames")
     def test_champion_endpoint_combines_same_request_evidence(
-        self, run_competition, download_frames, analyze_pbo, evaluate_gate
+        self, run_on_frames, load_dataset, analyze_pbo, evaluate_gate
     ) -> None:
         competition = {"run_id": "run-1", "leader": {"robot_id": "R1", "name": "Robot 1"}}
-        frames = {"0050": object()}
-        sources = {"0050": "official"}
+        frames = {code: object() for code in ("0050", "0056", "00878", "00919")}
+        sources = {code: "official" for code in frames}
+        coverage = {"actual_years": 5.0, "long_horizon_qualified": True}
         pbo = {"pbo": {"pbo_percent": 12.5}, "slice_count": 12, "strategy_count": 16}
         champion = {"robot_id": "R1", "qualified": True, "status": "qualified_champion", "policy": "policy"}
-        run_competition.return_value = competition
-        download_frames.return_value = (frames, sources)
+        run_on_frames.return_value = competition
+        load_dataset.return_value = {"frames": frames, "sources": sources, "universe_coverage": coverage}
         analyze_pbo.return_value = pbo
         evaluate_gate.return_value = champion
 
@@ -37,23 +38,31 @@ class ChampionApiTests(unittest.TestCase):
         self.assertEqual(payload["competition_run_id"], "run-1")
         self.assertEqual(payload["pbo_percent"], 12.5)
         self.assertEqual(payload["data_sources"], sources)
+        self.assertEqual(payload["research_history"], coverage)
+        run_on_frames.assert_called_once_with(frames, initial_capital=100000.0, sources=sources)
         evaluate_gate.assert_called_once_with(competition=competition, pbo_analysis=pbo)
 
-    @patch("app.api.competition.run_competition")
-    def test_champion_endpoint_rejects_odd_slice_count_before_work(self, run_competition) -> None:
+    @patch("app.api.competition.run_competition_on_frames")
+    def test_champion_endpoint_rejects_odd_slice_count_before_work(self, run_on_frames) -> None:
         response = self.client.get("/api/competition/champion?max_slices=11")
         self.assertEqual(response.status_code, 400)
-        run_competition.assert_not_called()
+        run_on_frames.assert_not_called()
 
     @patch("app.api.competition.evaluate_champion_gate")
     @patch("app.api.competition.analyze_historical_selection_overfit")
-    @patch("app.api.competition.legacy._download_competition_frames")
-    @patch("app.api.competition.run_competition")
+    @patch("app.api.competition.load_shared_research_dataset")
+    @patch("app.api.competition.run_competition_on_frames")
     def test_champion_gate_validation_failure_does_not_claim_champion(
-        self, run_competition, download_frames, analyze_pbo, evaluate_gate
+        self, run_on_frames, load_dataset, analyze_pbo, evaluate_gate
     ) -> None:
-        run_competition.return_value = {"run_id": "run-2", "leader": {"robot_id": "R1"}}
-        download_frames.return_value = ({"0050": object()}, {"0050": "official"})
+        competition = {"run_id": "run-2", "leader": {"robot_id": "R1"}}
+        run_on_frames.return_value = competition
+        frames = {code: object() for code in ("0050", "0056", "00878", "00919")}
+        load_dataset.return_value = {
+            "frames": frames,
+            "sources": {code: "official" for code in frames},
+            "universe_coverage": {"actual_years": 5.0, "long_horizon_qualified": True},
+        }
         analyze_pbo.return_value = {"pbo": {"pbo_percent": 20.0}, "slice_count": 12, "strategy_count": 16}
         evaluate_gate.side_effect = ValueError("competition leader is missing from PBO matrix")
 

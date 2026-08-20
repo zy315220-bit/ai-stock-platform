@@ -31,6 +31,9 @@ class InteractiveAnalysisHistoryTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertTrue(calls[0]["prefer_official"])
         self.assertTrue(calls[1]["force_official_refresh"])
+        self.assertTrue(result.attrs["history_recovery"]["recovered"])
+        self.assertEqual(result.attrs["history_recovery"]["initial_rows"], 36)
+        self.assertEqual(result.attrs["history_recovery"]["final_rows"], 250)
 
     def test_long_history_source_is_used_when_official_retry_stays_short(self) -> None:
         calls: list[dict] = []
@@ -50,6 +53,10 @@ class InteractiveAnalysisHistoryTests(unittest.TestCase):
         self.assertEqual(result.attrs["source"], "Yahoo Finance")
         self.assertFalse(calls[2]["prefer_official"])
         self.assertEqual(calls[2]["daily_period"], "1y")
+        self.assertEqual(
+            result.attrs["history_recovery"]["method"],
+            "long_history_fallback",
+        )
 
 
 if __name__ == "__main__":

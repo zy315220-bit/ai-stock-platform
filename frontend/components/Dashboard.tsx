@@ -349,6 +349,34 @@ function competitionLoadingStage(elapsedSeconds: number): string {
 }
 
 
+function analysisLoadingStage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 6) {
+    return "取得交易所日線與最新成交";
+  }
+  if (elapsedSeconds < 16) {
+    return "檢查缺月與資料筆數";
+  }
+  if (elapsedSeconds < 32) {
+    return "計算技術指標與三面向評分";
+  }
+  return "整理風險與持股建議";
+}
+
+
+function backtestLoadingStage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 15) {
+    return "取得長期歷史行情";
+  }
+  if (elapsedSeconds < 45) {
+    return "驗證缺月、分割與配息";
+  }
+  if (elapsedSeconds < 120) {
+    return "逐日模擬訊號與交易成本";
+  }
+  return "統計報酬、回撤與交易紀錄";
+}
+
+
 function formatElapsedTime(elapsedSeconds: number): string {
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
@@ -396,6 +424,46 @@ function CompetitionLoader({ elapsedSeconds }: { elapsedSeconds: number }) {
         <strong>夢的翅膀受了傷・卡點舞</strong>
         <small>手機禁止自動出聲，點一下才會播放音樂。</small>
       </aside>
+    </div>
+  );
+}
+
+
+function DataLoadingPanel({
+  code,
+  elapsedSeconds,
+  kind,
+  onCancel,
+}: {
+  code: string;
+  elapsedSeconds: number;
+  kind: "analysis" | "backtest";
+  onCancel: () => void;
+}) {
+  const isBacktest = kind === "backtest";
+  const stage = isBacktest
+    ? backtestLoadingStage(elapsedSeconds)
+    : analysisLoadingStage(elapsedSeconds);
+
+  return (
+    <div className={`data-loading-panel ${isBacktest ? "compact" : ""}`} role="status" aria-live="polite">
+      <div className="data-loading-visual" aria-hidden="true">
+        <span className="data-loading-orbit" />
+        <div className="data-loading-bars">
+          <i /><i /><i /><i /><i />
+        </div>
+      </div>
+      <div className="data-loading-copy">
+        <span>{isBacktest ? "HISTORICAL TEST" : "REAL DATA ANALYSIS"}</span>
+        <strong>{code || "股票"}・{stage}</strong>
+        <p>
+          {isBacktest
+            ? "系統會先確認長期資料完整度，再計入分割、配息與交易成本。"
+            : "系統正在交叉檢查資料完整度；若筆數不足會自動改用長期來源重抓。"}
+        </p>
+        <small>已執行 {formatElapsedTime(elapsedSeconds)}</small>
+      </div>
+      <button onClick={onCancel} type="button">取消</button>
     </div>
   );
 }
@@ -732,6 +800,9 @@ export default function Dashboard() {
   const [pendingStockCode, setPendingStockCode] =
     useState("");
 
+  const [analysisLoadingSeconds, setAnalysisLoadingSeconds] =
+    useState(0);
+
   const [error, setError] =
     useState("");
 
@@ -743,6 +814,9 @@ export default function Dashboard() {
 
   const [backtestLoading, setBacktestLoading] =
     useState(false);
+
+  const [backtestLoadingSeconds, setBacktestLoadingSeconds] =
+    useState(0);
 
   const [backtestError, setBacktestError] =
     useState("");
@@ -1099,6 +1173,32 @@ export default function Dashboard() {
 
 
   useEffect(() => {
+    if (!loading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setAnalysisLoadingSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [loading]);
+
+
+  useEffect(() => {
+    if (!backtestLoading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setBacktestLoadingSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [backtestLoading]);
+
+
+  useEffect(() => {
     if (
       !["market", "industry"].includes(activePage) ||
       marketOverview
@@ -1284,6 +1384,7 @@ export default function Dashboard() {
     analysisControllerRef.current = controller;
     backtestRequestIdRef.current += 1;
 
+    setAnalysisLoadingSeconds(0);
     setLoading(true);
     setPendingStockCode(normalizedCode);
     setBacktestLoading(false);
@@ -1470,6 +1571,7 @@ export default function Dashboard() {
       return;
     }
 
+    setBacktestLoadingSeconds(0);
     setBacktestLoading(true);
     setBacktestError("");
     setBacktestCanRetry(false);
@@ -1557,7 +1659,14 @@ export default function Dashboard() {
 
   function renderAnalysisOverview() {
     if (loading && !data) {
-      return <LoadingPanel />;
+      return (
+        <DataLoadingPanel
+          code={pendingStockCode || stockCode.trim()}
+          elapsedSeconds={analysisLoadingSeconds}
+          kind="analysis"
+          onCancel={cancelAnalysis}
+        />
+      );
     }
 
     if (!data) {
@@ -1771,6 +1880,11 @@ export default function Dashboard() {
                 {!data.meta.history_coverage.complete_month_coverage ? (
                   <p className="backtest-note">
                     官方資料缺少月份：{data.meta.history_coverage.missing_months.join("、")}，目前不視為完整一年資料。
+                  </p>
+                ) : null}
+                {data.meta.history_recovery?.recovered ? (
+                  <p className="data-recovery-note">
+                    系統偵測到首批資料不完整，已自動補齊 {data.meta.history_recovery.initial_rows} → {data.meta.history_recovery.final_rows} 筆（共嘗試 {data.meta.history_recovery.attempts} 次）。
                   </p>
                 ) : null}
               </>
@@ -2167,10 +2281,19 @@ export default function Dashboard() {
           {backtestLoading && backtest ? (
             <div className="request-notice request-notice-compact" role="status">
               <div>
-                <strong>正在重新計算回測</strong>
-                <span>目前顯示的是上一筆回測結果，完成後會自動更新。</span>
+                <strong>{backtestLoadingStage(backtestLoadingSeconds)}</strong>
+                <span>已執行 {formatElapsedTime(backtestLoadingSeconds)}；目前顯示上一筆結果，完成後會自動更新。</span>
               </div>
             </div>
+          ) : null}
+
+          {backtestLoading && !backtest ? (
+            <DataLoadingPanel
+              code={data.stock.code}
+              elapsedSeconds={backtestLoadingSeconds}
+              kind="backtest"
+              onCancel={cancelBacktest}
+            />
           ) : null}
 
           {backtest ? (
@@ -2185,6 +2308,11 @@ export default function Dashboard() {
                   {!backtest.history_coverage.complete_month_coverage
                     ? `官方資料缺少月份：${backtest.history_coverage.missing_months.join("、")}，本次不能視為完整長期回測。`
                     : "這檔商品可用資料不足 3 年，不能視為長期回測；可能是上市時間較短。"}
+                </p>
+              ) : null}
+              {backtest.history_recovery?.recovered ? (
+                <p className="data-recovery-note">
+                  系統偵測到首批歷史資料不足，已自動補齊 {backtest.history_recovery.initial_rows} → {backtest.history_recovery.final_rows} 筆（共嘗試 {backtest.history_recovery.attempts} 次）。
                 </p>
               ) : null}
               <div className="backtest-grid">
@@ -2219,11 +2347,9 @@ export default function Dashboard() {
                 已依股價分割調整歷史價格，並納入證交所公告配息；過去績效不代表未來結果。若策略報酬低於同期持有，代表目前規則仍需調整，不能因名稱含 AI 就視為有效。
               </p>
             </>
-          ) : (
+          ) : backtestLoading ? null : (
             <p className="empty-state">
-              {backtestLoading
-                ? "正在下載並計算五年歷史資料；首次執行可能需要 1～2 分鐘，你可以按下「取消回測」停止等待。"
-                : "回測不會自動下單。按下執行後，系統會用最近五年官方資料比較量化策略與同期持有績效。"}
+              回測不會自動下單。按下執行後，系統會用最近五年官方資料比較量化策略與同期持有績效。
             </p>
           )}
         </article>
@@ -3806,8 +3932,8 @@ export default function Dashboard() {
                 </strong>
                 <span>
                   {data
-                    ? `目前顯示的是上一筆 ${data.stock.code} ${data.stock.name} 的結果。`
-                    : "正在取得行情與計算指標；你可以隨時取消。"}
+                    ? `${analysisLoadingStage(analysisLoadingSeconds)}・${formatElapsedTime(analysisLoadingSeconds)}；目前顯示上一筆 ${data.stock.code} ${data.stock.name} 的結果。`
+                    : `${analysisLoadingStage(analysisLoadingSeconds)}・已執行 ${formatElapsedTime(analysisLoadingSeconds)}。`}
                 </span>
               </div>
 

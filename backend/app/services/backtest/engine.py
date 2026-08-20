@@ -59,6 +59,100 @@ BACKTEST_REQUIRED_COLUMNS = [
 ]
 
 
+def _download_backtest_history(
+    stock_code: str,
+    *,
+    required_start_date: str,
+    required_end_date: str | None,
+) -> pd.DataFrame:
+    """Choose the most complete long-horizon frame from controlled sources."""
+
+    required_start = pd.Timestamp(required_start_date).normalize()
+    required_end = pd.Timestamp(
+        required_end_date or pd.Timestamp.today()
+    ).normalize()
+    attempts = (
+        {
+            "prefer_official": False,
+            "daily_period": "10y",
+            "force_official_refresh": False,
+        },
+        {
+            "prefer_official": True,
+            "daily_period": "max",
+            "force_official_refresh": True,
+        },
+    )
+    best_frame = pd.DataFrame()
+    best_key: tuple[int, int, int, int, int, int] | None = None
+    initial_rows = 0
+    errors: list[str] = []
+
+    for attempt_index, options in enumerate(attempts):
+        try:
+            candidate = download_stock(
+                stock_code,
+                prefer_official=bool(options["prefer_official"]),
+                daily_period=str(options["daily_period"]),
+                update_with_intraday=False,
+                official_months=RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS,
+                force_official_refresh=bool(options["force_official_refresh"]),
+                include_corporate_actions=True,
+            )
+        except Exception as error:
+            errors.append(str(error))
+            continue
+
+        if attempt_index == 0:
+            initial_rows = len(candidate) if candidate is not None else 0
+
+        if candidate is None or candidate.empty:
+            continue
+
+        coverage = frame_coverage(candidate)
+        actual_start = pd.Timestamp(candidate.index.min()).normalize()
+        actual_end = pd.Timestamp(candidate.index.max()).normalize()
+        covers_start = actual_start <= required_start
+        covers_end = actual_end >= required_end - pd.Timedelta(days=10)
+        complete_months = bool(coverage["complete_month_coverage"])
+        covers_requested_span = covers_start and covers_end and complete_months
+        key = (
+            int(covers_requested_span),
+            int(complete_months),
+            int(covers_end),
+            -int(actual_start.value),
+            int(actual_end.value),
+            len(candidate),
+        )
+
+        if best_key is None or key > best_key:
+            best_key = key
+            best_frame = candidate
+
+        if covers_requested_span:
+            candidate.attrs["history_recovery"] = {
+                "recovered": attempt_index > 0,
+                "attempts": attempt_index + 1,
+                "initial_rows": initial_rows,
+                "final_rows": len(candidate),
+                "method": "long_history" if attempt_index == 0 else "official_refresh",
+            }
+            return candidate
+
+    if not best_frame.empty:
+        best_frame.attrs["history_recovery"] = {
+            "recovered": len(attempts) > 1,
+            "attempts": len(attempts),
+            "initial_rows": initial_rows,
+            "final_rows": len(best_frame),
+            "method": "best_available",
+        }
+        return best_frame
+
+    detail = "；".join(message for message in errors if message)
+    raise ValueError(detail or f"找不到 {stock_code} 的歷史資料。")
+
+
 def backtest_stock(
     stock_code: str,
     start_date: str | None = None,
@@ -137,12 +231,10 @@ def backtest_stock(
         - pd.DateOffset(months=BACKTEST_WARMUP_MONTHS)
     ).strftime("%Y-%m-%d")
 
-    df = download_stock(
+    df = _download_backtest_history(
         normalized_code,
-        prefer_official=True,
-        update_with_intraday=False,
-        official_months=RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS,
-        include_corporate_actions=True,
+        required_start_date=warmup_start_date,
+        required_end_date=end_date,
     )
 
     if df is None or df.empty:
@@ -153,6 +245,7 @@ def backtest_stock(
         )
 
     data_source = str(df.attrs.get("source", "未知"))
+    history_recovery = dict(df.attrs.get("history_recovery", {}))
     corporate_action_attrs = {
         "dividends": list(df.attrs.get("dividends", [])),
         "split_adjustments": list(df.attrs.get("split_adjustments", [])),
@@ -840,6 +933,7 @@ def backtest_stock(
             actual_end_date
         ),
         "history_coverage": history_coverage,
+        "history_recovery": history_recovery,
         "requested_history_months": RESEARCH_HISTORY_MONTHS,
         "entry_score": (
             entry_score

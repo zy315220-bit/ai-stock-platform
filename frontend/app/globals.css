@@ -589,6 +589,16 @@ button, input, select { font: inherit; }
   gap: 10px;
 }
 .backtest-note { margin: 12px 0 0; }
+.data-recovery-note {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-left: 3px solid #55d6be;
+  border-radius: 7px;
+  color: #a7f3d0;
+  font-size: 10px;
+  line-height: 1.65;
+  background: rgba(20, 83, 69, .25);
+}
 .watchlist { display: grid; gap: 8px; }
 .watchlist-row {
   display: grid;
@@ -676,6 +686,86 @@ button, input, select { font: inherit; }
 .scanner-price strong { font-size: 13px; }
 .scanner-score strong { font-size: 19px; }
 .loading-panel { min-height: 55vh; display: grid; place-items: center; color: var(--muted); }
+.data-loading-panel {
+  min-height: 300px;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid #263a58;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 12% 50%, rgba(85, 214, 190, .12), transparent 26%),
+    linear-gradient(135deg, rgba(18, 30, 50, .94), rgba(8, 14, 24, .98));
+}
+.data-loading-panel.compact { min-height: 190px; margin: 4px 0 14px; }
+.data-loading-panel::after {
+  content: "";
+  width: 34%;
+  height: 1px;
+  position: absolute;
+  right: 100%;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, #55d6be, transparent);
+  animation: data-scan 2.4s ease-in-out infinite;
+}
+.data-loading-visual {
+  width: 118px;
+  height: 118px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(85, 214, 190, .24);
+  border-radius: 50%;
+  background: rgba(5, 12, 22, .52);
+}
+.data-loading-orbit {
+  width: 90px;
+  height: 90px;
+  position: absolute;
+  border: 2px solid transparent;
+  border-top-color: #55d6be;
+  border-right-color: rgba(115, 132, 255, .7);
+  border-radius: 50%;
+  animation: data-orbit 1.8s linear infinite;
+}
+.data-loading-bars {
+  height: 46px;
+  display: flex;
+  gap: 5px;
+  align-items: flex-end;
+}
+.data-loading-bars i {
+  width: 6px;
+  height: 18px;
+  border-radius: 3px 3px 1px 1px;
+  background: #7384ff;
+  box-shadow: 0 0 10px rgba(115, 132, 255, .36);
+  animation: data-bars 1.15s ease-in-out infinite;
+}
+.data-loading-bars i:nth-child(2) { height: 30px; animation-delay: -.9s; }
+.data-loading-bars i:nth-child(3) { height: 42px; animation-delay: -.7s; background: #55d6be; }
+.data-loading-bars i:nth-child(4) { height: 26px; animation-delay: -.5s; }
+.data-loading-bars i:nth-child(5) { height: 35px; animation-delay: -.3s; }
+.data-loading-copy { min-width: 0; display: grid; gap: 7px; }
+.data-loading-copy > span { color: #6f819c; font-size: 9px; font-weight: 800; letter-spacing: .14em; }
+.data-loading-copy > strong { color: #ecf4ff; font-size: 17px; }
+.data-loading-copy > p { max-width: 620px; margin: 0; color: #96a4b8; font-size: 10px; line-height: 1.75; }
+.data-loading-copy > small { color: #55d6be; font-size: 10px; }
+.data-loading-panel > button {
+  padding: 8px 12px;
+  border: 1px solid #5a3340;
+  border-radius: 7px;
+  color: #fecdd3;
+  background: #351820;
+  cursor: pointer;
+}
+@keyframes data-orbit { to { transform: rotate(360deg); } }
+@keyframes data-bars { 0%, 100% { transform: scaleY(.55); opacity: .55; } 50% { transform: scaleY(1); opacity: 1; } }
+@keyframes data-scan { 0% { right: 100%; } 100% { right: -34%; } }
 
 .app-error-page {
   min-height: 100vh;
@@ -1921,6 +2011,16 @@ button, input, select { font: inherit; }
   .backtest-actions { width: 100%; align-items: stretch; flex-direction: column; }
   .backtest-actions input { width: 100%; }
   .backtest-grid { grid-template-columns: 1fr 1fr; }
+  .data-loading-panel {
+    min-height: 250px;
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 14px;
+    padding: 17px;
+  }
+  .data-loading-panel.compact { min-height: 210px; }
+  .data-loading-visual { width: 80px; height: 80px; }
+  .data-loading-orbit { width: 60px; height: 60px; }
+  .data-loading-panel > button { grid-column: 1 / -1; width: 100%; }
   .error-banner { align-items: stretch; flex-direction: column; }
   .request-notice { align-items: stretch; flex-direction: column; }
   .request-notice button { width: 100%; }
@@ -2017,7 +2117,10 @@ button, input, select { font: inherit; }
   .hero-actions button { transition: none; }
   .competition-loading-track i,
   .robot-runner,
-  .competition-music-start span { animation: none !important; }
+  .competition-music-start span,
+  .data-loading-panel::after,
+  .data-loading-orbit,
+  .data-loading-bars i { animation: none !important; }
 }
 
 @keyframes robot-race-mobile {

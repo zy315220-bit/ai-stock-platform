@@ -228,21 +228,44 @@ def _download_interactive_daily_history(
     )
     best_frame = pd.DataFrame()
     errors: list[str] = []
+    initial_rows = 0
+    method_names = (
+        "official",
+        "official_refresh",
+        "long_history_fallback",
+    )
 
-    for options in attempts:
+    for attempt_index, options in enumerate(attempts):
         try:
             candidate = download_stock(stock_code, **options)
         except Exception as error:
             errors.append(str(error))
             continue
 
+        if attempt_index == 0:
+            initial_rows = len(candidate) if candidate is not None else 0
+
         if candidate is not None and len(candidate) > len(best_frame):
             best_frame = candidate
 
         if candidate is not None and len(candidate) >= MINIMUM_DAILY_ROWS:
+            candidate.attrs["history_recovery"] = {
+                "recovered": attempt_index > 0,
+                "attempts": attempt_index + 1,
+                "initial_rows": initial_rows,
+                "final_rows": len(candidate),
+                "method": method_names[attempt_index],
+            }
             return candidate
 
     if not best_frame.empty:
+        best_frame.attrs["history_recovery"] = {
+            "recovered": len(attempts) > 1,
+            "attempts": len(attempts),
+            "initial_rows": initial_rows,
+            "final_rows": len(best_frame),
+            "method": "best_available",
+        }
         return best_frame
 
     detail = "；".join(message for message in errors if message)
@@ -559,6 +582,7 @@ def _real_response(stock_code: str, position_status: str) -> dict:
             realtime = None
 
     daily_source = str(raw_daily_df.attrs.get("source", ""))
+    history_recovery = dict(raw_daily_df.attrs.get("history_recovery", {}))
     history_coverage = frame_coverage(raw_daily_df)
     daily_df = _validate_daily_dataframe(add_indicators(raw_daily_df))
 
@@ -705,6 +729,7 @@ def _real_response(stock_code: str, position_status: str) -> dict:
             "analysis_engine": "Score Engine V2",
             "daily_source": daily_source or "未知",
             "history_coverage": history_coverage,
+            "history_recovery": history_recovery,
             "requested_history_months": INTERACTIVE_HISTORY_MONTHS,
         },
         "demo": False,

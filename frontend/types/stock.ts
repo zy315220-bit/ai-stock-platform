@@ -34,6 +34,14 @@ export type HistoryCoverage = {
   row_count: number;
 };
 
+export type HistoryRecovery = {
+  recovered: boolean;
+  attempts: number;
+  initial_rows: number;
+  final_rows: number;
+  method: string;
+};
+
 export type NewsArticle = {
   title: string;
   url: string;
@@ -154,6 +162,7 @@ export type AnalysisResponse = {
     analysis_engine: string;
     daily_source?: string;
     history_coverage?: HistoryCoverage;
+    history_recovery?: HistoryRecovery;
     requested_history_months?: number;
   };
   demo: boolean;
@@ -232,6 +241,7 @@ export type BacktestResponse = {
   actual_start_date: string;
   actual_end_date: string;
   history_coverage: HistoryCoverage;
+  history_recovery?: HistoryRecovery;
   requested_history_months: number;
   initial_capital: number;
   final_capital: number;

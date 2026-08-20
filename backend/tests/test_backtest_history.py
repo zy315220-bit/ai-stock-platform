@@ -48,7 +48,8 @@ class BacktestHistoryTests(unittest.TestCase):
             )
 
         self.assertEqual(len(calls), 1)
-        self.assertTrue(calls[0]["prefer_official"])
+        self.assertFalse(calls[0]["prefer_official"])
+        self.assertEqual(calls[0]["daily_period"], "10y")
         self.assertFalse(calls[0]["update_with_intraday"])
         self.assertEqual(calls[0]["official_months"], 66)
         self.assertTrue(calls[0]["include_corporate_actions"])
@@ -57,6 +58,57 @@ class BacktestHistoryTests(unittest.TestCase):
         self.assertEqual(result["actual_end_date"], "2026-08-20")
         self.assertEqual(result["history_coverage"]["available_years"], 5.0)
         self.assertTrue(result["history_coverage"]["long_horizon_qualified"])
+        self.assertEqual(result["history_recovery"]["attempts"], 1)
+
+    def test_backtest_retries_when_first_history_is_partial(self) -> None:
+        complete_dates = pd.bdate_range("2021-01-01", "2026-08-20")
+        partial_dates = pd.bdate_range("2026-05-01", "2026-08-20")
+
+        def make_frame(dates: pd.DatetimeIndex) -> pd.DataFrame:
+            prices = np.linspace(20, 34, len(dates))
+            frame = pd.DataFrame(
+                {
+                    "Open": prices,
+                    "High": prices + 0.5,
+                    "Low": prices - 0.5,
+                    "Close": prices,
+                    "Volume": np.full(len(dates), 1_000_000),
+                },
+                index=dates,
+            )
+            frame.attrs["source"] = "test"
+            return frame
+
+        calls: list[dict] = []
+        responses = [make_frame(partial_dates), make_frame(complete_dates)]
+
+        def fake_download(_code: str, **kwargs) -> pd.DataFrame:
+            calls.append(kwargs)
+            return responses[len(calls) - 1].copy()
+
+        with (
+            patch(
+                "app.services.backtest.engine.download_stock",
+                side_effect=fake_download,
+            ),
+            patch(
+                "app.services.backtest.engine.calculate_score",
+                return_value={"total_score": 0},
+            ),
+        ):
+            result = backtest_stock(
+                "8039",
+                start_date="2021-08-20",
+                end_date="2026-08-20",
+                initial_capital=80_000,
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(calls[1]["prefer_official"])
+        self.assertTrue(calls[1]["force_official_refresh"])
+        self.assertEqual(result["actual_start_date"], "2021-08-20")
+        self.assertTrue(result["history_recovery"]["recovered"])
+        self.assertEqual(result["history_recovery"]["initial_rows"], len(partial_dates))
 
     def test_optional_indicator_nan_does_not_shorten_backtest_period(self) -> None:
         dates = pd.bdate_range("2021-01-01", "2026-08-20")

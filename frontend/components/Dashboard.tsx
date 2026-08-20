@@ -486,6 +486,113 @@ function DataLoadingPanel({
 }
 
 
+type ScannerProgressItem = {
+  code: string;
+  status: ScannerAnalysisEntry["status"];
+};
+
+
+function ScannerRankingAnimation({
+  items,
+  readyCount,
+  settledCount,
+}: {
+  items: ScannerProgressItem[];
+  readyCount: number;
+  settledCount: number;
+}) {
+  const total = items.length;
+  const processingCodes = items
+    .filter((item) => item.status === "loading")
+    .slice(0, 3)
+    .map((item) => item.code);
+  const failedCount = items.filter(
+    (item) => item.status === "error",
+  ).length;
+  const progress = total > 0 ? (settledCount / total) * 100 : 0;
+
+  return (
+    <section
+      aria-label={`候選股三面向分析進度，${settledCount}／${total} 檔已檢查`}
+      aria-valuemax={total}
+      aria-valuemin={0}
+      aria-valuenow={settledCount}
+      aria-valuetext={`${readyCount} 檔分析完成${failedCount > 0 ? `，${failedCount} 檔失敗` : ""}`}
+      className="scanner-journey"
+      role="progressbar"
+    >
+      <div className="scanner-journey-head">
+        <div>
+          <span>CANDIDATE CHECKPOINT</span>
+          <strong>
+            {processingCodes.length > 0
+              ? `${processingCodes.length} 檔候選股並行穿越三道檢查門`
+              : "正在組裝正式排名"}
+          </strong>
+        </div>
+        <b>
+          {readyCount}
+          <small>／{total} 檔</small>
+        </b>
+      </div>
+
+      <div className="scanner-gate-track" aria-hidden="true">
+        <div className="scanner-token-stream">
+          {processingCodes.map((code) => (
+            <span className="scanner-stock-token" key={code}>
+              <i>↗</i>
+              {code}
+            </span>
+          ))}
+        </div>
+        <div className="scanner-gate scanner-technical-gate">
+          <i>技</i>
+          <small>技術面</small>
+        </div>
+        <div className="scanner-gate scanner-fundamental-gate">
+          <i>基</i>
+          <small>基本面</small>
+        </div>
+        <div className="scanner-gate scanner-news-gate">
+          <i>消</i>
+          <small>消息面</small>
+        </div>
+        <div className="scanner-gate scanner-rank-gate">
+          <i>#</i>
+          <small>正式排名</small>
+        </div>
+      </div>
+
+      <div className="scanner-journey-progress" aria-hidden="true">
+        <i style={{ width: `${progress}%` }} />
+      </div>
+
+      <div className="scanner-checkpoint-grid" aria-hidden="true">
+        {items.map((item, index) => (
+          <span
+            className={`scanner-checkpoint ${item.status}`}
+            key={item.code}
+          >
+            <i>
+              {item.status === "ready"
+                ? "✓"
+                : item.status === "error"
+                  ? "!"
+                  : index + 1}
+            </i>
+            <small>{item.code}</small>
+          </span>
+        ))}
+      </div>
+
+      <p>
+        每完成一檔才點亮一格；技術、基本、消息三面向未齊全，不會提前排入正式名次。
+      </p>
+    </section>
+  );
+}
+
+
 const stateLabels: Record<string, string> = {
   LONG: "偏多",
   SHORT: "偏空",
@@ -2822,6 +2929,12 @@ export default function Dashboard() {
     ).length;
     const rankingFinished =
       candidates.length > 0 && settledCount === candidates.length;
+    const scannerProgressItems: ScannerProgressItem[] = candidates.map(
+      (candidate) => ({
+        code: candidate.code,
+        status: scannerAnalyses[candidate.code]?.status ?? "loading",
+      }),
+    );
 
     if (rankingFinished) {
       candidates.sort((left, right) => {
@@ -2873,6 +2986,11 @@ export default function Dashboard() {
           <MetricCard
             label="完整分析"
             value={scanner ? `${readyCount} / ${candidates.length} 檔` : "—"}
+            detail={
+              scanner && !rankingFinished
+                ? "完成一檔，進度才增加一格"
+                : undefined
+            }
           />
 
           <MetricCard
@@ -2932,6 +3050,13 @@ export default function Dashboard() {
                 </strong>
                 <span>行情更新：{scanner.updated_at}</span>
               </div>
+              {!rankingFinished && scannerProgressItems.length > 0 ? (
+                <ScannerRankingAnimation
+                  items={scannerProgressItems}
+                  readyCount={readyCount}
+                  settledCount={settledCount}
+                />
+              ) : null}
               <div className="scanner-list">
                 {candidates.map((item, index) => {
                   const entry = scannerAnalyses[item.code];

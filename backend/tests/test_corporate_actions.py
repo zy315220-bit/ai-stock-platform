@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -8,6 +9,7 @@ from app.services.backtest.benchmark import _calculate_buy_and_hold
 from corporate_actions import (
     adjust_dividends_for_splits,
     apply_split_adjustments,
+    download_twse_etf_dividends,
     parse_twse_dividend_html,
 )
 
@@ -85,6 +87,22 @@ class CorporateActionTests(unittest.TestCase):
         self.assertEqual(result["total_dividends"], 1_000)
         self.assertEqual(result["return_percent"], 10.0)
         self.assertEqual(result["return_basis"], "split_adjusted_total_return")
+
+    def test_audited_fallback_survives_twse_page_timeout(self) -> None:
+        with patch(
+            "corporate_actions._download_twse_etf_dividends_cached",
+            side_effect=ValueError("timeout"),
+        ):
+            events = download_twse_etf_dividends(
+                "0050",
+                start=pd.Timestamp("2025-01-01"),
+                end=pd.Timestamp("2025-12-31"),
+            )
+
+        self.assertEqual(
+            [(event["ex_date"], event["amount"]) for event in events],
+            [("2025-01-17", 2.7), ("2025-07-21", 0.36)],
+        )
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from functools import lru_cache
 import re
+import time
 from typing import Any, Callable
 
 import pandas as pd
@@ -21,6 +22,9 @@ TWSE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY"
 TPEX_URL = "https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock"
 DEFAULT_MONTHS = 10
 REQUEST_TIMEOUT_SECONDS = 8
+MAX_MONTH_WORKERS = 5
+MONTH_MAX_ATTEMPTS = 2
+MONTH_RETRY_DELAY_SECONDS = 0.15
 
 _HEADERS = {
     "Accept": "application/json, text/plain, */*",
@@ -175,17 +179,38 @@ def _download_market(
     frames: list[pd.DataFrame] = []
     name = ""
 
-    with ThreadPoolExecutor(max_workers=min(6, len(months))) as executor:
+    def fetch_month(month: date) -> tuple[pd.DataFrame, str]:
+        fetched_name = ""
+
+        for attempt in range(MONTH_MAX_ATTEMPTS):
+            try:
+                frame, current_name = fetcher(stock_code, month)
+            except (requests.RequestException, ValueError, TypeError):
+                frame, current_name = pd.DataFrame(), ""
+
+            if current_name:
+                fetched_name = current_name
+
+            if not frame.empty:
+                return frame, fetched_name
+
+            if attempt + 1 < MONTH_MAX_ATTEMPTS:
+                time.sleep(MONTH_RETRY_DELAY_SECONDS)
+
+        return pd.DataFrame(), fetched_name
+
+    # TWSE／TPEx 對同一來源的高併發月查詢偶爾只回傳部分月份；
+    # 限制並行數並對失敗月份重試，避免把缺月資料誤當成完整歷史。
+    with ThreadPoolExecutor(
+        max_workers=min(MAX_MONTH_WORKERS, len(months))
+    ) as executor:
         futures = {
-            executor.submit(fetcher, stock_code, month): month
+            executor.submit(fetch_month, month): month
             for month in months
         }
 
         for future in as_completed(futures):
-            try:
-                frame, fetched_name = future.result()
-            except (requests.RequestException, ValueError, TypeError):
-                continue
+            frame, fetched_name = future.result()
 
             if not frame.empty:
                 frames.append(frame)

@@ -22,6 +22,18 @@ export type WatchItem = {
 
 export type PositionStatus = "not_holding" | "holding";
 
+export type HistoryCoverage = {
+  start: string | null;
+  end: string | null;
+  available_days: number;
+  available_years: number;
+  status: "preferred" | "acceptable" | "insufficient_for_long_horizon_claim" | "incomplete_months";
+  long_horizon_qualified: boolean;
+  complete_month_coverage: boolean;
+  missing_months: string[];
+  row_count: number;
+};
+
 export type NewsArticle = {
   title: string;
   url: string;
@@ -141,6 +153,8 @@ export type AnalysisResponse = {
     hourly_available: boolean;
     analysis_engine: string;
     daily_source?: string;
+    history_coverage?: HistoryCoverage;
+    requested_history_months?: number;
   };
   demo: boolean;
 };
@@ -217,6 +231,8 @@ export type BacktestResponse = {
   data_source: string;
   actual_start_date: string;
   actual_end_date: string;
+  history_coverage: HistoryCoverage;
+  requested_history_months: number;
   initial_capital: number;
   final_capital: number;
   total_profit: number;

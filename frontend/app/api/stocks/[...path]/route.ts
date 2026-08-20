@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 
 import { BACKEND_API_URL } from "@/lib/server/backend";
 
+export const maxDuration = 300;
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -9,7 +11,7 @@ export async function GET(
   const { path } = await context.params;
   const controller = new AbortController();
   const isBacktest = path.at(-1) === "backtest";
-  const timeoutMs = isBacktest ? 110_000 : 60_000;
+  const timeoutMs = isBacktest ? 270_000 : 60_000;
   let timedOut = false;
 
   const cancel = () => controller.abort();

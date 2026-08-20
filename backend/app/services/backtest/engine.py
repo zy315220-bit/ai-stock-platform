@@ -5,6 +5,13 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.history_policy import (
+    BACKTEST_WARMUP_MONTHS,
+    RESEARCH_HISTORY_MONTHS,
+    default_research_start_date,
+)
+from app.services.research_history import frame_coverage
+
 # 這三個模組位於 backend 根目錄
 from indicators import add_indicators
 from score_engine.calculate import calculate_score
@@ -38,7 +45,7 @@ MAX_INITIAL_CAPITAL = 2_000_000
 
 def backtest_stock(
     stock_code: str,
-    start_date: str = "2023-01-01",
+    start_date: str | None = None,
     end_date: str | None = None,
     entry_score: float = 75,
     exit_score: float = 55,
@@ -108,12 +115,18 @@ def backtest_stock(
             "交易稅率必須介於 0 到 1 之間。"
         )
 
+    effective_start_date = start_date or default_research_start_date().isoformat()
+    warmup_start_date = (
+        pd.Timestamp(effective_start_date)
+        - pd.DateOffset(months=BACKTEST_WARMUP_MONTHS)
+    ).strftime("%Y-%m-%d")
+
     df = download_stock(
         normalized_code,
         prefer_official=True,
+        update_with_intraday=False,
+        official_months=RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS,
     )
-
-    data_source = str(df.attrs.get("source", "未知"))
 
     if df is None or df.empty:
         raise ValueError(
@@ -122,9 +135,11 @@ def backtest_stock(
             "的歷史資料。"
         )
 
+    data_source = str(df.attrs.get("source", "未知"))
+
     df = _prepare_stock_data(
         df=df,
-        start_date=start_date,
+        start_date=warmup_start_date,
         end_date=end_date,
     )
 
@@ -144,6 +159,9 @@ def backtest_stock(
             drop=True
         )
     )
+
+    requested_start_timestamp = pd.Timestamp(effective_start_date).normalize()
+    df = df.loc[df["Date"] >= requested_start_timestamp].reset_index(drop=True)
 
     if len(df) < 61:
         raise ValueError(
@@ -701,6 +719,8 @@ def backtest_stock(
         )
     )
 
+    history_coverage = frame_coverage(df.set_index("Date"))
+
     buy_and_hold = _calculate_buy_and_hold(
         df=df,
         initial_capital=initial_capital,
@@ -765,7 +785,7 @@ def backtest_stock(
         ),
         "data_source": data_source,
         "requested_start_date": (
-            start_date
+            effective_start_date
         ),
         "requested_end_date": (
             end_date
@@ -776,6 +796,8 @@ def backtest_stock(
         "actual_end_date": (
             actual_end_date
         ),
+        "history_coverage": history_coverage,
+        "requested_history_months": RESEARCH_HISTORY_MONTHS,
         "entry_score": (
             entry_score
         ),

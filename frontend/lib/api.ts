@@ -177,8 +177,8 @@ export async function fetchBacktest(
     `${API_BASE_URL}/api/stocks/${encodeURIComponent(stockCode)}/backtest?${query.toString()}`,
     {
       ...options,
-      timeoutMs: 115_000,
-      timeoutError: "回測時間過長，請縮短期間或稍後重試。",
+      timeoutMs: 275_000,
+      timeoutError: "五年回測時間過長，請稍後重試。",
       networkError: "目前無法連接回測服務，請稍後再試。",
       fallbackError: "回測服務錯誤",
     },

@@ -1572,6 +1572,20 @@ export default function Dashboard() {
               ma20={data.chart.ma20}
               ma60={data.chart.ma60}
             />
+
+            {data.meta.history_coverage?.start && data.meta.history_coverage.end ? (
+              <>
+                <p className="backtest-period">
+                  圖表資料期間：{data.meta.history_coverage.start} 至 {data.meta.history_coverage.end}
+                  {" ・ "}{data.meta.daily_source}
+                </p>
+                {!data.meta.history_coverage.complete_month_coverage ? (
+                  <p className="backtest-note">
+                    官方資料缺少月份：{data.meta.history_coverage.missing_months.join("、")}，目前不視為完整一年資料。
+                  </p>
+                ) : null}
+              </>
+            ) : null}
           </article>
 
           <article className="panel score-panel">
@@ -1975,7 +1989,15 @@ export default function Dashboard() {
               <p className="backtest-period">
                 實際資料期間：{backtest.actual_start_date} 至 {backtest.actual_end_date}
                 {" ・ "}{backtest.data_source}
+                {" ・ "}約 {formatNumber(backtest.history_coverage.available_years)} 年
               </p>
+              {!backtest.history_coverage.long_horizon_qualified ? (
+                <p className="backtest-note">
+                  {!backtest.history_coverage.complete_month_coverage
+                    ? `官方資料缺少月份：${backtest.history_coverage.missing_months.join("、")}，本次不能視為完整長期回測。`
+                    : "這檔商品可用資料不足 3 年，不能視為長期回測；可能是上市時間較短。"}
+                </p>
+              ) : null}
               <div className="backtest-grid">
                 <MetricCard
                   label="策略報酬"
@@ -2009,8 +2031,8 @@ export default function Dashboard() {
           ) : (
             <p className="empty-state">
               {backtestLoading
-                ? "正在計算歷史資料；你可以按下「取消回測」停止等待。"
-                : "回測不會自動下單。按下執行後，系統會用歷史資料比較量化策略與同期持有績效。"}
+                ? "正在下載並計算五年歷史資料；首次執行可能需要 1～2 分鐘，你可以按下「取消回測」停止等待。"
+                : "回測不會自動下單。按下執行後，系統會用最近五年官方資料比較量化策略與同期持有績效。"}
             </p>
           )}
         </article>

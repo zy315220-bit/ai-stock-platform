@@ -11,11 +11,13 @@ from typing import Any, Callable, Optional
 import pandas as pd
 
 from app.core.config import settings
+from app.services.history_policy import INTERACTIVE_HISTORY_MONTHS
 from app.services.market_context import build_perspectives
+from app.services.research_history import frame_coverage
 from app.services.stock_code import base_stock_code
 
 
-CHART_ROWS = 180
+CHART_ROWS = 260
 MINIMUM_DAILY_ROWS = 65
 MINIMUM_HOURLY_ROWS = 30
 POSITION_STATUSES = {"not_holding", "holding"}
@@ -486,13 +488,14 @@ def _real_response(stock_code: str, position_status: str) -> dict:
     code = _normalize_code(stock_code)
 
     # 官方歷史資料與即時行情互不相依，同時取得可避免兩段網路等待
-    # 疊加。六個月日線已足夠 EMA60 與目前圖表／評分使用。
+    # 疊加。額外取得一個月可確保圖表涵蓋完整的一年交易日。
     with ThreadPoolExecutor(max_workers=2) as executor:
         daily_future = executor.submit(
             download_stock,
             code,
             prefer_official=True,
-            official_months=6,
+            update_with_intraday=False,
+            official_months=INTERACTIVE_HISTORY_MONTHS,
         )
         realtime_future = executor.submit(get_realtime_price, code)
 
@@ -504,6 +507,7 @@ def _real_response(stock_code: str, position_status: str) -> dict:
             realtime = None
 
     daily_source = str(raw_daily_df.attrs.get("source", ""))
+    history_coverage = frame_coverage(raw_daily_df)
     daily_df = _validate_daily_dataframe(add_indicators(raw_daily_df))
 
     # 官方月報提供穩定的免費日線，但不提供60分鐘K線。避免在已知
@@ -648,6 +652,8 @@ def _real_response(stock_code: str, position_status: str) -> dict:
             "hourly_available": hourly_df is not None and not hourly_df.empty,
             "analysis_engine": "Score Engine V2",
             "daily_source": daily_source or "未知",
+            "history_coverage": history_coverage,
+            "requested_history_months": INTERACTIVE_HISTORY_MONTHS,
         },
         "demo": False,
     }

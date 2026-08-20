@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+import unittest
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+
+from app.services.backtest.engine import backtest_stock
+
+
+class BacktestHistoryTests(unittest.TestCase):
+    def test_backtest_requests_warmup_and_preserves_five_year_period(self) -> None:
+        dates = pd.bdate_range("2021-01-01", "2026-08-20")
+        prices = np.linspace(20, 34, len(dates))
+        frame = pd.DataFrame(
+            {
+                "Open": prices,
+                "High": prices + 0.5,
+                "Low": prices - 0.5,
+                "Close": prices,
+                "Volume": np.full(len(dates), 1_000_000),
+            },
+            index=dates,
+        )
+        frame.attrs["source"] = "synthetic-official"
+        calls: list[dict] = []
+
+        def fake_download(_code: str, **kwargs) -> pd.DataFrame:
+            calls.append(kwargs)
+            return frame.copy()
+
+        with (
+            patch(
+                "app.services.backtest.engine.download_stock",
+                side_effect=fake_download,
+            ),
+            patch(
+                "app.services.backtest.engine.calculate_score",
+                return_value={"total_score": 0},
+            ),
+        ):
+            result = backtest_stock(
+                "00878",
+                start_date="2021-08-20",
+                initial_capital=80_000,
+            )
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0]["prefer_official"])
+        self.assertFalse(calls[0]["update_with_intraday"])
+        self.assertEqual(calls[0]["official_months"], 66)
+        self.assertEqual(result["requested_start_date"], "2021-08-20")
+        self.assertEqual(result["actual_start_date"], "2021-08-20")
+        self.assertEqual(result["actual_end_date"], "2026-08-20")
+        self.assertEqual(result["history_coverage"]["available_years"], 5.0)
+        self.assertTrue(result["history_coverage"]["long_horizon_qualified"])
+
+
+if __name__ == "__main__":
+    unittest.main()

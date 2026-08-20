@@ -4,6 +4,7 @@
     "frontend": {
       "root": "frontend/",
       "framework": "nextjs",
+      "maxDuration": 300,
       "bindings": [
         {
           "type": "service",
@@ -15,7 +16,8 @@
     },
     "backend": {
       "root": "backend/",
-      "entrypoint": "main:app"
+      "entrypoint": "main:app",
+      "maxDuration": 300
     }
   },
   "rewrites": [

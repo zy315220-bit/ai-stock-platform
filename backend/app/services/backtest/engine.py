@@ -42,6 +42,21 @@ from .trades import (
 
 MAX_INITIAL_CAPITAL = 2_000_000
 
+# 回測只應因「實際交易與核心評分所需」欄位缺值而刪除日期。
+# add_indicators 也會產生輔助診斷欄位；其中任一欄位偶發 NaN 時，
+# 若使用無條件 dropna()，會把原本有效的多年行情誤裁成較短期間。
+BACKTEST_REQUIRED_COLUMNS = [
+    "Date",
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume",
+    "EMA20",
+    "EMA60",
+    "ATR",
+]
+
 
 def backtest_stock(
     stock_code: str,
@@ -154,7 +169,7 @@ def backtest_stock(
 
     df = (
         df
-        .dropna()
+        .dropna(subset=BACKTEST_REQUIRED_COLUMNS)
         .reset_index(
             drop=True
         )

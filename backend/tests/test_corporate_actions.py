@@ -17,92 +17,70 @@ from corporate_actions import (
 class CorporateActionTests(unittest.TestCase):
     def test_0050_split_removes_non_economic_price_drop(self) -> None:
         frame = pd.DataFrame(
-            {
-                "Open": [188.0, 47.2],
-                "High": [190.0, 48.0],
-                "Low": [187.0, 46.8],
-                "Close": [188.65, 47.16],
-                "Volume": [1_000_000.0, 4_100_000.0],
-            },
+            {"Open": [188.0, 47.2], "High": [190.0, 48.0], "Low": [187.0, 46.8], "Close": [188.65, 47.16], "Volume": [1_000_000.0, 4_100_000.0]},
             index=pd.to_datetime(["2025-06-10", "2025-06-18"]),
         )
-
         adjusted = apply_split_adjustments(frame, "0050")
-
         self.assertAlmostEqual(adjusted.iloc[0]["Close"], 47.1625)
         self.assertEqual(adjusted.iloc[0]["Volume"], 4_000_000)
         self.assertEqual(adjusted.iloc[1]["Close"], 47.16)
         self.assertEqual(adjusted.attrs["split_adjustments"][0]["ratio"], 4.0)
 
+    def test_split_adjustment_is_idempotent(self) -> None:
+        """A normalized frame must never be split-adjusted a second time."""
+        frame = pd.DataFrame(
+            {"Open": [188.0, 47.2], "High": [190.0, 48.0], "Low": [187.0, 46.8], "Close": [188.65, 47.16], "Volume": [1_000_000.0, 4_100_000.0]},
+            index=pd.to_datetime(["2025-06-10", "2025-06-18"]),
+        )
+        once = apply_split_adjustments(frame, "0050")
+        twice = apply_split_adjustments(once, "0050")
+        pd.testing.assert_frame_equal(once, twice)
+        self.assertEqual(once.attrs.get("split_adjustments"), twice.attrs.get("split_adjustments"))
+
+    def test_multiple_splits_compound_once(self) -> None:
+        """Regression guard for stocks/ETFs with more than one corporate split."""
+        frame = pd.DataFrame(
+            {"Open": [400.0, 205.0, 70.0], "High": [410.0, 210.0, 72.0], "Low": [390.0, 200.0, 68.0], "Close": [400.0, 210.0, 70.0], "Volume": [100.0, 200.0, 600.0]},
+            index=pd.to_datetime(["2020-01-02", "2022-01-03", "2024-01-02"]),
+        )
+        with patch("corporate_actions.KNOWN_SPLITS", {"TEST": [
+            {"effective_date": "2022-01-03", "ratio": 2.0, "source": "test"},
+            {"effective_date": "2024-01-02", "ratio": 3.0, "source": "test"},
+        ]}):
+            adjusted = apply_split_adjustments(frame, "TEST")
+            self.assertAlmostEqual(adjusted.iloc[0]["Close"], 400.0 / 6.0)
+            self.assertAlmostEqual(adjusted.iloc[1]["Close"], 210.0 / 3.0)
+            self.assertAlmostEqual(adjusted.iloc[2]["Close"], 70.0)
+            again = apply_split_adjustments(adjusted, "TEST")
+            pd.testing.assert_frame_equal(adjusted, again)
+
     def test_pre_split_dividend_is_normalized_to_latest_unit(self) -> None:
-        dividends = [
-            {"ex_date": "2025-01-17", "payment_date": "2025-02-20", "amount": 2.7},
-            {"ex_date": "2025-07-21", "payment_date": "2025-08-08", "amount": 0.36},
-        ]
+        dividends = [{"ex_date": "2025-01-17", "payment_date": "2025-02-20", "amount": 2.7}, {"ex_date": "2025-07-21", "payment_date": "2025-08-08", "amount": 0.36}]
         splits = [{"effective_date": "2025-06-18", "ratio": 4.0}]
-
         adjusted = adjust_dividends_for_splits(dividends, splits)
-
         self.assertAlmostEqual(adjusted[0]["amount"], 0.675)
         self.assertAlmostEqual(adjusted[1]["amount"], 0.36)
 
     def test_official_dividend_html_parser(self) -> None:
-        html = """
-        <table><tbody><tr>
-          <td>0050</td><td>元大台灣50</td><td>115年07月21日</td>
-          <td>115年07月27日</td><td>115年08月10日</td><td>0.6</td>
-          <td><a>詳細資料</a></td><td>115</td>
-        </tr></tbody></table>
-        """
-
+        html = """<table><tbody><tr><td>0050</td><td>元大台灣50</td><td>115年07月21日</td><td>115年07月27日</td><td>115年08月10日</td><td>0.6</td><td><a>詳細資料</a></td><td>115</td></tr></tbody></table>"""
         events = parse_twse_dividend_html(html, "0050")
-
         self.assertEqual(events[0]["ex_date"], "2026-07-21")
         self.assertEqual(events[0]["payment_date"], "2026-08-10")
         self.assertEqual(events[0]["amount"], 0.6)
 
     def test_buy_and_hold_total_return_includes_dividends(self) -> None:
-        frame = pd.DataFrame(
-            {
-                "Date": pd.to_datetime(["2025-01-02", "2025-07-21", "2025-12-31"]),
-                "Open": [10.0, 10.0, 10.0],
-                "High": [10.0, 10.0, 10.0],
-                "Low": [10.0, 10.0, 10.0],
-                "Close": [10.0, 10.0, 10.0],
-                "Volume": [1_000, 1_000, 1_000],
-            }
-        )
-        frame.attrs["dividends"] = [
-            {"ex_date": "2025-07-21", "amount": 1.0}
-        ]
-
-        result = _calculate_buy_and_hold(
-            frame,
-            initial_capital=10_000,
-            commission_rate=0.0,
-            transaction_tax_rate=0.0,
-        )
-
+        frame = pd.DataFrame({"Date": pd.to_datetime(["2025-01-02", "2025-07-21", "2025-12-31"]), "Open": [10.0]*3, "High": [10.0]*3, "Low": [10.0]*3, "Close": [10.0]*3, "Volume": [1_000]*3})
+        frame.attrs["dividends"] = [{"ex_date": "2025-07-21", "amount": 1.0}]
+        result = _calculate_buy_and_hold(frame, initial_capital=10_000, commission_rate=0.0, transaction_tax_rate=0.0)
         self.assertEqual(result["shares"], 1_000)
         self.assertEqual(result["total_dividends"], 1_000)
         self.assertEqual(result["return_percent"], 10.0)
         self.assertEqual(result["return_basis"], "split_adjusted_total_return")
 
     def test_audited_fallback_survives_twse_page_timeout(self) -> None:
-        with patch(
-            "corporate_actions._download_twse_etf_dividends_cached",
-            side_effect=ValueError("timeout"),
-        ):
-            events = download_twse_etf_dividends(
-                "0050",
-                start=pd.Timestamp("2025-01-01"),
-                end=pd.Timestamp("2025-12-31"),
-            )
-
-        self.assertEqual(
-            [(event["ex_date"], event["amount"]) for event in events],
-            [("2025-01-17", 2.7), ("2025-07-21", 0.36)],
-        )
+        with patch("corporate_actions._download_twse_etf_dividends_cached", side_effect=ValueError("timeout")):
+            events = download_twse_etf_dividends("0050", start=pd.Timestamp("2025-01-01"), end=pd.Timestamp("2025-12-31"))
+        self.assertEqual([(event["ex_date"], event["amount"]) for event in events], [("2025-01-17", 2.7), ("2025-07-21", 0.36)])
 
 
 if __name__ == "__main__":

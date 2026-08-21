@@ -2,8 +2,9 @@
 
 Exchange sources do not expose rate units identically. TWSE TWT48U presents
 allotment rates as ratios used directly by its reference-price formula, whereas
-TPEx EDIS S20 documents those fields with unit "%". We therefore normalize
-source-specifically and never infer units from the numeric magnitude.
+TPEx EDIS S20 documents those fields with unit "%". Canonical event `ratio`
+for STOCK_DIVIDEND is the *incremental share ratio* (0.15 means +15% shares),
+matching CorporateActionLedger which applies shares * (1 + ratio).
 """
 from __future__ import annotations
 
@@ -56,7 +57,7 @@ def _map_exright_record(record: dict[str, Any], *, exchange: str, rate_unit: str
     if cash > 0:
         events.append({**base, "event_type": "cash_dividend", "cash_per_share": cash})
     if stock_ratio > 0:
-        events.append({**base, "event_type": "stock_dividend", "ratio": 1.0 + stock_ratio})
+        events.append({**base, "event_type": "stock_dividend", "ratio": stock_ratio})
     if rights_ratio > 0:
         if subscription in (None, "", "--"):
             raise ValueError(f"{exchange} rights issue missing official subscription price")

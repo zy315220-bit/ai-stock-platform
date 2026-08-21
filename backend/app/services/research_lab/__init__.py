@@ -5,6 +5,7 @@ only be promoted after validation and untouched holdout checks pass.
 """
 
 from .models import ExperimentDecision, ExperimentResult, ResearchCandidate, ResearchSplit
+from .runner import run_candidate_validation, run_research_batch, serialize_result
 from .scoring import evaluate_candidate
 from .splits import build_research_split
 
@@ -15,4 +16,7 @@ __all__ = [
     "ResearchSplit",
     "build_research_split",
     "evaluate_candidate",
+    "run_candidate_validation",
+    "run_research_batch",
+    "serialize_result",
 ]

@@ -18,9 +18,11 @@ TWSE_0052_SPLIT_SOURCE="https://www.twse.com.tw/zh/ETFortune/announcement?compan
 REQUEST_TIMEOUT_SECONDS=15
 SPLIT_DISCONTINUITY_LOW=0.55
 SPLIT_DISCONTINUITY_HIGH=1.8
-# Inference is only a safety fallback. A 5% tolerance prevents ordinary large
-# market gaps from being silently re-labelled as corporate actions.
 MAX_INFERRED_SPLIT_RELATIVE_ERROR=0.05
+# Vendor/official OHLCV can place the same corporate-action discontinuity a few
+# trading days away from the exchange effective date. Treat a matching-ratio
+# inference near a known event as the same event, never as a second split.
+KNOWN_SPLIT_DEDUP_DAYS=14
 _HEADERS={"Accept":"text/html,application/xhtml+xml","User-Agent":"Mozilla/5.0 (compatible; AI-Stock-Platform/1.0; +https://github.com/zy315220-bit/ai-stock-platform)"}
 KNOWN_SPLITS={"0050":[{"effective_date":"2025-06-18","ratio":4.0,"source":TWSE_0050_SPLIT_SOURCE}],"0052":[{"effective_date":"2025-11-26","ratio":7.0,"source":TWSE_0052_SPLIT_SOURCE}]}
 OFFICIAL_DIVIDEND_FALLBACK={"0050":(("2020-01-31","2020-03-06",2.9),("2020-07-21","2020-08-24",0.7),("2021-01-22","2021-03-09",3.05),("2021-07-21","2021-08-24",0.35),("2022-01-21","2022-03-04",3.2),("2022-07-18","2022-08-19",1.8),("2023-01-30","2023-03-07",2.6),("2023-07-18","2023-08-11",1.9),("2024-01-17","2024-02-21",3.0),("2024-07-16","2024-08-09",1.0),("2025-01-17","2025-02-20",2.7),("2025-07-21","2025-08-08",0.36),("2026-01-22","2026-02-11",1.0),("2026-07-21","2026-08-10",0.6)),"0056":(("2020-10-28","2020-12-01",1.6),("2021-10-22","2021-11-25",1.8),("2022-10-19","2022-11-22",2.1)),"00878":(),"00919":()}
@@ -71,8 +73,7 @@ def _split_candidate(prev_close,current_open):
  observed=prev_close/current_open
  if observed>=SPLIT_DISCONTINUITY_HIGH:ratio=float(round(observed))
  elif observed<=SPLIT_DISCONTINUITY_LOW:
-  inverse=1.0/observed
-  rounded=round(inverse)
+  inverse=1.0/observed;rounded=round(inverse)
   if rounded<=0:return None
   ratio=1.0/float(rounded)
  else:return None
@@ -91,17 +92,25 @@ def _inferred_splits(frame):
   events.append({"effective_date":pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d"),"ratio":ratio,"source":"detected_from_official_ohlcv_discontinuity"})
  return events
 
+def _same_split_event(a,b):
+ try:
+  ratio_a=float(a["ratio"]);ratio_b=float(b["ratio"])
+  if not math.isclose(ratio_a,ratio_b,rel_tol=MAX_INFERRED_SPLIT_RELATIVE_ERROR,abs_tol=1e-9):return False
+  days=abs((pd.Timestamp(a["effective_date"])-pd.Timestamp(b["effective_date"])).days)
+  return days<=KNOWN_SPLIT_DEDUP_DAYS
+ except (KeyError,TypeError,ValueError):return False
+
 def validate_corporate_action_basis(frame,stock_code):
  if frame is None or frame.empty or len(frame)<2:return []
- ordered=frame.sort_index();known_dates={e["effective_date"] for e in KNOWN_SPLITS.get(stock_code,[])};ambiguous=[]
+ ordered=frame.sort_index();known=KNOWN_SPLITS.get(stock_code,[]);ambiguous=[]
  for pos in range(1,len(ordered)):
   prev=float(ordered.iloc[pos-1]["Close"]);cur=float(ordered.iloc[pos]["Open"])
   if prev<=0 or cur<=0:continue
   observed=prev/cur
   if SPLIT_DISCONTINUITY_LOW<observed<SPLIT_DISCONTINUITY_HIGH:continue
-  event_date=pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d")
-  if event_date in known_dates:continue
-  candidate=_split_candidate(prev,cur)
+  event_date=pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d");candidate=_split_candidate(prev,cur)
+  inferred={"effective_date":event_date,"ratio":candidate[0] if candidate else observed}
+  if any(_same_split_event(inferred,k) for k in known):continue
   if candidate is None or candidate[1]>MAX_INFERRED_SPLIT_RELATIVE_ERROR:ambiguous.append({"date":event_date,"observed_ratio":round(observed,6)})
  if ambiguous:
   sample=ambiguous[0]
@@ -109,7 +118,13 @@ def validate_corporate_action_basis(frame,stock_code):
  return ambiguous
 
 def split_events(frame,stock_code):
- known=[dict(e) for e in KNOWN_SPLITS.get(stock_code,[])];inferred=_inferred_splits(frame);by_date={e["effective_date"]:e for e in inferred};by_date.update({e["effective_date"]:e for e in known});return sorted(by_date.values(),key=lambda e:e["effective_date"])
+ known=[dict(e) for e in KNOWN_SPLITS.get(stock_code,[])];inferred=_inferred_splits(frame);events=list(known)
+ for event in inferred:
+  # Known TWSE metadata is authoritative. Do not apply a nearby matching vendor
+  # discontinuity as another corporate action.
+  if any(_same_split_event(event,k) for k in known):continue
+  if not any(_same_split_event(event,e) for e in events):events.append(event)
+ return sorted(events,key=lambda e:e["effective_date"])
 
 def adjust_dividends_for_splits(dividends,splits):
  out=[]

@@ -12,10 +12,12 @@ on:
       - 'backend/app/services/backtest/**'
       - 'backend/app/services/corporate_action_ledger.py'
       - 'backend/app/services/corporate_action_metadata.py'
+      - 'backend/app/services/corporate_action_ingestion.py'
       - 'backend/app/services/competition_dataset_guard.py'
       - 'backend/tests/test_corporate_actions.py'
       - 'backend/tests/test_corporate_action_ledger.py'
       - 'backend/tests/test_corporate_action_adapter.py'
+      - 'backend/tests/test_corporate_action_ingestion.py'
       - 'backend/tests/test_stock_price_basis.py'
       - 'backend/tests/test_backtest_no_lookahead.py'
       - 'backend/tests/test_production_split_pipeline.py'
@@ -30,10 +32,12 @@ on:
       - 'backend/app/services/backtest/**'
       - 'backend/app/services/corporate_action_ledger.py'
       - 'backend/app/services/corporate_action_metadata.py'
+      - 'backend/app/services/corporate_action_ingestion.py'
       - 'backend/app/services/competition_dataset_guard.py'
       - 'backend/tests/test_corporate_actions.py'
       - 'backend/tests/test_corporate_action_ledger.py'
       - 'backend/tests/test_corporate_action_adapter.py'
+      - 'backend/tests/test_corporate_action_ingestion.py'
       - 'backend/tests/test_stock_price_basis.py'
       - 'backend/tests/test_backtest_no_lookahead.py'
       - 'backend/tests/test_production_split_pipeline.py'
@@ -57,5 +61,5 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run legacy research-integrity regression suite
         run: python -m unittest tests.test_corporate_actions tests.test_stock_price_basis tests.test_backtest_no_lookahead tests.test_production_split_pipeline -v
-      - name: Run corporate-action accounting invariants
-        run: python -m pytest tests/test_corporate_action_ledger.py tests/test_corporate_action_adapter.py -v
+      - name: Run corporate-action integrity gates
+        run: python -m pytest tests/test_corporate_action_ledger.py tests/test_corporate_action_adapter.py tests/test_corporate_action_ingestion.py -v

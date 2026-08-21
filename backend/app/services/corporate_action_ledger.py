@@ -1,9 +1,9 @@
 """Event-driven corporate-action accounting primitives.
 
-Raw market prices and portfolio accounting are separate concerns.  Corporate
-actions mutate shares/cash/cost basis only on their effective event date.  This
-module is intentionally independent of signal logic so every strategy and the
-buy-and-hold benchmark can share the same accounting rules.
+Raw market prices and portfolio accounting are separate concerns. Corporate
+actions mutate shares/cash/cost basis only on their effective event date.
+Complex lifecycle events are resolved from explicit official metadata; unknown
+terms fail closed instead of guessing from the last traded price.
 """
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from dataclasses import dataclass, replace
 from enum import Enum
 import math
 from typing import Iterable
+
+from app.services.corporate_action_metadata import CorporateActionResolution, ResolutionType
 
 
 class CorporateActionType(str, Enum):
@@ -42,6 +44,10 @@ class PositionState:
     shares: float
     cash: float
     total_cost_basis: float
+    stock_code: str | None = None
+    market: str | None = None
+    locked_until_date: str | None = None
+    terminated: bool = False
 
     @property
     def average_cost(self) -> float:
@@ -65,68 +71,72 @@ def _positive(value: float | None, name: str) -> float:
 
 
 def apply_event(state: PositionState, event: CorporateActionEvent) -> PositionState:
-    """Apply one official event without using future prices.
-
-    Cost basis is total historical invested cost. Share-only actions conserve
-    total cost basis; cash-return actions reduce basis only by the returned
-    capital, never below zero. Merger/rights events require explicit terms and
-    therefore fail closed when those terms are absent.
-    """
     shares = _finite_nonnegative(state.shares, "shares")
     cash = _finite_nonnegative(state.cash, "cash")
     basis = _finite_nonnegative(state.total_cost_basis, "total_cost_basis")
     kind = event.event_type
-
     if shares == 0:
         return state
-
     if kind == CorporateActionType.CASH_DIVIDEND:
         amount = _finite_nonnegative(event.cash_per_share or 0.0, "cash_per_share")
         return replace(state, cash=cash + shares * amount)
-
     if kind in (CorporateActionType.SPLIT, CorporateActionType.REVERSE_SPLIT):
-        ratio = _positive(event.ratio, "ratio")
-        return replace(state, shares=shares * ratio)
-
+        return replace(state, shares=shares * _positive(event.ratio, "ratio"))
     if kind == CorporateActionType.STOCK_DIVIDEND:
-        # ratio means new shares received per one existing share (e.g. 0.1 = +10%).
         ratio = _finite_nonnegative(event.ratio or 0.0, "ratio")
         return replace(state, shares=shares * (1.0 + ratio))
-
     if kind == CorporateActionType.CASH_CAPITAL_REDUCTION:
         ratio = _positive(event.ratio, "ratio")
         returned = _finite_nonnegative(event.cash_per_share or 0.0, "cash_per_share") * shares
-        return PositionState(
-            shares=shares * ratio,
-            cash=cash + returned,
-            total_cost_basis=max(0.0, basis - returned),
-        )
-
+        return replace(state, shares=shares * ratio, cash=cash + returned,
+                       total_cost_basis=max(0.0, basis - returned))
     if kind == CorporateActionType.LOSS_CAPITAL_REDUCTION:
-        ratio = _positive(event.ratio, "ratio")
-        return replace(state, shares=shares * ratio)
-
+        return replace(state, shares=shares * _positive(event.ratio, "ratio"))
     if kind == CorporateActionType.RIGHTS_ISSUE:
-        # Rights are an economic asset. Silently ignoring them creates a fake loss.
-        # Until an official entitlement ratio + disposition policy is supplied,
-        # research must stop rather than assume free cash or forced subscription.
         _positive(event.ratio, "ratio")
         _positive(event.subscription_price, "subscription_price")
         raise ValueError("rights_issue requires an explicit entitlement disposition policy")
-
     if kind == CorporateActionType.MERGER_EXCHANGE:
-        ratio = _positive(event.ratio, "ratio")
-        return replace(state, shares=shares * ratio)
-
+        return replace(state, shares=shares * _positive(event.ratio, "ratio"))
     if kind == CorporateActionType.CASH_MERGER:
-        amount = _positive(event.cash_per_share, "cash_per_share")
-        proceeds = shares * amount
-        return PositionState(shares=0.0, cash=cash + proceeds, total_cost_basis=0.0)
-
+        proceeds = shares * _positive(event.cash_per_share, "cash_per_share")
+        return replace(state, shares=0.0, cash=cash + proceeds, total_cost_basis=0.0, terminated=True)
     if kind == CorporateActionType.DELISTING:
         raise ValueError("delisting requires explicit settlement/termination terms")
-
     raise ValueError(f"unsupported corporate action: {kind}")
+
+
+def apply_resolution(state: PositionState, resolution: CorporateActionResolution) -> PositionState:
+    """Execute an explicitly sourced delisting/merger/market-transfer resolution."""
+    resolution.validate_for_research()
+    shares = _finite_nonnegative(state.shares, "shares")
+    cash = _finite_nonnegative(state.cash, "cash")
+
+    if resolution.resolution_type == ResolutionType.CASH_BUYOUT:
+        proceeds = shares * _finite_nonnegative(resolution.cash_per_share or 0.0, "cash_per_share")
+        return replace(state, shares=0.0, cash=cash + proceeds, total_cost_basis=0.0,
+                       locked_until_date=resolution.settlement_date, terminated=True)
+
+    if resolution.resolution_type == ResolutionType.STOCK_SWAP:
+        ratio = _positive(resolution.exchange_ratio, "exchange_ratio")
+        return replace(state, shares=shares * ratio,
+                       stock_code=resolution.successor_stock_code,
+                       market=resolution.successor_market or state.market,
+                       locked_until_date=resolution.locked_until_date)
+
+    if resolution.resolution_type == ResolutionType.MARKET_TRANSFER:
+        return replace(state, market=resolution.successor_market,
+                       locked_until_date=resolution.locked_until_date)
+
+    if resolution.resolution_type in (ResolutionType.LIQUIDATION, ResolutionType.BANKRUPTCY):
+        if resolution.cash_per_share is None:
+            # A pending settlement is an illiquid locked asset, not zero and not cash.
+            return replace(state, locked_until_date=resolution.settlement_date or resolution.locked_until_date)
+        recovery = shares * _finite_nonnegative(resolution.cash_per_share, "cash_per_share")
+        return replace(state, shares=0.0, cash=cash + recovery, total_cost_basis=0.0,
+                       locked_until_date=resolution.settlement_date, terminated=True)
+
+    raise ValueError("unsupported/unknown resolution must fail closed")
 
 
 def apply_events(state: PositionState, events: Iterable[CorporateActionEvent]) -> PositionState:

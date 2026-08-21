@@ -3,7 +3,7 @@ from typing import Any, Optional
 import pandas as pd
 import yfinance as yf
 from official_data import download_official_history
-from corporate_actions import apply_split_adjustments, attach_official_dividends
+from corporate_actions import apply_split_adjustments, attach_official_dividends, split_events
 
 REQUIRED_OHLCV_COLUMNS=["Open","High","Low","Close","Volume"]
 
@@ -56,9 +56,9 @@ def _download_yfinance(ticker,period,interval,prepost=False):
     try:df=yf.download(tickers=ticker,period=period,interval=interval,progress=False,auto_adjust=False,threads=False,prepost=prepost,group_by="column")
     except Exception:return pd.DataFrame()
     if df is None:return pd.DataFrame()
-    # Yahoo's historical OHLC series is split-normalized even with auto_adjust=False;
-    # auto_adjust controls dividend/Adj Close behavior, not reintroducing pre-split units.
-    df.attrs["source"]="Yahoo Finance";df.attrs["split_adjusted"]=True;df.attrs["price_basis"]="yahoo_split_adjusted_close";return df
+    # Do not trust provider metadata alone for split normalization. Yahoo can
+    # return mixed pre/post-split units for some Taiwan ETFs.
+    df.attrs["source"]="Yahoo Finance";df.attrs["price_basis"]="yahoo_raw_close_unverified";return df
 
 def _aggregate_latest_intraday(intraday):
     if intraday is None or intraday.empty:return None
@@ -70,20 +70,41 @@ def _aggregate_latest_intraday(intraday):
     if o.empty or c.empty:return None
     return {"date":pd.Timestamp(latest.date()),"Open":float(o.iloc[0]),"High":float(rows["High"].max()),"Low":float(rows["Low"].min()),"Close":float(c.iloc[-1]),"Volume":float(rows["Volume"].fillna(0).sum())}
 
-def _merge_latest_intraday(daily,intraday):
+def _merge_latest_intraday(intraday_daily,intraday):
     summary=_aggregate_latest_intraday(intraday)
-    if summary is None:return daily
-    attrs=dict(daily.attrs);daily=_normalize_datetime_index(daily,remove_timezone=True).copy()
+    if summary is None:return intraday_daily
+    attrs=dict(intraday_daily.attrs);daily=_normalize_datetime_index(intraday_daily,remove_timezone=True).copy()
     for c in REQUIRED_OHLCV_COLUMNS:daily.loc[summary["date"],c]=summary[c]
     daily=daily[~daily.index.duplicated(keep="last")].copy().sort_index();daily.attrs.update(attrs);return daily
 
 def _set_dataframe_attributes(df,ticker,interval,source="Yahoo Finance"):
     df.attrs.update({"ticker":ticker,"stock_code":normalize_stock_code(ticker),"market":"上櫃" if ticker.endswith(".TWO") else "上市","interval":interval,"source":source});return df
 
+def _known_split_is_already_normalized(daily,stock_code):
+    """Return True only when known split boundaries are already on one price scale."""
+    if daily is None or daily.empty:return True
+    ordered=daily.sort_index()
+    checked=False
+    for event in split_events(ordered,stock_code):
+        effective=pd.Timestamp(event["effective_date"]);ratio=float(event["ratio"])
+        before=ordered.loc[ordered.index<effective];after=ordered.loc[ordered.index>=effective]
+        if before.empty or after.empty:continue
+        checked=True
+        prev=float(before.iloc[-1]["Close"]);cur=float(after.iloc[0]["Open"])
+        if prev<=0 or cur<=0:continue
+        observed=prev/cur
+        # A raw split boundary is close to the announced ratio (e.g. 7:1).
+        if ratio>1 and abs(observed-ratio)/ratio<=0.20:return False
+        if ratio<1 and abs(observed-ratio)/abs(ratio)<=0.20:return False
+    return checked or not split_events(ordered,stock_code)
+
 def _normalize_price_basis(daily,stock_code,source):
     daily=daily.copy();daily.attrs["source"]=source
-    if source=="Yahoo Finance":
-        daily.attrs["split_adjusted"]=True;daily.attrs.setdefault("price_basis","yahoo_split_adjusted_close");return daily
+    if source=="Yahoo Finance" and _known_split_is_already_normalized(daily,stock_code):
+        daily.attrs["split_adjusted"]=True;daily.attrs["split_adjustments"]=split_events(daily,stock_code);daily.attrs["price_basis"]="yahoo_verified_latest-unit split-adjusted";daily.attrs["corporate_action_validated"]=True;return daily
+    # Raw or mixed-unit data must pass the same corporate-action normalization
+    # used for official data instead of being trusted because of its provider.
+    daily.attrs.pop("split_adjusted",None)
     return apply_split_adjustments(daily,stock_code)
 
 def download_stock(stock_code:Any,daily_period="max",update_with_intraday=True,intraday_period="5d",intraday_interval="5m",prefer_official=False,official_months=10,force_official_refresh=False,include_corporate_actions=False):

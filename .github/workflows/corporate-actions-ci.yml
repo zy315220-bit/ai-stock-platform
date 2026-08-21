@@ -10,7 +10,11 @@ on:
       - 'backend/indicators.py'
       - 'backend/score_engine/**'
       - 'backend/app/services/backtest/**'
+      - 'backend/app/services/corporate_action_ledger.py'
+      - 'backend/app/services/corporate_action_metadata.py'
+      - 'backend/app/services/competition_dataset_guard.py'
       - 'backend/tests/test_corporate_actions.py'
+      - 'backend/tests/test_corporate_action_ledger.py'
       - 'backend/tests/test_stock_price_basis.py'
       - 'backend/tests/test_backtest_no_lookahead.py'
       - 'backend/tests/test_production_split_pipeline.py'
@@ -22,10 +26,15 @@ on:
       - 'backend/indicators.py'
       - 'backend/score_engine/**'
       - 'backend/app/services/backtest/**'
+      - 'backend/app/services/corporate_action_ledger.py'
+      - 'backend/app/services/corporate_action_metadata.py'
+      - 'backend/app/services/competition_dataset_guard.py'
       - 'backend/tests/test_corporate_actions.py'
+      - 'backend/tests/test_corporate_action_ledger.py'
       - 'backend/tests/test_stock_price_basis.py'
       - 'backend/tests/test_backtest_no_lookahead.py'
       - 'backend/tests/test_production_split_pipeline.py'
+      - '.github/workflows/corporate-actions-ci.yml'
 
 jobs:
   research-integrity-regression:
@@ -42,5 +51,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install backend dependencies
         run: pip install -r requirements.txt
-      - name: Run research-integrity regression suite
+      - name: Run legacy research-integrity regression suite
         run: python -m unittest tests.test_corporate_actions tests.test_stock_price_basis tests.test_backtest_no_lookahead tests.test_production_split_pipeline -v
+      - name: Run corporate-action accounting invariants
+        run: python -m pytest tests/test_corporate_action_ledger.py -v

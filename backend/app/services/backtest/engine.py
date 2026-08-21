@@ -39,17 +39,7 @@ def _official_months_for_backtest(start_date: str) -> int:
     return max(10, min(months, 240))
 
 
-def backtest_stock(
-    stock_code: str,
-    start_date: str = "2023-01-01",
-    end_date: str | None = None,
-    entry_score: float = 75,
-    exit_score: float = 55,
-    initial_capital: float = 100_000,
-    commission_rate: float = COMMISSION_RATE,
-    transaction_tax_rate: float = ETF_TRANSACTION_TAX_RATE,
-) -> dict[str, Any]:
-    """台灣股票型 ETF 日線回測；指標使用前置資料暖機，交易嚴格從 start_date 開始。"""
+def backtest_stock(stock_code: str, start_date: str = "2023-01-01", end_date: str | None = None, entry_score: float = 75, exit_score: float = 55, initial_capital: float = 100_000, commission_rate: float = COMMISSION_RATE, transaction_tax_rate: float = ETF_TRANSACTION_TAX_RATE) -> dict[str, Any]:
     normalized_code = stock_code.strip().upper()
     if not normalized_code:
         raise ValueError("股票代號不能空白。")
@@ -69,7 +59,6 @@ def backtest_stock(
     data_source = str(df.attrs.get("source", "未知"))
     if df is None or df.empty:
         raise ValueError(f"找不到 {normalized_code} 的歷史資料。")
-
     df = _prepare_stock_data(df=df, start_date=warmup_start, end_date=end_date)
     df = add_indicators(df.copy())
     if df is None or df.empty:
@@ -83,8 +72,7 @@ def backtest_stock(
     if len(df) - first_trade_index < 2:
         raise ValueError("指定交易區間的有效歷史資料不足。")
 
-    cash = normalized_capital
-    shares = 0
+    cash, shares = normalized_capital, 0
     entry_price = entry_date = entry_signal_score = None
     entry_gross_amount = entry_commission = entry_total_cost = 0.0
     trades: list[dict[str, Any]] = []
@@ -108,10 +96,10 @@ def backtest_stock(
                 total_commission += entry_commission
         elif shares > 0 and score <= exit_score:
             sell_value = _calculate_sell_value(shares, next_open, commission_rate, transaction_tax_rate)
-            cash += sell_value["net_value"]
+            cash += sell_value["net_amount"]
             total_commission += sell_value["commission"]
             total_transaction_tax += sell_value["transaction_tax"]
-            trades.append({"entry_date": entry_date, "exit_date": next_date, "entry_price": entry_price, "exit_price": next_open, "shares": shares, "entry_signal_score": entry_signal_score, "exit_signal_score": score, "entry_gross_amount": entry_gross_amount, "entry_commission": entry_commission, "entry_total_cost": entry_total_cost, "exit_gross_amount": sell_value["gross_amount"], "exit_commission": sell_value["commission"], "transaction_tax": sell_value["transaction_tax"], "exit_net_value": sell_value["net_value"], "profit": sell_value["net_value"] - entry_total_cost})
+            trades.append({"entry_date": entry_date, "exit_date": next_date, "entry_price": entry_price, "exit_price": next_open, "shares": shares, "entry_signal_score": entry_signal_score, "exit_signal_score": score, "entry_gross_amount": entry_gross_amount, "entry_commission": entry_commission, "entry_total_cost": entry_total_cost, "exit_gross_amount": sell_value["gross_amount"], "exit_commission": sell_value["commission"], "transaction_tax": sell_value["transaction_tax"], "exit_net_value": sell_value["net_amount"], "profit": sell_value["net_amount"] - entry_total_cost})
             shares = 0
             entry_price = entry_date = entry_signal_score = None
             entry_gross_amount = entry_commission = entry_total_cost = 0.0
@@ -126,15 +114,7 @@ def backtest_stock(
     enriched_trades = _enrich_trades_with_excursions(trades=trades, df=trade_df)
     max_drawdown = _calculate_max_drawdown(equity_curve)
     drawdown_statistics = _calculate_drawdown_statistics(equity_curve)
-    performance_metrics = _calculate_performance_metrics(
-        equity_curve=equity_curve,
-        trades=enriched_trades,
-        initial_capital=normalized_capital,
-        final_capital=final_equity,
-        actual_start_date=_get_row_date(trade_df.iloc[0]),
-        actual_end_date=final_date,
-        max_drawdown_percent=abs(max_drawdown),
-    )
+    performance_metrics = _calculate_performance_metrics(equity_curve=equity_curve, trades=enriched_trades, initial_capital=normalized_capital, final_capital=final_equity, actual_start_date=_get_row_date(trade_df.iloc[0]), actual_end_date=final_date, max_drawdown_percent=abs(max_drawdown))
     advanced_trade_statistics = _calculate_advanced_trade_statistics(enriched_trades)
     buy_and_hold = _calculate_buy_and_hold(df=trade_df, initial_capital=normalized_capital, commission_rate=commission_rate, transaction_tax_rate=transaction_tax_rate)
     exposure_percent = _calculate_exposure_percent(equity_curve)

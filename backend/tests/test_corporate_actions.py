@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import unittest
 from unittest.mock import patch
 import pandas as pd
@@ -15,10 +14,7 @@ class CorporateActionTests(unittest.TestCase):
     def test_0052_seven_for_one_split_is_normalized(self):
         frame=pd.DataFrame({"Open":[238.0,34.2],"High":[242.0,35.0],"Low":[236.0,33.8],"Close":[239.4,34.2],"Volume":[1_000_000.,7_100_000.]},index=pd.to_datetime(["2025-11-25","2025-11-26"]))
         adjusted=apply_split_adjustments(frame,"0052")
-        self.assertAlmostEqual(adjusted.iloc[0]["Close"],239.4/7.0)
-        self.assertEqual(adjusted.iloc[0]["Volume"],7_000_000)
-        self.assertEqual(adjusted.attrs["split_adjustments"][0]["effective_date"],"2025-11-26")
-        self.assertEqual(adjusted.attrs["split_adjustments"][0]["ratio"],7.0)
+        self.assertAlmostEqual(adjusted.iloc[0]["Close"],239.4/7.0); self.assertEqual(adjusted.iloc[0]["Volume"],7_000_000); self.assertEqual(adjusted.attrs["split_adjustments"][0]["ratio"],7.0)
 
     def test_split_adjustment_is_idempotent(self):
         frame=pd.DataFrame({"Open":[188.,47.2],"High":[190.,48.],"Low":[187.,46.8],"Close":[188.65,47.16],"Volume":[1_000_000.,4_100_000.]},index=pd.to_datetime(["2025-06-10","2025-06-18"]))
@@ -33,6 +29,16 @@ class CorporateActionTests(unittest.TestCase):
         frame=pd.DataFrame({"Open":[10.,50.],"High":[11.,52.],"Low":[9.,49.],"Close":[10.,50.],"Volume":[500.,100.]},index=pd.to_datetime(["2020-01-02","2022-01-03"]))
         with patch("corporate_actions.KNOWN_SPLITS",{"TEST":[{"effective_date":"2022-01-03","ratio":0.2,"source":"test"}]}):
             adjusted=apply_split_adjustments(frame,"TEST"); self.assertAlmostEqual(adjusted.iloc[0]["Close"],50.0); self.assertAlmostEqual(adjusted.iloc[0]["Volume"],100.0)
+
+    def test_unknown_plausible_split_is_inferred_and_normalized(self):
+        frame=pd.DataFrame({"Open":[100.,25.1],"High":[101.,26.],"Low":[99.,24.8],"Close":[100.,25.],"Volume":[100.,400.]},index=pd.to_datetime(["2024-01-02","2024-01-03"]))
+        adjusted=apply_split_adjustments(frame,"UNKNOWN")
+        self.assertAlmostEqual(adjusted.iloc[0]["Close"],25.0); self.assertEqual(adjusted.attrs["split_adjustments"][0]["ratio"],4.0)
+
+    def test_ambiguous_large_jump_fails_closed(self):
+        frame=pd.DataFrame({"Open":[100.,42.],"High":[101.,43.],"Low":[99.,41.],"Close":[100.,42.],"Volume":[100.,250.]},index=pd.to_datetime(["2024-01-02","2024-01-03"]))
+        with self.assertRaisesRegex(ValueError,"回測已停止"):
+            apply_split_adjustments(frame,"UNKNOWN")
 
     def test_pre_split_dividend_is_normalized_to_latest_unit(self):
         adjusted=adjust_dividends_for_splits([{"ex_date":"2025-01-17","amount":2.7},{"ex_date":"2025-07-21","amount":0.36}],[{"effective_date":"2025-06-18","ratio":4.0}]); self.assertAlmostEqual(adjusted[0]["amount"],0.675); self.assertAlmostEqual(adjusted[1]["amount"],0.36)

@@ -1,5 +1,5 @@
 """Taiwan stock historical data downloader."""
-from typing import Any, Optional
+from typing import Any
 import pandas as pd
 import yfinance as yf
 from official_data import download_official_history
@@ -56,8 +56,6 @@ def _download_yfinance(ticker,period,interval,prepost=False):
     try:df=yf.download(tickers=ticker,period=period,interval=interval,progress=False,auto_adjust=False,threads=False,prepost=prepost,group_by="column")
     except Exception:return pd.DataFrame()
     if df is None:return pd.DataFrame()
-    # Do not trust provider metadata alone for split normalization. Yahoo can
-    # return mixed pre/post-split units for some Taiwan ETFs.
     df.attrs["source"]="Yahoo Finance";df.attrs["price_basis"]="yahoo_raw_close_unverified";return df
 
 def _aggregate_latest_intraday(intraday):
@@ -80,30 +78,29 @@ def _merge_latest_intraday(intraday_daily,intraday):
 def _set_dataframe_attributes(df,ticker,interval,source="Yahoo Finance"):
     df.attrs.update({"ticker":ticker,"stock_code":normalize_stock_code(ticker),"market":"上櫃" if ticker.endswith(".TWO") else "上市","interval":interval,"source":source});return df
 
-def _known_split_is_already_normalized(daily,stock_code):
-    """Return True only when known split boundaries are already on one price scale."""
-    if daily is None or daily.empty:return True
+def _has_split_like_discontinuity(daily,stock_code):
+    """Detect any known/inferred split boundary still visible in the OHLCV units."""
+    if daily is None or daily.empty:return False
     ordered=daily.sort_index()
-    checked=False
     for event in split_events(ordered,stock_code):
-        effective=pd.Timestamp(event["effective_date"]);ratio=float(event["ratio"])
-        before=ordered.loc[ordered.index<effective];after=ordered.loc[ordered.index>=effective]
+        boundary=pd.Timestamp(event.get("adjustment_date",event["effective_date"]));before=ordered.loc[ordered.index<boundary];after=ordered.loc[ordered.index>=boundary]
         if before.empty or after.empty:continue
-        checked=True
-        prev=float(before.iloc[-1]["Close"]);cur=float(after.iloc[0]["Open"])
+        prev=float(before.iloc[-1]["Close"]);cur=float(after.iloc[0]["Open"]);ratio=float(event["ratio"])
         if prev<=0 or cur<=0:continue
         observed=prev/cur
-        # A raw split boundary is close to the announced ratio (e.g. 7:1).
-        if ratio>1 and abs(observed-ratio)/ratio<=0.20:return False
-        if ratio<1 and abs(observed-ratio)/abs(ratio)<=0.20:return False
-    return checked or not split_events(ordered,stock_code)
+        if abs(observed-ratio)/abs(ratio)<=0.20:return True
+    return False
+
+def _known_split_is_already_normalized(daily,stock_code):
+    if daily is None or daily.empty:return True
+    events=split_events(daily,stock_code)
+    if not events:return True
+    return not _has_split_like_discontinuity(daily,stock_code)
 
 def _normalize_price_basis(daily,stock_code,source):
     daily=daily.copy();daily.attrs["source"]=source
     if source=="Yahoo Finance" and _known_split_is_already_normalized(daily,stock_code):
         daily.attrs["split_adjusted"]=True;daily.attrs["split_adjustments"]=split_events(daily,stock_code);daily.attrs["price_basis"]="yahoo_verified_latest-unit split-adjusted";daily.attrs["corporate_action_validated"]=True;return daily
-    # Raw or mixed-unit data must pass the same corporate-action normalization
-    # used for official data instead of being trusted because of its provider.
     daily.attrs.pop("split_adjusted",None)
     return apply_split_adjustments(daily,stock_code)
 

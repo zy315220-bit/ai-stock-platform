@@ -65,16 +65,11 @@ def backtest_stock(
 
     requested_start = pd.Timestamp(start_date).normalize()
     warmup_start = (requested_start - pd.Timedelta(days=INDICATOR_WARMUP_CALENDAR_DAYS)).date().isoformat()
-    df = download_stock(
-        normalized_code,
-        prefer_official=True,
-        official_months=_official_months_for_backtest(warmup_start),
-    )
+    df = download_stock(normalized_code, prefer_official=True, official_months=_official_months_for_backtest(warmup_start))
     data_source = str(df.attrs.get("source", "未知"))
     if df is None or df.empty:
         raise ValueError(f"找不到 {normalized_code} 的歷史資料。")
 
-    # Keep pre-window rows only for indicator calculation; they are never tradable.
     df = _prepare_stock_data(df=df, start_date=warmup_start, end_date=end_date)
     df = add_indicators(df.copy())
     if df is None or df.empty:
@@ -127,12 +122,20 @@ def backtest_stock(
     final_date = _get_row_date(df.iloc[-1])
     final_equity = cash + shares * final_close
     equity_curve.append({"date": final_date, "equity": final_equity, "cash": cash, "shares": shares, "close": final_close})
-    enriched_trades = _enrich_trades_with_excursions(trades=trades, df=df.iloc[first_trade_index:].reset_index(drop=True))
+    trade_df = df.iloc[first_trade_index:].reset_index(drop=True)
+    enriched_trades = _enrich_trades_with_excursions(trades=trades, df=trade_df)
     max_drawdown = _calculate_max_drawdown(equity_curve)
     drawdown_statistics = _calculate_drawdown_statistics(equity_curve)
-    performance_metrics = _calculate_performance_metrics(initial_capital=normalized_capital, final_equity=final_equity, equity_curve=equity_curve, trades=enriched_trades)
+    performance_metrics = _calculate_performance_metrics(
+        equity_curve=equity_curve,
+        trades=enriched_trades,
+        initial_capital=normalized_capital,
+        final_capital=final_equity,
+        actual_start_date=_get_row_date(trade_df.iloc[0]),
+        actual_end_date=final_date,
+        max_drawdown_percent=abs(max_drawdown),
+    )
     advanced_trade_statistics = _calculate_advanced_trade_statistics(enriched_trades)
-    trade_df = df.iloc[first_trade_index:].reset_index(drop=True)
     buy_and_hold = _calculate_buy_and_hold(df=trade_df, initial_capital=normalized_capital, commission_rate=commission_rate, transaction_tax_rate=transaction_tax_rate)
     exposure_percent = _calculate_exposure_percent(equity_curve)
     total_return_percent = (final_equity / normalized_capital - 1) * 100

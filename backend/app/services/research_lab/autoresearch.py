@@ -27,11 +27,15 @@ def run_autoresearch(
     max_experiments: int = 100,
     top_k: int = 3,
     target_score: float = 75.0,
+    min_validation_trades: int = 8,
 ) -> ResearchSession:
     """Bounded keep/discard/evolve loop with explicit compute budget.
 
     Holdout is deliberately absent from this function. A winning validation
-    candidate must be passed separately to the promotion gate.
+    candidate must be passed separately to the promotion gate. The production
+    default remains conservative (8 completed validation trades); callers may
+    raise it, while deployment smoke tests may lower it only to exercise the
+    lineage/evolution plumbing on short validation windows.
     """
     candidates = list(initial_candidates)
     rounds: list[EvolutionRound] = []
@@ -49,7 +53,15 @@ def run_autoresearch(
             stopped_reason = "no_surviving_candidates"
             break
 
-        evaluated = tuple(run_research_batch(stock_code, split, batch, backtest_fn=backtest_fn))
+        evaluated = tuple(
+            run_research_batch(
+                stock_code,
+                split,
+                batch,
+                backtest_fn=backtest_fn,
+                min_validation_trades=min_validation_trades,
+            )
+        )
         experiments += len(evaluated)
         if evaluated and (best is None or evaluated[0].research_score > best.research_score):
             best = evaluated[0]
@@ -70,10 +82,4 @@ def run_autoresearch(
     else:
         stopped_reason = "generation_budget_reached"
 
-    return ResearchSession(
-        stock_code=stock_code,
-        rounds=tuple(rounds),
-        best_result=best,
-        experiments_run=experiments,
-        stopped_reason=stopped_reason,
-    )
+    return ResearchSession(stock_code=stock_code, rounds=tuple(rounds), best_result=best, experiments_run=experiments, stopped_reason=stopped_reason)

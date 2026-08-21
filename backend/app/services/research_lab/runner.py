@@ -9,7 +9,7 @@ from .models import ExperimentResult, ResearchCandidate, ResearchSplit
 from .scoring import evaluate_candidate
 
 BacktestFn = Callable[..., dict[str, Any]]
-_ALLOWED_PARAMETERS = {"entry_score", "exit_score", "initial_capital", "require_ema_trend", "ema_fast_column", "ema_slow_column"}
+_ALLOWED_PARAMETERS = {"entry_score", "exit_score", "initial_capital", "require_ema_trend", "ema_fast_column", "ema_slow_column", "exit_mode", "max_holding_days"}
 
 
 def _validation_metrics(report: dict[str, Any]) -> dict[str, Any]:

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.competition import router as competition_router
+from app.api.research_lab import router as research_lab_router
 from app.api.stocks import router as stocks_router
 from app.core.config import settings
 
@@ -45,6 +46,12 @@ app.include_router(
     competition_router,
     prefix="/api/competition",
     tags=["competition"],
+)
+
+app.include_router(
+    research_lab_router,
+    prefix="/api/research-lab",
+    tags=["research-lab"],
 )
 
 # =========================

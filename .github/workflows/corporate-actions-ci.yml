@@ -13,6 +13,7 @@ on:
       - 'backend/tests/test_corporate_actions.py'
       - 'backend/tests/test_stock_price_basis.py'
       - 'backend/tests/test_backtest_no_lookahead.py'
+      - 'backend/tests/test_production_split_pipeline.py'
       - '.github/workflows/corporate-actions-ci.yml'
   pull_request:
     paths:
@@ -24,6 +25,7 @@ on:
       - 'backend/tests/test_corporate_actions.py'
       - 'backend/tests/test_stock_price_basis.py'
       - 'backend/tests/test_backtest_no_lookahead.py'
+      - 'backend/tests/test_production_split_pipeline.py'
 
 jobs:
   research-integrity-regression:
@@ -41,4 +43,4 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r requirements.txt
       - name: Run research-integrity regression suite
-        run: python -m unittest tests.test_corporate_actions tests.test_stock_price_basis tests.test_backtest_no_lookahead -v
+        run: python -m unittest tests.test_corporate_actions tests.test_stock_price_basis tests.test_backtest_no_lookahead tests.test_production_split_pipeline -v

@@ -6,7 +6,9 @@ TWSE metadata ingestion can add reduction/rights/merger events without changing
 the execution loop.
 
 Important: split events are NOT emitted when the dataframe price basis is already
-split-adjusted. Doing so would double-adjust the economic position.
+split-adjusted. Doing so would double-adjust the economic position. Conversely,
+we must never assume an unknown basis is raw: if split metadata exists and the
+basis cannot be classified, research fails closed instead of guessing.
 """
 from __future__ import annotations
 
@@ -18,13 +20,38 @@ from app.services.corporate_action_ledger import CorporateActionEvent, Corporate
 from .corporate_action_execution import events_by_effective_date
 
 
+_SPLIT_ADJUSTED_BASIS_TOKENS = ("split-adjusted", "split_adjusted")
+_RAW_BASIS_TOKENS = ("raw-unadjusted", "raw_unadjusted", "raw-unadjusted-official", "raw_unadjusted_official")
+
+
 def _date(value: Any) -> str:
     return pd.Timestamp(value).strftime("%Y-%m-%d")
 
 
+def _classify_price_basis(value: Any) -> str:
+    basis = str(value or "").strip().lower()
+    if any(token in basis for token in _SPLIT_ADJUSTED_BASIS_TOKENS):
+        return "split_adjusted"
+    if any(token in basis for token in _RAW_BASIS_TOKENS):
+        return "raw"
+    return "unknown"
+
+
 def ledger_schedule_from_frame(frame: pd.DataFrame) -> dict[str, list[CorporateActionEvent]]:
     events: list[CorporateActionEvent] = []
-    price_basis = str(frame.attrs.get("price_basis") or "").lower()
+    price_basis = frame.attrs.get("price_basis")
+    basis_class = _classify_price_basis(price_basis)
+    split_items = [item for item in (frame.attrs.get("split_adjustments", []) or []) if isinstance(item, dict)]
+
+    # A split-bearing frame with an unknown basis is unsafe. Treating it as raw
+    # could double-adjust Yahoo-style normalized prices; treating it as adjusted
+    # could omit a real share conversion. Research must stop until provenance is
+    # explicit.
+    if split_items and basis_class == "unknown":
+        raise ValueError(
+            "corporate-action price basis is unknown; refusing to apply split metadata "
+            f"(price_basis={price_basis!r})"
+        )
 
     # Dividends are cash flows even when OHLC is split-adjusted. They are emitted
     # exactly once here so the engine no longer needs a second dividend path.
@@ -46,14 +73,10 @@ def ledger_schedule_from_frame(frame: pd.DataFrame) -> dict[str, list[CorporateA
             announce_date=str(item.get("announce_date")) if item.get("announce_date") else None,
         ))
 
-    # Existing production frames normalize historical OHLC into latest share
-    # units. Applying the same split to portfolio shares would be a second
-    # adjustment. Raw-basis feeds may emit split events safely.
-    already_split_adjusted = "split-adjusted" in price_basis or "split_adjusted" in price_basis
-    if not already_split_adjusted:
-        for item in frame.attrs.get("split_adjustments", []) or []:
-            if not isinstance(item, dict):
-                continue
+    # Only an explicitly raw feed may emit split events. Split-adjusted feeds
+    # already express historical OHLC in the normalized share unit.
+    if basis_class == "raw":
+        for item in split_items:
             ratio = item.get("ratio")
             date = item.get("adjustment_date", item.get("effective_date", item.get("date")))
             if date is None or ratio is None:

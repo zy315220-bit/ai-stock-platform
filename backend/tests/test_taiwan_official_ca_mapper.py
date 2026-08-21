@@ -1,9 +1,10 @@
 import pytest
 
 from app.services.taiwan_official_ca_mapper import map_tpex_exright_record, map_twse_exright_record
+from app.services.corporate_action_ledger import CorporateActionEvent, CorporateActionType, PositionState, apply_event
 
 
-def test_twse_stock_dividend_uses_direct_ratio_units():
+def test_twse_stock_dividend_uses_incremental_ratio_units():
     events = map_twse_exright_record({
         "股票代號": "2330",
         "除權息日期": "2026-07-01",
@@ -14,7 +15,7 @@ def test_twse_stock_dividend_uses_direct_ratio_units():
         "effective_date": "2026-07-01",
         "source": "TWSE_official",
         "event_type": "stock_dividend",
-        "ratio": 1.15,
+        "ratio": 0.15,
     }]
 
 
@@ -30,14 +31,31 @@ def test_tpex_rights_rate_percent_is_converted_to_ratio():
     assert events[0]["subscription_price"] == 50.0
 
 
-def test_tpex_stock_dividend_percent_is_converted_to_multiplier():
+def test_tpex_stock_dividend_percent_is_converted_to_incremental_ratio():
     events = map_tpex_exright_record({
         "股票代號": "TEST",
         "除權息日期": "2026-07-01",
         "無償配股率": "15",
     })
     assert events[0]["event_type"] == "stock_dividend"
-    assert events[0]["ratio"] == pytest.approx(1.15)
+    assert events[0]["ratio"] == pytest.approx(0.15)
+
+
+def test_mapper_ratio_matches_ledger_share_accounting_once():
+    item = map_twse_exright_record({
+        "股票代號": "TEST",
+        "除權息日期": "2026-07-01",
+        "無償配股率": "0.15",
+    })[0]
+    state = PositionState(shares=100.0, cash=0.0, total_cost_basis=1000.0)
+    result = apply_event(state, CorporateActionEvent(
+        event_type=CorporateActionType.STOCK_DIVIDEND,
+        effective_date=item["effective_date"],
+        ratio=item["ratio"],
+        source=item["source"],
+    ))
+    assert result.shares == pytest.approx(115.0)
+    assert result.total_cost_basis == pytest.approx(1000.0)
 
 
 def test_cash_dividend_preserves_per_share_amount():

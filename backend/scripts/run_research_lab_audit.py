@@ -5,12 +5,13 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.services.backtest.engine import backtest_stock
 from app.services.research_lab.autoresearch import run_autoresearch
 from app.services.research_lab.evolution import generate_parameter_candidates
 from app.services.research_lab.models import ExperimentDecision, ResearchSplit
-from app.services.research_lab.promotion import evaluate_holdout_promotion
+from app.services.research_lab.promotion import run_holdout_gate
 from app.services.research_lab.runner import serialize_result
-from app.services.research_lab.walk_forward import run_walk_forward
+from app.services.research_lab.walk_forward import run_walk_forward_validation
 
 STOCK_CODE = "2330"
 SPLIT = ResearchSplit("2020-01-01", "2022-12-31", "2023-01-01", "2024-12-31", "2025-01-01", "2025-12-31")
@@ -18,11 +19,19 @@ OUT = Path("research_artifacts/research_lab_2330_latest.json")
 
 
 def main() -> None:
-    candidates = generate_parameter_candidates(entry_scores=(55, 60, 65, 70), exit_scores=(35, 40, 45, 50))
+    # Promotion currently accepts the score-only family. Keep the first auditable
+    # end-to-end run inside that family; structural EMA research remains isolated
+    # in validation until its holdout contract is explicitly expanded.
+    candidates = generate_parameter_candidates(
+        entry_scores=(55, 60, 65, 70),
+        exit_scores=(35, 40, 45, 50),
+    )
+    candidates = [c for c in candidates if not c.parameters.get("require_ema_trend")]
     session = run_autoresearch(
         STOCK_CODE,
         SPLIT,
         candidates,
+        backtest_fn=backtest_stock,
         max_generations=4,
         max_experiments=48,
         top_k=3,
@@ -49,10 +58,16 @@ def main() -> None:
         "promotion": None,
     }
     if best is not None:
-        wf = run_walk_forward(STOCK_CODE, best.candidate)
+        wf = run_walk_forward_validation(
+            STOCK_CODE,
+            SPLIT,
+            best.candidate,
+            backtest_fn=backtest_stock,
+            slice_count=3,
+        )
         payload["walk_forward"] = asdict(wf)
         if best.decision is ExperimentDecision.HOLDOUT_READY:
-            promotion = evaluate_holdout_promotion(STOCK_CODE, SPLIT, best)
+            promotion = run_holdout_gate(STOCK_CODE, SPLIT, best, backtest_fn=backtest_stock)
             payload["promotion"] = asdict(promotion)
         else:
             payload["promotion"] = {

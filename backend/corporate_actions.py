@@ -1,9 +1,8 @@
 """Corporate-action support for Taiwan ETF historical simulations.
 
-Split normalization is deliberately idempotent. Raw official price series are
-also validated fail-closed: a split-like discontinuity that cannot be mapped to
-a plausible integer split/reverse-split ratio is rejected instead of silently
-polluting a simulation.
+Split normalization is idempotent. Raw official price series are validated
+fail-closed: a split-like discontinuity must closely match a plausible split or
+reverse-split ratio, otherwise the research simulation is rejected.
 """
 from __future__ import annotations
 from functools import lru_cache
@@ -17,6 +16,11 @@ TWSE_DIVIDEND_URL="https://www.twse.com.tw/zh/ETFortune-institute/dividendList"
 TWSE_0050_SPLIT_SOURCE="https://www.twse.com.tw/zh/ETFortune/announcement?company=A00005&date=20250617&fund=0050&seq=1&type=all"
 TWSE_0052_SPLIT_SOURCE="https://www.twse.com.tw/zh/ETFortune/announcement?company=A00010&date=20251125&fund=0052&seq=1&type=other"
 REQUEST_TIMEOUT_SECONDS=15
+SPLIT_DISCONTINUITY_LOW=0.55
+SPLIT_DISCONTINUITY_HIGH=1.8
+# Inference is only a safety fallback. A 5% tolerance prevents ordinary large
+# market gaps from being silently re-labelled as corporate actions.
+MAX_INFERRED_SPLIT_RELATIVE_ERROR=0.05
 _HEADERS={"Accept":"text/html,application/xhtml+xml","User-Agent":"Mozilla/5.0 (compatible; AI-Stock-Platform/1.0; +https://github.com/zy315220-bit/ai-stock-platform)"}
 KNOWN_SPLITS={"0050":[{"effective_date":"2025-06-18","ratio":4.0,"source":TWSE_0050_SPLIT_SOURCE}],"0052":[{"effective_date":"2025-11-26","ratio":7.0,"source":TWSE_0052_SPLIT_SOURCE}]}
 OFFICIAL_DIVIDEND_FALLBACK={"0050":(("2020-01-31","2020-03-06",2.9),("2020-07-21","2020-08-24",0.7),("2021-01-22","2021-03-09",3.05),("2021-07-21","2021-08-24",0.35),("2022-01-21","2022-03-04",3.2),("2022-07-18","2022-08-19",1.8),("2023-01-30","2023-03-07",2.6),("2023-07-18","2023-08-11",1.9),("2024-01-17","2024-02-21",3.0),("2024-07-16","2024-08-09",1.0),("2025-01-17","2025-02-20",2.7),("2025-07-21","2025-08-08",0.36),("2026-01-22","2026-02-11",1.0),("2026-07-21","2026-08-10",0.6)),"0056":(("2020-10-28","2020-12-01",1.6),("2021-10-22","2021-11-25",1.8),("2022-10-19","2022-11-22",2.1)),"00878":(),"00919":()}
@@ -65,12 +69,16 @@ def download_twse_etf_dividends(stock_code,*,start,end):
 def _split_candidate(prev_close,current_open):
  if prev_close<=0 or current_open<=0:return None
  observed=prev_close/current_open
- if observed>=1.8:ratio=float(round(observed))
- elif observed<=0.55:ratio=1.0/float(round(1.0/observed))
+ if observed>=SPLIT_DISCONTINUITY_HIGH:ratio=float(round(observed))
+ elif observed<=SPLIT_DISCONTINUITY_LOW:
+  inverse=1.0/observed
+  rounded=round(inverse)
+  if rounded<=0:return None
+  ratio=1.0/float(rounded)
  else:return None
  if ratio==0 or not(0.05<=ratio<=20):return None
  error=abs(observed-ratio)/abs(ratio)
- return (ratio,error,observed)
+ return ratio,error,observed
 
 def _inferred_splits(frame):
  if frame.empty or len(frame)<2:return []
@@ -79,29 +87,22 @@ def _inferred_splits(frame):
   prev=float(ordered.iloc[pos-1]["Close"]);cur=float(ordered.iloc[pos]["Open"]);candidate=_split_candidate(prev,cur)
   if candidate is None:continue
   ratio,error,_=candidate
-  if error>0.20:continue
+  if error>MAX_INFERRED_SPLIT_RELATIVE_ERROR:continue
   events.append({"effective_date":pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d"),"ratio":ratio,"source":"detected_from_official_ohlcv_discontinuity"})
  return events
 
 def validate_corporate_action_basis(frame,stock_code):
- """Reject unexplained split-like jumps in raw official OHLCV.
-
- A >=45% overnight unit discontinuity is suspicious enough to invalidate a
- research simulation. Plausible integer split ratios are allowed because they
- will be normalized by split_events(). Known official events are always allowed.
- """
  if frame is None or frame.empty or len(frame)<2:return []
  ordered=frame.sort_index();known_dates={e["effective_date"] for e in KNOWN_SPLITS.get(stock_code,[])};ambiguous=[]
  for pos in range(1,len(ordered)):
   prev=float(ordered.iloc[pos-1]["Close"]);cur=float(ordered.iloc[pos]["Open"])
   if prev<=0 or cur<=0:continue
   observed=prev/cur
-  if 0.55<observed<1.8:continue
+  if SPLIT_DISCONTINUITY_LOW<observed<SPLIT_DISCONTINUITY_HIGH:continue
   event_date=pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d")
   if event_date in known_dates:continue
   candidate=_split_candidate(prev,cur)
-  if candidate is None or candidate[1]>0.20:
-   ambiguous.append({"date":event_date,"observed_ratio":round(observed,6)})
+  if candidate is None or candidate[1]>MAX_INFERRED_SPLIT_RELATIVE_ERROR:ambiguous.append({"date":event_date,"observed_ratio":round(observed,6)})
  if ambiguous:
   sample=ambiguous[0]
   raise ValueError(f"{stock_code} 歷史價格在 {sample['date']} 出現未確認的 corporate-action 跳變（約 {sample['observed_ratio']} 倍）；為避免拆分錯誤污染模擬，本次回測已停止。")

@@ -1,8 +1,8 @@
 """Corporate-action support for Taiwan ETF historical simulations.
 
-Split normalization is idempotent. Raw official price series are validated
-fail-closed: a split-like discontinuity must closely match a plausible split or
-reverse-split ratio, otherwise the research simulation is rejected.
+Known TWSE split metadata remains authoritative, while provider-specific price
+series are normalized at the actual discontinuity boundary. This matters when
+a vendor rewrites only part of the pre-split history (0052 is a real example).
 """
 from __future__ import annotations
 from functools import lru_cache
@@ -19,9 +19,6 @@ REQUEST_TIMEOUT_SECONDS=15
 SPLIT_DISCONTINUITY_LOW=0.55
 SPLIT_DISCONTINUITY_HIGH=1.8
 MAX_INFERRED_SPLIT_RELATIVE_ERROR=0.05
-# Vendor/official OHLCV can place the same corporate-action discontinuity a few
-# trading days away from the exchange effective date. Treat a matching-ratio
-# inference near a known event as the same event, never as a second split.
 KNOWN_SPLIT_DEDUP_DAYS=14
 _HEADERS={"Accept":"text/html,application/xhtml+xml","User-Agent":"Mozilla/5.0 (compatible; AI-Stock-Platform/1.0; +https://github.com/zy315220-bit/ai-stock-platform)"}
 KNOWN_SPLITS={"0050":[{"effective_date":"2025-06-18","ratio":4.0,"source":TWSE_0050_SPLIT_SOURCE}],"0052":[{"effective_date":"2025-11-26","ratio":7.0,"source":TWSE_0052_SPLIT_SOURCE}]}
@@ -89,15 +86,14 @@ def _inferred_splits(frame):
   if candidate is None:continue
   ratio,error,_=candidate
   if error>MAX_INFERRED_SPLIT_RELATIVE_ERROR:continue
-  events.append({"effective_date":pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d"),"ratio":ratio,"source":"detected_from_official_ohlcv_discontinuity"})
+  events.append({"effective_date":pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d"),"ratio":ratio,"source":"detected_from_ohlcv_discontinuity"})
  return events
 
 def _same_split_event(a,b):
  try:
   ratio_a=float(a["ratio"]);ratio_b=float(b["ratio"])
   if not math.isclose(ratio_a,ratio_b,rel_tol=MAX_INFERRED_SPLIT_RELATIVE_ERROR,abs_tol=1e-9):return False
-  days=abs((pd.Timestamp(a["effective_date"])-pd.Timestamp(b["effective_date"])).days)
-  return days<=KNOWN_SPLIT_DEDUP_DAYS
+  return abs((pd.Timestamp(a["effective_date"])-pd.Timestamp(b["effective_date"])).days)<=KNOWN_SPLIT_DEDUP_DAYS
  except (KeyError,TypeError,ValueError):return False
 
 def validate_corporate_action_basis(frame,stock_code):
@@ -108,22 +104,30 @@ def validate_corporate_action_basis(frame,stock_code):
   if prev<=0 or cur<=0:continue
   observed=prev/cur
   if SPLIT_DISCONTINUITY_LOW<observed<SPLIT_DISCONTINUITY_HIGH:continue
-  event_date=pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d");candidate=_split_candidate(prev,cur)
-  inferred={"effective_date":event_date,"ratio":candidate[0] if candidate else observed}
+  event_date=pd.Timestamp(ordered.index[pos]).strftime("%Y-%m-%d");candidate=_split_candidate(prev,cur);inferred={"effective_date":event_date,"ratio":candidate[0] if candidate else observed}
   if any(_same_split_event(inferred,k) for k in known):continue
   if candidate is None or candidate[1]>MAX_INFERRED_SPLIT_RELATIVE_ERROR:ambiguous.append({"date":event_date,"observed_ratio":round(observed,6)})
  if ambiguous:
-  sample=ambiguous[0]
-  raise ValueError(f"{stock_code} 歷史價格在 {sample['date']} 出現未確認的 corporate-action 跳變（約 {sample['observed_ratio']} 倍）；為避免拆分錯誤污染模擬，本次回測已停止。")
+  sample=ambiguous[0];raise ValueError(f"{stock_code} 歷史價格在 {sample['date']} 出現未確認的 corporate-action 跳變（約 {sample['observed_ratio']} 倍）；為避免拆分錯誤污染模擬，本次回測已停止。")
  return ambiguous
 
 def split_events(frame,stock_code):
- known=[dict(e) for e in KNOWN_SPLITS.get(stock_code,[])];inferred=_inferred_splits(frame);events=list(known)
+ """Return official events plus the provider boundary used for normalization.
+
+ The exchange effective date is retained for audit. If the actual OHLCV series
+ changes units on a nearby date, adjustment_date records that boundary instead
+ of pretending the provider's mixed history is already normalized.
+ """
+ known=[dict(e) for e in KNOWN_SPLITS.get(stock_code,[])];inferred=_inferred_splits(frame);events=[]
+ for official in known:
+  item=dict(official);matches=[e for e in inferred if _same_split_event(e,official)]
+  if matches:item["adjustment_date"]=min(matches,key=lambda e:abs((pd.Timestamp(e["effective_date"])-pd.Timestamp(official["effective_date"])).days))["effective_date"]
+  else:item["adjustment_date"]=item["effective_date"]
+  events.append(item)
  for event in inferred:
-  # Known TWSE metadata is authoritative. Do not apply a nearby matching vendor
-  # discontinuity as another corporate action.
   if any(_same_split_event(event,k) for k in known):continue
-  if not any(_same_split_event(event,e) for e in events):events.append(event)
+  item=dict(event);item["adjustment_date"]=item["effective_date"]
+  if not any(_same_split_event(item,e) for e in events):events.append(item)
  return sorted(events,key=lambda e:e["effective_date"])
 
 def adjust_dividends_for_splits(dividends,splits):
@@ -138,10 +142,9 @@ def adjust_dividends_for_splits(dividends,splits):
 def apply_split_adjustments(frame,stock_code):
  if frame is None or frame.empty:return frame
  if frame.attrs.get("split_adjusted") is True:return frame.copy()
- validate_corporate_action_basis(frame,stock_code)
- adjusted=frame.copy();events=split_events(adjusted,stock_code)
+ validate_corporate_action_basis(frame,stock_code);adjusted=frame.copy();events=split_events(adjusted,stock_code)
  for event in reversed(events):
-  effective=pd.Timestamp(event["effective_date"]);ratio=float(event["ratio"]);mask=adjusted.index<effective;adjusted.loc[mask,["Open","High","Low","Close"]]/=ratio
+  boundary=pd.Timestamp(event.get("adjustment_date",event["effective_date"]));ratio=float(event["ratio"]);mask=adjusted.index<boundary;adjusted.loc[mask,["Open","High","Low","Close"]]/=ratio
   if "Volume" in adjusted.columns:adjusted.loc[mask,"Volume"]*=ratio
  adjusted.attrs.update(frame.attrs);adjusted.attrs["split_adjustments"]=events;adjusted.attrs["price_basis"]="latest-unit split-adjusted";adjusted.attrs["split_adjusted"]=True;adjusted.attrs["corporate_action_validated"]=True;return adjusted
 

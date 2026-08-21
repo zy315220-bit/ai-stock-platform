@@ -6,6 +6,7 @@ on:
       - "backend/app/services/research_lab/**"
       - "backend/app/api/research_lab.py"
       - "backend/app/main.py"
+      - "backend/scripts/run_research_lab_audit.py"
       - "backend/tests/test_research_lab*.py"
       - "frontend/app/research-lab/**"
       - ".github/workflows/research-lab-ci.yml"
@@ -27,6 +28,30 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt pytest
       - run: python -m pytest -q tests/test_research_lab*.py
+
+  real-data-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Run auditable 2330 research session
+        run: python scripts/run_research_lab_audit.py
+      - name: Upload research audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-lab-2330-audit
+          path: backend/research_artifacts/research_lab_2330_latest.json
+          if-no-files-found: error
+          retention-days: 30
 
   frontend-build:
     runs-on: ubuntu-latest

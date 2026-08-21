@@ -18,6 +18,7 @@ def run_research(
     end_date: date = Query(...),
     max_generations: int = Query(3, ge=1, le=10),
     max_experiments: int = Query(40, ge=1, le=200),
+    min_validation_trades: int = Query(8, ge=1, le=100),
 ) -> dict[str, object]:
     """Run bounded validation-only autonomous research and return an auditable generation trail."""
     try:
@@ -29,6 +30,7 @@ def run_research(
             backtest_fn=backtest_stock,
             max_generations=max_generations,
             max_experiments=max_experiments,
+            min_validation_trades=min_validation_trades,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -41,14 +43,8 @@ def run_research(
             "survivor_count": len(round_.survivors),
             "evaluated": [serialize_result(result) for result in round_.evaluated],
             "survivors": [
-                {
-                    "candidate_id": candidate.candidate_id,
-                    "parent_id": candidate.parent_id,
-                    "strategy_family": candidate.strategy_family,
-                    "parameters": candidate.parameters,
-                    "hypothesis": candidate.hypothesis,
-                }
-                for candidate in round_.survivors
+                {"candidate_id": c.candidate_id, "parent_id": c.parent_id, "strategy_family": c.strategy_family, "parameters": c.parameters, "hypothesis": c.hypothesis}
+                for c in round_.survivors
             ],
         })
 
@@ -63,12 +59,9 @@ def run_research(
             "candidate_generation": "deterministic_grid_then_local_mutation",
             "selection": "research_score_ranked_non_discarded_top_k",
             "holdout_used_during_search": False,
+            "validation_policy": {"min_completed_trades": min_validation_trades},
             "bounded_by": {"max_generations": max_generations, "max_experiments": max_experiments},
         },
         "holdout_status": "LOCKED_REQUIRES_PROMOTION_GATE",
-        "split": {
-            "train": [split.train_start, split.train_end],
-            "validation": [split.validation_start, split.validation_end],
-            "holdout": [split.holdout_start, split.holdout_end],
-        },
+        "split": {"train": [split.train_start, split.train_end], "validation": [split.validation_start, split.validation_end], "holdout": [split.holdout_start, split.holdout_end]},
     }

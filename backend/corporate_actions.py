@@ -1,12 +1,11 @@
 """Corporate-action support for Taiwan ETF historical simulations.
 
 Split normalization is deliberately idempotent: a frame already normalized by
-this module must never be adjusted a second time.  This protects every stock or
+this module must never be adjusted a second time. This protects every stock or
 ETF, including instruments with multiple split/reverse-split events.
 """
 from __future__ import annotations
 
-from datetime import date
 from functools import lru_cache
 from html.parser import HTMLParser
 import math
@@ -16,9 +15,13 @@ import requests
 
 TWSE_DIVIDEND_URL = "https://www.twse.com.tw/zh/ETFortune-institute/dividendList"
 TWSE_0050_SPLIT_SOURCE = "https://www.twse.com.tw/zh/ETFortune/announcement?company=A00005&date=20250617&fund=0050&seq=1&type=all"
+TWSE_0052_SPLIT_SOURCE = "https://www.twse.com.tw/zh/ETFortune/announcement?company=A00010&date=20251125&fund=0052&seq=1&type=other"
 REQUEST_TIMEOUT_SECONDS = 15
 _HEADERS = {"Accept": "text/html,application/xhtml+xml", "User-Agent": "Mozilla/5.0 (compatible; AI-Stock-Platform/1.0; +https://github.com/zy315220-bit/ai-stock-platform)"}
-KNOWN_SPLITS: dict[str, list[dict[str, Any]]] = {"0050": [{"effective_date": "2025-06-18", "ratio": 4.0, "source": TWSE_0050_SPLIT_SOURCE}]}
+KNOWN_SPLITS: dict[str, list[dict[str, Any]]] = {
+    "0050": [{"effective_date": "2025-06-18", "ratio": 4.0, "source": TWSE_0050_SPLIT_SOURCE}],
+    "0052": [{"effective_date": "2025-11-26", "ratio": 7.0, "source": TWSE_0052_SPLIT_SOURCE}],
+}
 OFFICIAL_DIVIDEND_FALLBACK: dict[str, tuple[tuple[str, str | None, float], ...]] = {
 "0050": (("2020-01-31","2020-03-06",2.9),("2020-07-21","2020-08-24",0.7),("2021-01-22","2021-03-09",3.05),("2021-07-21","2021-08-24",0.35),("2022-01-21","2022-03-04",3.2),("2022-07-18","2022-08-19",1.8),("2023-01-30","2023-03-07",2.6),("2023-07-18","2023-08-11",1.9),("2024-01-17","2024-02-21",3.0),("2024-07-16","2024-08-09",1.0),("2025-01-17","2025-02-20",2.7),("2025-07-21","2025-08-08",0.36),("2026-01-22","2026-02-11",1.0),("2026-07-21","2026-08-10",0.6)),
 "0056": (("2020-10-28","2020-12-01",1.6),("2021-10-22","2021-11-25",1.8),("2022-10-19","2022-11-22",2.1),("2023-07-18","2023-08-11",1.0),("2023-10-19","2023-11-14",1.2),("2024-01-17","2024-02-21",0.7),("2024-04-18","2024-05-15",0.79),("2024-07-16","2024-08-09",1.07),("2024-10-17","2024-11-12",1.07),("2025-01-17","2025-02-20",1.07),("2025-04-23","2025-05-14",1.07),("2025-07-21","2025-08-08",0.866),("2025-10-23","2025-11-14",0.866),("2026-01-22","2026-02-11",0.866),("2026-04-23","2026-05-14",1.0),("2026-07-21","2026-08-10",1.35)),
@@ -97,10 +100,7 @@ def adjust_dividends_for_splits(dividends,splits):
 def apply_split_adjustments(frame,stock_code):
     """Backward-adjust raw OHLCV exactly once to the latest unit basis."""
     if frame is None or frame.empty:return frame
-    # Idempotence is critical: stock.py can pass frames through shared pipelines
-    # more than once, and callers may reuse already-normalized frames.
-    if frame.attrs.get("split_adjusted") is True:
-        return frame.copy()
+    if frame.attrs.get("split_adjusted") is True:return frame.copy()
     adjusted=frame.copy(); events=split_events(adjusted,stock_code)
     for event in reversed(events):
         effective=pd.Timestamp(event["effective_date"]); ratio=float(event["ratio"]); mask=adjusted.index<effective

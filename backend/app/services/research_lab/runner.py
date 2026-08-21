@@ -13,12 +13,26 @@ _ALLOWED_PARAMETERS = {"entry_score", "exit_score", "initial_capital", "require_
 
 def _validation_metrics(report: dict[str, Any]) -> dict[str, Any]:
     metrics = dict(report.get("performance_metrics") or {})
-    metrics.update({"total_return_percent": report.get("total_return_percent", report.get("total_return", 0.0)), "max_drawdown_percent": report.get("max_drawdown_percent", report.get("max_drawdown", 0.0)), "total_trades": report.get("total_trades", len(report.get("trades") or []))})
+    completed_trades = report.get("completed_trades", report.get("total_trades", len(report.get("trades") or [])))
+    open_position_count = report.get("open_position_count", 1 if report.get("open_position") else 0)
+    metrics.update({
+        "total_return_percent": report.get("total_return_percent", report.get("total_return", 0.0)),
+        "max_drawdown_percent": report.get("max_drawdown_percent", report.get("max_drawdown", 0.0)),
+        "total_trades": completed_trades,
+        "completed_trades": completed_trades,
+        "open_position_count": open_position_count,
+        "has_open_position": bool(open_position_count),
+        "open_position_unrealized_return_percent": (report.get("open_position") or {}).get("unrealized_return_percent", 0.0),
+    })
     return metrics
 
 
 def run_candidate_validation(stock_code: str, split: ResearchSplit, candidate: ResearchCandidate, *, backtest_fn: BacktestFn = backtest_stock, min_validation_trades: int = 8) -> ExperimentResult:
-    """Run exactly validation; holdout is never touched."""
+    """Run exactly validation; holdout is never touched.
+
+    Open positions are exposed as audit evidence but never counted as completed
+    trades, preventing a mark-to-market winner from bypassing sample-size gates.
+    """
     unknown = set(candidate.parameters) - _ALLOWED_PARAMETERS
     if unknown: raise ValueError(f"Unsupported research parameters: {sorted(unknown)}")
     report = backtest_fn(stock_code=stock_code, start_date=split.validation_start, end_date=split.validation_end, **candidate.parameters)

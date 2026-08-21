@@ -29,13 +29,11 @@ def run_autoresearch(
     target_score: float = 75.0,
     min_validation_trades: int = 8,
 ) -> ResearchSession:
-    """Bounded keep/discard/evolve loop with explicit compute budget.
+    """Bounded keep/discard/evolve loop with a generation-aware compute budget.
 
-    Holdout is deliberately absent from this function. A winning validation
-    candidate must be passed separately to the promotion gate. The production
-    default remains conservative (8 completed validation trades); callers may
-    raise it, while deployment smoke tests may lower it only to exercise the
-    lineage/evolution plumbing on short validation windows.
+    The experiment budget is shared fairly across remaining generations instead
+    of allowing generation 1 to consume everything. Holdout remains deliberately
+    absent from search and is handled only by the separate promotion gate.
     """
     candidates = list(initial_candidates)
     rounds: list[EvolutionRound] = []
@@ -48,7 +46,13 @@ def run_autoresearch(
         if remaining <= 0:
             stopped_reason = "experiment_budget_reached"
             break
-        batch = candidates[:remaining]
+
+        generations_left = max_generations - generation + 1
+        # Reserve a fair share for every generation still allowed to run. This
+        # guarantees that, when survivors exist, later generations can actually
+        # be evaluated rather than merely generated at the end of the budget.
+        generation_budget = max(1, remaining // generations_left)
+        batch = candidates[:generation_budget]
         if not batch:
             stopped_reason = "no_surviving_candidates"
             break

@@ -1,4 +1,4 @@
-name: Corporate Actions CI
+name: Research Integrity CI
 
 on:
   push:
@@ -7,20 +7,26 @@ on:
     paths:
       - 'backend/stock.py'
       - 'backend/corporate_actions.py'
+      - 'backend/indicators.py'
+      - 'backend/score_engine/**'
       - 'backend/app/services/backtest/**'
       - 'backend/tests/test_corporate_actions.py'
       - 'backend/tests/test_stock_price_basis.py'
+      - 'backend/tests/test_backtest_no_lookahead.py'
       - '.github/workflows/corporate-actions-ci.yml'
   pull_request:
     paths:
       - 'backend/stock.py'
       - 'backend/corporate_actions.py'
+      - 'backend/indicators.py'
+      - 'backend/score_engine/**'
       - 'backend/app/services/backtest/**'
       - 'backend/tests/test_corporate_actions.py'
       - 'backend/tests/test_stock_price_basis.py'
+      - 'backend/tests/test_backtest_no_lookahead.py'
 
 jobs:
-  split-regression:
+  research-integrity-regression:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -34,5 +40,5 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install backend dependencies
         run: pip install -r requirements.txt
-      - name: Run corporate-action regression suite
-        run: python -m unittest tests.test_corporate_actions tests.test_stock_price_basis -v
+      - name: Run research-integrity regression suite
+        run: python -m unittest tests.test_corporate_actions tests.test_stock_price_basis tests.test_backtest_no_lookahead -v

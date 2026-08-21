@@ -9,7 +9,6 @@ def split():
 
 def report_for_score(**kwargs):
     entry = kwargs["entry_score"]
-    # deterministic fake landscape: higher entry threshold is better
     return {
         "performance_metrics": {"sharpe_ratio": entry / 40, "sortino_ratio": entry / 30, "calmar_ratio": entry / 45},
         "total_return_percent": entry / 2,
@@ -37,11 +36,13 @@ def test_autoresearch_respects_experiment_budget():
 
 
 def test_autoresearch_stops_when_every_candidate_dies():
+    candidates = generate_parameter_candidates(entry_scores=(55, 60), exit_scores=(40,))
     session = run_autoresearch(
-        "2330", split(), generate_parameter_candidates(entry_scores=(55, 60), exit_scores=(40,)),
+        "2330", split(), candidates,
         backtest_fn=weak_report, max_generations=10, max_experiments=100,
     )
-    assert session.experiments_run == 2
+    assert session.experiments_run == len(candidates)
+    assert len(session.rounds) == 1
     assert session.stopped_reason == "no_surviving_candidates"
 
 

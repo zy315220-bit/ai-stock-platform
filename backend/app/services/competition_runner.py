@@ -1,21 +1,29 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from functools import lru_cache
 import hashlib
 import json
 import math
+import time
 from typing import Any, Callable
 
 import pandas as pd
 
+from corporate_actions import dividends_by_ex_date
 from indicators import add_indicators
 
 from app.services.competition_service import (
     freeze_robot_spec,
     rank_robot_results,
 )
+from app.services.history_policy import (
+    BACKTEST_WARMUP_MONTHS,
+    FORWARD_HOLDOUT_MONTHS,
+    PREFERRED_RESEARCH_YEARS,
+    RESEARCH_HISTORY_MONTHS,
+)
+from app.services.research_history import frame_coverage
 
 
 COMPETITION_UNIVERSE = ("0050", "0056", "00878", "00919")
@@ -26,6 +34,13 @@ ETF_TRANSACTION_TAX_RATE = 0.001
 STOP_ATR_MULTIPLE = 2.0
 TARGET_ATR_MULTIPLE = 4.0
 MIN_FORWARD_TRADES_FOR_CHAMPION = 30
+COMPETITION_LISTING_DATES = {
+    "0050": date(2003, 6, 25),
+    "0056": date(2007, 12, 26),
+    "00878": date(2020, 7, 20),
+    "00919": date(2022, 10, 20),
+}
+COMPETITION_DOWNLOAD_PAUSE_SECONDS = 1.0
 
 BROCK_REFERENCE = {
     "title": "Simple Technical Trading Rules and the Stochastic Properties of Stock Returns",
@@ -697,6 +712,12 @@ def _date_text(value: Any) -> str:
 def _prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if frame is None or frame.empty:
         raise ValueError("競賽股票資料為空白。")
+    corporate_action_attrs = {
+        "dividends": list(frame.attrs.get("dividends", [])),
+        "split_adjustments": list(frame.attrs.get("split_adjustments", [])),
+        "dividend_source": frame.attrs.get("dividend_source"),
+        "price_basis": frame.attrs.get("price_basis"),
+    }
     prepared = add_indicators(frame.copy()).sort_index()
     prepared["Prior20High"] = (
         prepared["High"].shift(1).rolling(window=20, min_periods=20).max()
@@ -710,7 +731,9 @@ def _prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     prepared["Return126"] = (
         prepared["Close"] / prepared["Close"].shift(126) - 1
     )
-    return prepared.replace([math.inf, -math.inf], math.nan)
+    prepared = prepared.replace([math.inf, -math.inf], math.nan)
+    prepared.attrs.update(corporate_action_attrs)
+    return prepared
 
 
 def _close_position(
@@ -749,7 +772,22 @@ def _simulate_symbol(
         if start <= pd.Timestamp(timestamp) <= end
     ]
     if not positions:
-        raise ValueError(f"{stock_code} 在指定競賽期間沒有資料。")
+        return {
+            "stock_code": stock_code,
+            "data_available": False,
+            "actual_start": None,
+            "actual_end": None,
+            "initial_capital": round(initial_capital, 2),
+            "final_capital": round(initial_capital, 2),
+            "total_commission": 0.0,
+            "total_transaction_tax": 0.0,
+            "total_dividends": 0.0,
+            "trades": [],
+            "equity_curve": [
+                {"date": _date_text(start), "equity": round(initial_capital, 2)},
+                {"date": _date_text(end), "equity": round(initial_capital, 2)},
+            ],
+        }
 
     cash = float(initial_capital)
     shares = 0
@@ -766,6 +804,9 @@ def _simulate_symbol(
     equity_curve: list[dict[str, Any]] = []
     total_commission = 0.0
     total_transaction_tax = 0.0
+    total_dividends = 0.0
+    position_dividends = 0.0
+    dividend_schedule = dividends_by_ex_date(frame)
 
     first_position = positions[0]
     if first_position > 0:
@@ -788,6 +829,15 @@ def _simulate_symbol(
         if not _all_finite(open_price, high_price, low_price, close_price):
             continue
 
+        # The holder before the ex-date open receives the distribution.  This
+        # runs before open exits/entries so same-day buyers cannot receive it.
+        dividend_per_share = dividend_schedule.get(session_date, 0.0)
+        if shares > 0 and dividend_per_share > 0:
+            received_dividend = shares * dividend_per_share
+            cash += received_dividend
+            total_dividends += received_dividend
+            position_dividends += received_dividend
+
         if pending_exit and shares > 0:
             cash, sale = _close_position(
                 cash=cash,
@@ -796,7 +846,7 @@ def _simulate_symbol(
                 commission_rate=commission_rate,
                 transaction_tax_rate=transaction_tax_rate,
             )
-            profit = sale["net_amount"] - entry_total_cost
+            profit = sale["net_amount"] + position_dividends - entry_total_cost
             trades.append(
                 {
                     "robot_id": robot_id,
@@ -817,6 +867,7 @@ def _simulate_symbol(
                     "entry_commission": round(entry_commission, 2),
                     "exit_commission": round(sale["commission"], 2),
                     "transaction_tax": round(sale["transaction_tax"], 2),
+                    "dividends": round(position_dividends, 2),
                     "stop_price": round(stop_price or 0.0, 4),
                     "target_price": round(target_price or 0.0, 4),
                 }
@@ -831,6 +882,7 @@ def _simulate_symbol(
             stop_price = None
             target_price = None
             pending_exit = None
+            position_dividends = 0.0
 
         if pending_entry and shares == 0:
             reason, signal_atr = pending_entry
@@ -873,7 +925,7 @@ def _simulate_symbol(
                 commission_rate=commission_rate,
                 transaction_tax_rate=transaction_tax_rate,
             )
-            profit = sale["net_amount"] - entry_total_cost
+            profit = sale["net_amount"] + position_dividends - entry_total_cost
             trades.append(
                 {
                     "robot_id": robot_id,
@@ -894,6 +946,7 @@ def _simulate_symbol(
                     "entry_commission": round(entry_commission, 2),
                     "exit_commission": round(sale["commission"], 2),
                     "transaction_tax": round(sale["transaction_tax"], 2),
+                    "dividends": round(position_dividends, 2),
                     "stop_price": round(stop_price, 4),
                     "target_price": round(target_price, 4),
                 }
@@ -907,6 +960,7 @@ def _simulate_symbol(
             entry_commission = 0.0
             stop_price = None
             target_price = None
+            position_dividends = 0.0
 
         equity_curve.append(
             {
@@ -940,7 +994,7 @@ def _simulate_symbol(
             commission_rate=commission_rate,
             transaction_tax_rate=transaction_tax_rate,
         )
-        profit = sale["net_amount"] - entry_total_cost
+        profit = sale["net_amount"] + position_dividends - entry_total_cost
         trades.append(
             {
                 "robot_id": robot_id,
@@ -961,6 +1015,7 @@ def _simulate_symbol(
                 "entry_commission": round(entry_commission, 2),
                 "exit_commission": round(sale["commission"], 2),
                 "transaction_tax": round(sale["transaction_tax"], 2),
+                "dividends": round(position_dividends, 2),
                 "stop_price": round(stop_price or 0.0, 4),
                 "target_price": round(target_price or 0.0, 4),
             }
@@ -972,10 +1027,14 @@ def _simulate_symbol(
 
     return {
         "stock_code": stock_code,
+        "data_available": True,
+        "actual_start": _date_text(frame.index[positions[0]]),
+        "actual_end": _date_text(frame.index[positions[-1]]),
         "initial_capital": round(initial_capital, 2),
         "final_capital": round(cash, 2),
         "total_commission": round(total_commission, 2),
         "total_transaction_tax": round(total_transaction_tax, 2),
+        "total_dividends": round(total_dividends, 2),
         "trades": trades,
         "equity_curve": equity_curve,
     }
@@ -1035,33 +1094,139 @@ def _aggregate_portfolio(
             sum(float(result["total_transaction_tax"]) for result in symbol_results),
             2,
         ),
+        "total_dividends": round(
+            sum(float(result.get("total_dividends", 0.0)) for result in symbol_results),
+            2,
+        ),
         "trades": trades,
         "equity_curve": equity_curve,
     }
 
 
-def _download_competition_frames() -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
+def _competition_official_months(
+    stock_code: str,
+    *,
+    as_of: date | None = None,
+) -> int:
+    current = as_of or date.today()
+    requested = RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS
+    listing = COMPETITION_LISTING_DATES.get(stock_code)
+
+    if listing is None:
+        return requested
+
+    months_since_listing = (
+        (current.year - listing.year) * 12
+        + current.month
+        - listing.month
+        + 1
+    )
+    return min(requested, max(1, months_since_listing))
+
+
+def _expected_competition_history_month(
+    stock_code: str,
+    *,
+    as_of: date | None = None,
+) -> str:
+    current = as_of or date.today()
+    month_count = _competition_official_months(stock_code, as_of=current)
+    current_month_index = current.year * 12 + current.month - 1
+    expected_month_index = current_month_index - month_count + 1
+    listing = COMPETITION_LISTING_DATES.get(stock_code)
+
+    if listing is not None:
+        listing_month_index = listing.year * 12 + listing.month - 1
+        expected_month_index = max(expected_month_index, listing_month_index)
+
+    year, zero_based_month = divmod(expected_month_index, 12)
+    return f"{year:04d}-{zero_based_month + 1:02d}"
+
+
+def _competition_coverage_is_complete(
+    stock_code: str,
+    item: dict[str, Any],
+    *,
+    as_of: date | None = None,
+) -> bool:
+    current = as_of or date.today()
+    expected_start_month = _expected_competition_history_month(
+        stock_code,
+        as_of=current,
+    )
+    start = item.get("start")
+    end = item.get("end")
+
+    if not start or not end or not item.get("complete_month_coverage"):
+        return False
+
+    actual_start_month = str(start)[:7]
+    fresh_cutoff = pd.Timestamp(current) - pd.Timedelta(days=10)
+    actual_end = pd.Timestamp(str(end)).normalize()
+    return actual_start_month <= expected_start_month and actual_end >= fresh_cutoff
+
+
+def _download_competition_frames() -> tuple[
+    dict[str, pd.DataFrame],
+    dict[str, str],
+    dict[str, dict[str, Any]],
+]:
     from stock import download_stock
 
     frames: dict[str, pd.DataFrame] = {}
     sources: dict[str, str] = {}
-    with ThreadPoolExecutor(max_workers=len(COMPETITION_UNIVERSE)) as executor:
-        futures = {
-            executor.submit(
-                download_stock,
+    coverage: dict[str, dict[str, Any]] = {}
+    # 長期行情優先一次下載，避免官方免費逐月介面在冷啟動時因大量查詢遭限流；
+    # 分割與配息仍由證交所資料校正。只有長期來源不完整時才受控回退官方逐月資料。
+    for index, code in enumerate(COMPETITION_UNIVERSE):
+        if index:
+            time.sleep(COMPETITION_DOWNLOAD_PAUSE_SECONDS)
+        requested_months = _competition_official_months(code)
+        candidates = (
+            {
+                "prefer_official": False,
+                "daily_period": "10y",
+                "force_official_refresh": False,
+            },
+            {
+                "prefer_official": True,
+                "daily_period": "max",
+                "force_official_refresh": True,
+            },
+        )
+        last_item: dict[str, Any] = {}
+
+        for candidate in candidates:
+            frame = download_stock(
                 code,
-                prefer_official=True,
+                daily_period=str(candidate["daily_period"]),
+                prefer_official=bool(candidate["prefer_official"]),
                 update_with_intraday=False,
-                official_months=12,
-            ): code
-            for code in COMPETITION_UNIVERSE
-        }
-        for future in as_completed(futures):
-            code = futures[future]
-            frame = future.result()
-            sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
-            frames[code] = _prepare_frame(frame)
-    return frames, sources
+                official_months=requested_months,
+                force_official_refresh=bool(candidate["force_official_refresh"]),
+                include_corporate_actions=True,
+            )
+            prepared = _prepare_frame(frame)
+            item = frame_coverage(prepared)
+            required_start_month = _expected_competition_history_month(code)
+            item["required_start_month"] = required_start_month
+            item["requested_span_complete"] = _competition_coverage_is_complete(
+                code,
+                item,
+            )
+            last_item = item
+
+            if item["requested_span_complete"]:
+                sources[code] = str(frame.attrs.get("source", "官方交易所資料"))
+                frames[code] = prepared
+                coverage[code] = item
+                break
+        else:
+            raise TimeoutError(
+                f"{code} 歷史資料不完整："
+                f"需要從 {required_start_month} 起，實際僅有 {last_item.get('start') or '無資料'} 起。"
+            )
+    return frames, sources, coverage
 
 
 def run_competition_on_frames(
@@ -1069,6 +1234,7 @@ def run_competition_on_frames(
     *,
     initial_capital: float = DEFAULT_INITIAL_CAPITAL,
     sources: dict[str, str] | None = None,
+    coverage: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     capital = float(initial_capital)
     if not math.isfinite(capital) or capital <= 0:
@@ -1080,8 +1246,13 @@ def run_competition_on_frames(
         raise ValueError("競賽缺少股票資料：" + "、".join(missing))
 
     latest_date = min(pd.Timestamp(frames[code].index.max()) for code in COMPETITION_UNIVERSE)
-    forward_start = (latest_date - pd.DateOffset(months=1)).normalize()
-    backtest_start = (forward_start - pd.DateOffset(months=2)).normalize()
+    competition_start = (
+        latest_date - pd.DateOffset(years=PREFERRED_RESEARCH_YEARS)
+    ).normalize()
+    forward_start = (
+        latest_date - pd.DateOffset(months=FORWARD_HOLDOUT_MONTHS)
+    ).normalize()
+    backtest_start = competition_start
     backtest_end = forward_start - pd.Timedelta(days=1)
     per_symbol_capital = capital / len(COMPETITION_UNIVERSE)
     robot_outputs: list[dict[str, Any]] = []
@@ -1122,7 +1293,7 @@ def run_competition_on_frames(
                 "initial_capital": capital,
                 "period_start": _date_text(forward_start),
                 "period_end": _date_text(latest_date),
-                "cost_model_id": "TWSE-ETF-0.1425-0.1-v1",
+                "cost_model_id": "TWSE-ETF-0.1425-0.1-CORP-ACTIONS-v2",
                 "risk_model_id": "ATR-2R-STOP-4R-TARGET-v1",
                 "market_universe_id": "TW-ETF-CORE-4-v1",
                 "trade_count": forward["trade_count"],
@@ -1159,6 +1330,7 @@ def run_competition_on_frames(
         "latest_date": _date_text(latest_date),
         "capital": capital,
         "universe": list(COMPETITION_UNIVERSE),
+        "corporate_actions_version": "TWSE-SPLIT-DIVIDEND-v1",
         "fingerprints": [robot["rule_fingerprint"] for robot in robot_outputs],
     }
     run_id = hashlib.sha256(
@@ -1170,16 +1342,21 @@ def run_competition_on_frames(
         "status": "completed",
         "executed_at": datetime.now(timezone.utc).isoformat(),
         "data_sources": sources or {},
+        "history_coverage": coverage or {
+            code: frame_coverage(frames[code])
+            for code in COMPETITION_UNIVERSE
+        },
+        "requested_history_months": RESEARCH_HISTORY_MONTHS,
         "periods": {
             "backtest": {
                 "start": _date_text(backtest_start),
                 "end": _date_text(backtest_end),
-                "purpose": "固定規則的 2 個月歷史檢查，不在執行中調參。",
+                "purpose": "前 4 年固定規則歷史檢查，不在執行中調參。",
             },
             "forward": {
                 "start": _date_text(forward_start),
                 "end": _date_text(latest_date),
-                "purpose": "最後 1 個月 walk-forward 模擬；正式排名只使用此區間。",
+                "purpose": "最後 1 年 walk-forward 樣本外模擬；正式排名只使用此區間。",
             },
         },
         "fairness": {
@@ -1195,6 +1372,9 @@ def run_competition_on_frames(
         },
         "ranking": {
             "primary_metric": "forward Wilson 95% win-rate lower bound",
+            "objective": ranking["objective"],
+            "method": ranking["ranking_method"],
+            "return_role": "總報酬只在 Wilson 下界與原始勝率同分時作為下一順位比較。",
             "minimum_forward_trades_for_champion": MIN_FORWARD_TRADES_FOR_CHAMPION,
             "leader_status": "qualified" if qualified else "provisional",
         },
@@ -1211,7 +1391,13 @@ def run_competition_on_frames(
         },
         "robots": robot_outputs,
         "disclosures": [
-            "目前的 1 個月區間是 walk-forward 歷史模擬，不冒充部署後累積的真實實盤前瞻紀錄。",
+            "競賽優先使用五年資料：前 4 年做固定規則歷史檢查，最後 1 年做 walk-forward 樣本外排名。",
+            "長期 OHLCV 會逐檔揭露實際來源；現行優先一次下載 Yahoo Finance 未調整行情，ETF 分割與現金配息仍使用證交所資料校正。",
+            "每檔資料必須涵蓋要求的起始月份且中間沒有缺月，否則整場競賽直接中止，不會用殘缺資料產生排名。",
+            "成立未滿五年的 ETF 只會使用上市後的真實資料，不會補造不存在的行情。",
+            "個別 ETF 在尚無行情的區間，其等額配置會保留為現金；所有機器人適用完全相同規則。",
+            "歷史價格會依 ETF 分割／反分割調整，持有期間並納入證交所公告的現金配息。",
+            "最後 1 年區間是 walk-forward 歷史模擬，不冒充部署後累積的真實實盤前瞻紀錄。",
             "EMA、RSI、MACD、布林通道、KD、成交量與 ATR 的具體期間／門檻是固定的 v1 實證參數，不代表論文證明其為最優值。",
             "現階段只做多、無槓桿，且每檔 ETF 使用固定等額資金；所有交易均保存進出場與成本。",
         ],
@@ -1229,11 +1415,12 @@ def run_competition_on_frames(
 
 @lru_cache(maxsize=8)
 def _run_competition_cached(initial_capital: float, cache_date: str) -> dict[str, Any]:
-    frames, sources = _download_competition_frames()
+    frames, sources, coverage = _download_competition_frames()
     return run_competition_on_frames(
         frames,
         initial_capital=initial_capital,
         sources=sources,
+        coverage=coverage,
     )
 
 

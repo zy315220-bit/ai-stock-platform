@@ -18,6 +18,8 @@ from app.services.backtest_service import (
     MAX_INITIAL_CAPITAL,
     backtest_stock,
 )
+from app.services.market_overview_service import get_market_overview
+from app.services.history_policy import default_research_start_date
 from app.services.scanner_service import get_daily_scanner
 from app.services.stock_code import normalize_stock_code
 
@@ -25,6 +27,31 @@ from app.services.stock_code import normalize_stock_code
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get(
+    "/market/overview",
+    summary="取得台股市場與產業總覽",
+    description=(
+        "整合證交所與櫃買中心盤後資料，回傳主要指數、上市櫃普通股"
+        "漲跌家數、成交金額、市場狀態與產業類指數強弱排名。"
+    ),
+)
+async def get_stock_market_overview() -> dict[str, Any]:
+    try:
+        result = await run_in_threadpool(get_market_overview)
+    except Exception as error:
+        _raise_service_http_error(
+            error,
+            stock_code="MARKET",
+            service_name="市場總覽",
+        )
+
+    return _validate_service_result(
+        result,
+        stock_code="MARKET",
+        service_name="市場總覽",
+    )
 
 
 @router.get(
@@ -247,9 +274,9 @@ async def get_stock_backtest(
         ),
         examples=["0056"],
     ),
-    start_date: date = Query(
-        default=date(2023, 1, 1),
-        description="回測開始日期，格式為 YYYY-MM-DD",
+    start_date: date | None = Query(
+        default=None,
+        description="回測開始日期；未指定時使用最近五年，格式為 YYYY-MM-DD",
     ),
     end_date: date | None = Query(
         default=None,
@@ -295,10 +322,9 @@ async def get_stock_backtest(
             detail="進場分數必須高於出場分數。",
         )
 
-    if (
-        end_date is not None
-        and end_date < start_date
-    ):
+    effective_start_date = start_date or default_research_start_date()
+
+    if end_date is not None and end_date < effective_start_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="結束日期不能早於開始日期。",
@@ -308,7 +334,7 @@ async def get_stock_backtest(
         result = await run_in_threadpool(
             backtest_stock,
             stock_code=normalized_code,
-            start_date=start_date.isoformat(),
+            start_date=effective_start_date.isoformat(),
             end_date=(
                 end_date.isoformat()
                 if end_date is not None

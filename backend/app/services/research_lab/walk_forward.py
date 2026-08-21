@@ -72,6 +72,10 @@ def run_walk_forward_validation(stock_code: str, split: ResearchSplit, candidate
         total_return = float(metrics.get("total_return_percent", 0.0))
         sharpe = float(metrics.get("sharpe_ratio", 0.0) or 0.0)
         max_dd = abs(float(metrics.get("max_drawdown_percent", 0.0) or 0.0))
+        slice_evidence = assess_validation_evidence(
+            {"completed_trades": completed, "open_position_count": open_positions},
+            min_trades=min_total_completed_trades,
+        )
         completed_total += completed
         open_total += open_positions
         returns.append(total_return)
@@ -86,7 +90,8 @@ def run_walk_forward_validation(stock_code: str, split: ResearchSplit, candidate
             "max_drawdown_percent": max_dd,
             "completed_trades": completed,
             "open_position_count": open_positions,
-            "evidence_label": metrics.get("evidence_quality", {}).get("evidence_label"),
+            "evidence_quality": asdict(slice_evidence),
+            "evidence_label": slice_evidence.evidence_label,
         })
 
     evidence = assess_validation_evidence({"completed_trades": completed_total, "open_position_count": open_total}, min_trades=min_total_completed_trades)

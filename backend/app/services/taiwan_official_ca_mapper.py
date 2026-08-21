@@ -1,9 +1,8 @@
 """Map official Taiwan exchange ex-right/ex-dividend records into canonical CA fields.
 
-This module intentionally maps only fields whose semantics are explicitly
-published by the exchange. Unknown or incomplete records fail closed upstream.
-TPEx publishes cash dividend, stock-dividend rate, rights-issue rate and
-subscription price in its ex-right/ex-dividend datasets.
+Only explicitly published economic fields are mapped. Unknown/incomplete records
+fail closed. TWSE/TPEX rates are ratios (e.g. 0.15 means 15%), not percentages;
+therefore they must not be divided by 100 during canonical normalization.
 """
 from __future__ import annotations
 
@@ -20,43 +19,39 @@ def _first(record: dict[str, Any], *keys: str) -> Any:
 def _num(value: Any) -> float:
     if value in (None, "", "--"):
         return 0.0
-    text = str(value).replace(",", "").replace("%", "").strip()
-    return float(text)
+    return float(str(value).replace(",", "").replace("%", "").strip())
 
 
-def map_tpex_exright_record(record: dict[str, Any]) -> list[dict[str, Any]]:
-    """Convert one official TPEx ex-right/ex-dividend row to explicit CA events.
-
-    Rates published as percentages are converted to per-share ratios. Rights
-    issues retain subscription price instead of pretending the entitlement is a
-    cash dividend; the ledger policy can therefore fail closed until disposition
-    is explicitly configured.
-    """
+def _map_exright_record(record: dict[str, Any], *, exchange: str) -> list[dict[str, Any]]:
     code = str(_first(record, "股票代號", "證券代號", "SecuritiesCompanyCode") or "").strip()
-    ex_date = str(_first(record, "除權息日期", "資料日期", "Date") or "").strip()
+    ex_date = str(_first(record, "除權息日期", "除權除息日期", "資料日期", "Date") or "").strip()
     if not code or not ex_date:
-        raise ValueError("TPEx CA record missing stock code or effective date")
+        raise ValueError(f"{exchange} CA record missing stock code or effective date")
 
     events: list[dict[str, Any]] = []
     cash = _num(_first(record, "現金股利", "現金股利 NT$", "CashDividend"))
-    stock_pct = _num(_first(record, "無償配股率", "無償增資配股率％", "StockDividendRate"))
-    rights_pct = _num(_first(record, "現金增資配股率", "現金增資配股率％", "RightsIssueRate"))
-    subscription = _first(record, "現金增資認購價", "現金增資認購價(每股)", "SubscriptionPrice")
+    stock_ratio = _num(_first(record, "無償配股率", "無償增資配股率％", "股票股利", "StockDividendRate"))
+    rights_ratio = _num(_first(record, "現金增資配股率", "現金增資配股率％", "現金增資", "RightsIssueRate"))
+    subscription = _first(record, "現金增資認購價", "現金增資認購價(每股)", "每股認購價格", "SubscriptionPrice")
 
-    base = {"stock_code": code, "effective_date": ex_date, "source": "TPEx_official"}
+    base = {"stock_code": code, "effective_date": ex_date, "source": f"{exchange}_official"}
     if cash > 0:
         events.append({**base, "event_type": "cash_dividend", "cash_per_share": cash})
-    if stock_pct > 0:
-        events.append({**base, "event_type": "stock_dividend", "ratio": 1.0 + stock_pct / 100.0})
-    if rights_pct > 0:
+    if stock_ratio > 0:
+        events.append({**base, "event_type": "stock_dividend", "ratio": 1.0 + stock_ratio})
+    if rights_ratio > 0:
         if subscription in (None, "", "--"):
-            raise ValueError("TPEx rights issue missing official subscription price")
-        events.append({
-            **base,
-            "event_type": "rights_issue",
-            "rights_ratio": rights_pct / 100.0,
-            "subscription_price": _num(subscription),
-        })
+            raise ValueError(f"{exchange} rights issue missing official subscription price")
+        events.append({**base, "event_type": "rights_issue", "rights_ratio": rights_ratio, "subscription_price": _num(subscription)})
     if not events:
-        raise ValueError("TPEx CA record contains no recognized economic event")
+        raise ValueError(f"{exchange} CA record contains no recognized economic event")
     return events
+
+
+def map_tpex_exright_record(record: dict[str, Any]) -> list[dict[str, Any]]:
+    return _map_exright_record(record, exchange="TPEx")
+
+
+def map_twse_exright_record(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """Map TWSE TWT46U/T48-style official ex-right/ex-dividend fields."""
+    return _map_exright_record(record, exchange="TWSE")

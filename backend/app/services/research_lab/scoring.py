@@ -23,8 +23,10 @@ def evaluate_candidate(
 ) -> ExperimentResult:
     """Score validation only; holdout data must not be supplied here.
 
-    This is intentionally conservative. It prevents a high-return candidate
-    with too few trades or extreme drawdown from automatically surviving.
+    Mark-to-market performance is useful audit evidence, but it must not award
+    research fitness when there are no completed trades. Otherwise a candidate
+    that buys once and never exits can rank highly despite having zero realized
+    validation evidence.
     """
     sharpe = _number(validation_metrics, "sharpe_ratio")
     sortino = _number(validation_metrics, "sortino_ratio")
@@ -32,7 +34,7 @@ def evaluate_candidate(
     total_return = _number(validation_metrics, "total_return_percent")
     drawdown = abs(_number(validation_metrics, "max_drawdown_percent"))
     try:
-        trades = int(validation_metrics.get("total_trades", 0))
+        trades = max(0, int(validation_metrics.get("completed_trades", validation_metrics.get("total_trades", 0))))
     except (TypeError, ValueError):
         trades = 0
 
@@ -41,19 +43,26 @@ def evaluate_candidate(
         reasons.append("insufficient_validation_trades")
     if drawdown > max_drawdown_percent:
         reasons.append("validation_drawdown_too_high")
-    if total_return <= 0:
-        reasons.append("non_positive_validation_return")
-    if sharpe <= 0:
-        reasons.append("non_positive_validation_sharpe")
 
-    score = (
-        35.0 * max(-1.0, min(sharpe / 2.0, 1.0))
-        + 20.0 * max(-1.0, min(sortino / 3.0, 1.0))
-        + 20.0 * max(-1.0, min(calmar / 2.0, 1.0))
-        + 25.0 * max(-1.0, min(total_return / 25.0, 1.0))
-    )
-    score -= min(drawdown, 50.0) * 0.5
-    score = round(score, 3)
+    # With zero completed trades, equity-curve metrics are mark-to-market only.
+    # Preserve them in validation_metrics for audit/display, but do not let them
+    # create a high research score or misleading positive-performance reasons.
+    if trades == 0:
+        score = 0.0
+        reasons.append("no_realized_trade_evidence")
+    else:
+        if total_return <= 0:
+            reasons.append("non_positive_validation_return")
+        if sharpe <= 0:
+            reasons.append("non_positive_validation_sharpe")
+        score = (
+            35.0 * max(-1.0, min(sharpe / 2.0, 1.0))
+            + 20.0 * max(-1.0, min(sortino / 3.0, 1.0))
+            + 20.0 * max(-1.0, min(calmar / 2.0, 1.0))
+            + 25.0 * max(-1.0, min(total_return / 25.0, 1.0))
+        )
+        score -= min(drawdown, 50.0) * 0.5
+        score = round(score, 3)
 
     if reasons:
         decision = ExperimentDecision.DISCARD
@@ -68,5 +77,5 @@ def evaluate_candidate(
         validation_metrics=dict(validation_metrics),
         decision=decision,
         research_score=score,
-        reasons=tuple(reasons),
+        reasons=tuple(dict.fromkeys(reasons)),
     )

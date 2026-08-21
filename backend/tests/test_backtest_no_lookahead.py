@@ -32,9 +32,12 @@ class BacktestNoLookaheadTests(unittest.TestCase):
         self, score, add_indicators, download
     ) -> None:
         frame = self._frame()
-        # Make t+1 open intentionally extreme. The signal may execute there,
-        # but calculate_score must only receive information through t.
+        # Make t+1 open intentionally extreme while keeping OHLC internally
+        # valid. This bar must survive the production data-quality filter.
+        # The signal may execute at this open, but calculate_score must not see
+        # any t+1 information when producing the t signal.
         frame.iloc[61, frame.columns.get_loc("Open")] = 250.0
+        frame.iloc[61, frame.columns.get_loc("High")] = 251.0
         download.return_value = frame
 
         def indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -48,9 +51,6 @@ class BacktestNoLookaheadTests(unittest.TestCase):
         seen_last_dates: list[pd.Timestamp] = []
 
         def scorer(history: pd.DataFrame):
-            # _prepare_stock_data resets the DatetimeIndex to RangeIndex and
-            # preserves the actual session timestamp in Date. Assert against
-            # Date, not the implementation-detail RangeIndex.
             seen_last_dates.append(pd.Timestamp(history.iloc[-1]["Date"]))
             return {"total_score": 100.0 if len(seen_last_dates) == 1 else 50.0}
 

@@ -1,8 +1,9 @@
 """Map official Taiwan exchange ex-right/ex-dividend records into canonical CA fields.
 
-Only explicitly published economic fields are mapped. Unknown/incomplete records
-fail closed. TWSE/TPEX rates are ratios (e.g. 0.15 means 15%), not percentages;
-therefore they must not be divided by 100 during canonical normalization.
+Exchange sources do not expose rate units identically. TWSE TWT48U presents
+allotment rates as ratios used directly by its reference-price formula, whereas
+TPEx EDIS S20 documents those fields with unit "%". We therefore normalize
+source-specifically and never infer units from the numeric magnitude.
 """
 from __future__ import annotations
 
@@ -22,7 +23,18 @@ def _num(value: Any) -> float:
     return float(str(value).replace(",", "").replace("%", "").strip())
 
 
-def _map_exright_record(record: dict[str, Any], *, exchange: str) -> list[dict[str, Any]]:
+def _canonical_rate(value: Any, *, source_unit: str) -> float:
+    raw = _num(value)
+    if raw < 0:
+        raise ValueError("corporate-action rate cannot be negative")
+    if source_unit == "ratio":
+        return raw
+    if source_unit == "percent":
+        return raw / 100.0
+    raise ValueError(f"unsupported rate unit: {source_unit}")
+
+
+def _map_exright_record(record: dict[str, Any], *, exchange: str, rate_unit: str) -> list[dict[str, Any]]:
     code = str(_first(record, "股票代號", "證券代號", "SecuritiesCompanyCode") or "").strip()
     ex_date = str(_first(record, "除權息日期", "除權除息日期", "資料日期", "Date") or "").strip()
     if not code or not ex_date:
@@ -30,8 +42,14 @@ def _map_exright_record(record: dict[str, Any], *, exchange: str) -> list[dict[s
 
     events: list[dict[str, Any]] = []
     cash = _num(_first(record, "現金股利", "現金股利 NT$", "CashDividend"))
-    stock_ratio = _num(_first(record, "無償配股率", "無償增資配股率％", "股票股利", "StockDividendRate"))
-    rights_ratio = _num(_first(record, "現金增資配股率", "現金增資配股率％", "現金增資", "RightsIssueRate"))
+    stock_ratio = _canonical_rate(
+        _first(record, "無償配股率", "無償增資配股率％", "股票股利", "StockDividendRate"),
+        source_unit=rate_unit,
+    )
+    rights_ratio = _canonical_rate(
+        _first(record, "現金增資配股率", "現金增資配股率％", "現金增資", "RightsIssueRate"),
+        source_unit=rate_unit,
+    )
     subscription = _first(record, "現金增資認購價", "現金增資認購價(每股)", "每股認購價格", "SubscriptionPrice")
 
     base = {"stock_code": code, "effective_date": ex_date, "source": f"{exchange}_official"}
@@ -42,16 +60,22 @@ def _map_exright_record(record: dict[str, Any], *, exchange: str) -> list[dict[s
     if rights_ratio > 0:
         if subscription in (None, "", "--"):
             raise ValueError(f"{exchange} rights issue missing official subscription price")
-        events.append({**base, "event_type": "rights_issue", "rights_ratio": rights_ratio, "subscription_price": _num(subscription)})
+        events.append({
+            **base,
+            "event_type": "rights_issue",
+            "rights_ratio": rights_ratio,
+            "subscription_price": _num(subscription),
+        })
     if not events:
         raise ValueError(f"{exchange} CA record contains no recognized economic event")
     return events
 
 
 def map_tpex_exright_record(record: dict[str, Any]) -> list[dict[str, Any]]:
-    return _map_exright_record(record, exchange="TPEx")
+    """Map TPEx EDIS S20 rates documented in percent units."""
+    return _map_exright_record(record, exchange="TPEx", rate_unit="percent")
 
 
 def map_twse_exright_record(record: dict[str, Any]) -> list[dict[str, Any]]:
-    """Map TWSE TWT46U/T48-style official ex-right/ex-dividend fields."""
-    return _map_exright_record(record, exchange="TWSE")
+    """Map TWSE TWT48U-style rates expressed as direct ratios."""
+    return _map_exright_record(record, exchange="TWSE", rate_unit="ratio")

@@ -45,8 +45,8 @@ def run_research(
         "best_result": best,
         "holdout_status": "LOCKED_REQUIRES_PROMOTION_GATE",
         "split": {
-            "train": [split.train_start.isoformat(), split.train_end.isoformat()],
-            "validation": [split.validation_start.isoformat(), split.validation_end.isoformat()],
-            "holdout": [split.holdout_start.isoformat(), split.holdout_end.isoformat()],
+            "train": [split.train_start, split.train_end],
+            "validation": [split.validation_start, split.validation_end],
+            "holdout": [split.holdout_start, split.holdout_end],
         },
     }

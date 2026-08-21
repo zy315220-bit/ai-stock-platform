@@ -11,11 +11,11 @@ export async function GET() {
 
   const upstream = new URL("/api/research-lab/run", backendUrl);
   upstream.searchParams.set("stock_code", "2330");
-  // Keep the split's validation window inside the currently available backend dataset.
   upstream.searchParams.set("start_date", "2023-01-01");
   upstream.searchParams.set("end_date", "2025-08-07");
-  upstream.searchParams.set("max_generations", "1");
-  upstream.searchParams.set("max_experiments", "1");
+  upstream.searchParams.set("max_generations", "2");
+  // Three real candidates are enough to verify ranking/audit behavior while staying inside Vercel's smoke budget.
+  upstream.searchParams.set("max_experiments", "3");
 
   try {
     const response = await fetch(upstream, {

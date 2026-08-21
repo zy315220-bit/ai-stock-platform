@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Any, Callable, Iterable
 
 from app.services.backtest.engine import backtest_stock
+from .evidence import assess_validation_evidence
 from .models import ExperimentResult, ResearchCandidate, ResearchSplit
 from .scoring import evaluate_candidate
 
@@ -28,15 +29,15 @@ def _validation_metrics(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_candidate_validation(stock_code: str, split: ResearchSplit, candidate: ResearchCandidate, *, backtest_fn: BacktestFn = backtest_stock, min_validation_trades: int = 8) -> ExperimentResult:
-    """Run exactly validation; holdout is never touched.
-
-    Open positions are exposed as audit evidence but never counted as completed
-    trades, preventing a mark-to-market winner from bypassing sample-size gates.
-    """
+    """Run exactly validation; holdout is never touched."""
     unknown = set(candidate.parameters) - _ALLOWED_PARAMETERS
-    if unknown: raise ValueError(f"Unsupported research parameters: {sorted(unknown)}")
+    if unknown:
+        raise ValueError(f"Unsupported research parameters: {sorted(unknown)}")
     report = backtest_fn(stock_code=stock_code, start_date=split.validation_start, end_date=split.validation_end, **candidate.parameters)
-    return evaluate_candidate(candidate, _validation_metrics(report), min_trades=min_validation_trades)
+    metrics = _validation_metrics(report)
+    evidence = assess_validation_evidence(metrics, min_trades=min_validation_trades)
+    metrics["evidence_quality"] = asdict(evidence)
+    return evaluate_candidate(candidate, metrics, min_trades=min_validation_trades)
 
 
 def run_research_batch(stock_code: str, split: ResearchSplit, candidates: Iterable[ResearchCandidate], *, backtest_fn: BacktestFn = backtest_stock, min_validation_trades: int = 8) -> list[ExperimentResult]:

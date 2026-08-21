@@ -11,8 +11,9 @@ export async function GET() {
 
   const upstream = new URL("/api/research-lab/run", backendUrl);
   upstream.searchParams.set("stock_code", "2330");
-  upstream.searchParams.set("start_date", "2024-01-01");
-  upstream.searchParams.set("end_date", "2025-12-31");
+  // Keep the split's validation window inside the currently available backend dataset.
+  upstream.searchParams.set("start_date", "2023-01-01");
+  upstream.searchParams.set("end_date", "2025-08-07");
   upstream.searchParams.set("max_generations", "1");
   upstream.searchParams.set("max_experiments", "1");
 
@@ -24,11 +25,7 @@ export async function GET() {
     });
     const body = await response.json().catch(() => null);
     return NextResponse.json(
-      {
-        ok: response.ok,
-        upstream_status: response.status,
-        result: body,
-      },
+      { ok: response.ok, upstream_status: response.status, result: body },
       { status: response.ok ? 200 : 502 },
     );
   } catch (error) {

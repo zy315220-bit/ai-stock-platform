@@ -12,9 +12,9 @@ export async function GET() {
   upstream.searchParams.set("start_date", "2023-01-01");
   upstream.searchParams.set("end_date", "2025-08-07");
   upstream.searchParams.set("max_generations", "2");
-  upstream.searchParams.set("max_experiments", "5");
-  // Smoke-only policy: one completed validation trade is enough to exercise
-  // survivor -> mutation -> generation-2 lineage. Production default remains 8.
+  // Generation 1 consumes the first five grid candidates; reserve four more
+  // experiments so their mutation children are actually evaluated in generation 2.
+  upstream.searchParams.set("max_experiments", "9");
   upstream.searchParams.set("min_validation_trades", "1");
 
   try {
@@ -22,9 +22,18 @@ export async function GET() {
     const body = await response.json().catch(() => null);
     const rounds = Array.isArray(body?.rounds) ? body.rounds : [];
     const generation2 = rounds.find((round: { generation?: number }) => round.generation === 2);
-    const hasLineage = Boolean(generation2?.evaluated?.some((item: { candidate?: { parent_id?: string | null } }) => item?.candidate?.parent_id));
+    const lineageItems = Array.isArray(generation2?.evaluated)
+      ? generation2.evaluated.filter((item: { candidate?: { parent_id?: string | null } }) => Boolean(item?.candidate?.parent_id))
+      : [];
+    const hasLineage = lineageItems.length > 0;
     return NextResponse.json(
-      { ok: response.ok && hasLineage, upstream_status: response.status, lineage_verified: hasLineage, result: body },
+      {
+        ok: response.ok && hasLineage,
+        upstream_status: response.status,
+        lineage_verified: hasLineage,
+        generation2_lineage_count: lineageItems.length,
+        result: body,
+      },
       { status: response.ok && hasLineage ? 200 : 502 },
     );
   } catch (error) {

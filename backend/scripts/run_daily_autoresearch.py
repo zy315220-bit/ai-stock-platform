@@ -9,9 +9,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.api.research_lab import execute_research_pipeline
+from app.services.backtest.engine import backtest_stock
 from app.services.research_lab.evolution import generate_parameter_candidates
 from app.services.research_lab.splits import build_research_split
 from app.services.research_lab.training_memory import (
+    TRAIN_DATA_IDENTITY_SCHEMA,
     build_training_memory,
     prepare_daily_candidate_plan,
     training_memory_summary,
@@ -20,6 +22,57 @@ from app.services.research_lab.training_memory import (
 
 DEFAULT_MAX_EXPERIMENTS = 24
 AUTOMATION_SCHEMA_VERSION = 2
+
+
+def resolve_train_data_identity(
+    *,
+    stock_code: str,
+    train_start: str,
+    train_end: str,
+) -> str:
+    """Fingerprint one fixed Train-only frame before adaptive search.
+
+    Candidate strategies can require different indicator columns and therefore
+    trim different leading rows.  Their execution fingerprints remain useful
+    audit evidence, but they are not a stable cross-day dataset identity.  This
+    fixed score-only probe makes the compatibility decision independent of the
+    strategy family selected on a particular day.
+    """
+    report = backtest_stock(
+        stock_code=stock_code,
+        start_date=train_start,
+        end_date=train_end,
+        entry_score=99,
+        exit_score=1,
+        initial_capital=100_000,
+        require_ema_trend=False,
+        entry_mode="score",
+        exit_mode="score",
+        max_holding_days=60,
+        liquidate_at_end=False,
+        include_research_series=False,
+    )
+    cache = report.get("score_series_cache") or {}
+    fingerprint = str(cache.get("fingerprint") or "").strip()
+    if not fingerprint:
+        raise RuntimeError("Canonical Train data probe produced no fingerprint")
+    identity_payload = json.dumps(
+        {
+            "schema": TRAIN_DATA_IDENTITY_SCHEMA,
+            "score_cache_schema": cache.get("schema"),
+            "stock_code": stock_code,
+            "train_window": [train_start, train_end],
+            "actual_window": [
+                report.get("actual_start_date"),
+                report.get("actual_end_date"),
+            ],
+            "fingerprint": fingerprint,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(identity_payload.encode("utf-8")).hexdigest()[:24]
 
 
 def campaign_window(as_of_date: date) -> dict[str, str]:
@@ -76,6 +129,7 @@ def execute_daily_stock_research(
     research_runner: Callable[
         ..., dict[str, object]
     ] = execute_research_pipeline,
+    train_identity_resolver: Callable[..., str] = resolve_train_data_identity,
 ) -> dict[str, Any]:
     stock = stock_code.strip().upper()
     campaign = campaign_window(as_of_date)
@@ -84,12 +138,18 @@ def execute_daily_stock_research(
         campaign["start_date"],
         campaign["end_date"],
     )
+    train_data_identity = train_identity_resolver(
+        stock_code=stock,
+        train_start=split.train_start,
+        train_end=split.train_end,
+    )
     grid = generate_parameter_candidates()
     rotated_grid = grid[candidate_offset:] + grid[:candidate_offset]
     candidate_plan = prepare_daily_candidate_plan(
         stock_code=stock,
         campaign_id=campaign["campaign_id"],
         train_window=(split.train_start, split.train_end),
+        train_data_identity=train_data_identity,
         rotated_grid=rotated_grid,
         prior_memory=prior_training_memory,
     )
@@ -121,18 +181,25 @@ def execute_daily_stock_research(
         stock_code=stock,
         campaign_id=campaign["campaign_id"],
         train_window=(split.train_start, split.train_end),
+        train_data_identity=train_data_identity,
         as_of_date=as_of_date.isoformat(),
         result=payload,
         prior_memory=prior_training_memory,
     )
+    promotion_block_reason: str | None = None
     if memory.get("memory_reset_reason") == "train_data_revision":
-        promotion = dict(payload.get("promotion_eligibility") or {})
-        reasons = list(promotion.get("reasons") or [])
-        revision_reason = (
+        promotion_block_reason = (
             "train_data_revision_requires_fresh_cumulative_evidence"
         )
-        if revision_reason not in reasons:
-            reasons.append(revision_reason)
+    elif not memory.get("train_data_identity_verified"):
+        promotion_block_reason = (
+            "train_data_identity_requires_consecutive_confirmation"
+        )
+    if promotion_block_reason:
+        promotion = dict(payload.get("promotion_eligibility") or {})
+        reasons = list(promotion.get("reasons") or [])
+        if promotion_block_reason not in reasons:
+            reasons.append(promotion_block_reason)
         promotion.update(
             eligible_for_one_shot_holdout=False,
             reasons=reasons,

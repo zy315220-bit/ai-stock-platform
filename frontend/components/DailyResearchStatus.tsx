@@ -29,7 +29,10 @@ type DailySnapshot = {
   training_memory?: {
     enabled?: boolean;
     provenance?: string;
+    completed_symbol_count?: number;
     continued_symbol_count?: number;
+    verified_data_identity_symbol_count?: number;
+    migrated_data_identity_symbol_count?: number;
     unique_experiment_count?: number;
     last_run_new_experiment_count?: number;
     last_run_duplicate_skip_count?: number;
@@ -174,7 +177,11 @@ export default function DailyResearchStatus() {
           <div>
             <span>跨日 Train 記憶</span>
             <strong>{formatMetric(memory.unique_experiment_count)} 組不重複實驗</strong>
-            <small>{formatMetric(memory.continued_symbol_count)} 檔延續前次研究</small>
+            <small>
+              {formatMetric(memory.continued_symbol_count)} 檔延續前次研究・
+              {formatMetric(memory.verified_data_identity_symbol_count)}/
+              {formatMetric(memory.completed_symbol_count)} 檔資料身分連續驗證
+            </small>
           </div>
           <dl>
             <div><dt>本輪新實驗</dt><dd>{formatMetric(memory.last_run_new_experiment_count)}</dd></div>

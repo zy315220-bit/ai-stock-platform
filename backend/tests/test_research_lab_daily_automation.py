@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+import scripts.run_daily_autoresearch as daily_runner
 
 from app.api.research_lab import _rotated_parameter_candidates
 from app.services.research_lab.evolution import SEARCH_SPACE_SCHEMA
 from app.services.research_lab.training_memory import (
+    TRAIN_DATA_IDENTITY_SCHEMA,
     TRAINING_MEMORY_SCHEMA_VERSION,
 )
 from scripts.aggregate_daily_autoresearch import aggregate_payloads
@@ -14,6 +16,7 @@ from scripts.run_daily_autoresearch import (
     campaign_window,
     candidate_offset_for,
     execute_daily_stock_research,
+    resolve_train_data_identity,
 )
 
 
@@ -118,6 +121,10 @@ def _training_memory(stock_code: str) -> dict[str, object]:
         "train_window": ["2020-01-01", "2023-11-04"],
         "as_of_date": "2026-08-25",
         "memory_id": f"memory-{stock_code}",
+        "train_data_identity_schema": TRAIN_DATA_IDENTITY_SCHEMA,
+        "train_data_identity": f"canonical-data-{stock_code}",
+        "train_data_identity_verified": True,
+        "train_data_identity_migrated": False,
         "seen_parameter_signatures": [f"signature-{stock_code}"],
         "elites": [],
         "frontier": [],
@@ -169,6 +176,36 @@ def test_daily_candidate_rotation_is_reproducible_and_bounded() -> None:
     assert len({candidate.candidate_id for candidate in candidates}) == len(candidates)
 
 
+def test_train_data_identity_uses_one_fixed_train_only_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_backtest(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
+            "actual_start_date": "2020-01-02",
+            "actual_end_date": "2023-11-24",
+            "score_series_cache": {
+                "schema": "score-series-v1",
+                "fingerprint": "stable-frame-fingerprint",
+            },
+        }
+
+    monkeypatch.setattr(daily_runner, "backtest_stock", fake_backtest)
+    identity = resolve_train_data_identity(
+        stock_code="00878",
+        train_start="2020-01-01",
+        train_end="2023-11-24",
+    )
+    assert len(identity) == 24
+    assert captured["start_date"] == "2020-01-01"
+    assert captured["end_date"] == "2023-11-24"
+    assert captured["entry_mode"] == "score"
+    assert captured["require_ema_trend"] is False
+    assert captured["include_research_series"] is False
+
+
 def test_daily_runner_never_opens_holdout() -> None:
     captured: dict[str, object] = {}
 
@@ -180,6 +217,7 @@ def test_daily_runner_never_opens_holdout() -> None:
         "2330",
         date(2026, 8, 25),
         research_runner=fake_runner,
+        train_identity_resolver=lambda **_: "canonical-train-v1",
     )
     assert captured["candidate_offset"] == payload["automation"]["candidate_offset"]
     assert captured["end_date"] == date(2026, 6, 30)
@@ -199,33 +237,33 @@ def test_daily_runner_fails_closed_if_holdout_is_opened() -> None:
             "2330",
             date(2026, 8, 25),
             research_runner=unsafe_runner,
+            train_identity_resolver=lambda **_: "canonical-train-v1",
         )
 
 
 def test_daily_runner_blocks_promotion_when_train_data_revision_resets_memory() -> None:
     call_count = 0
 
-    def changing_runner(**_: object) -> dict[str, object]:
+    def changing_identity(**_: object) -> str:
         nonlocal call_count
         call_count += 1
-        result = _research_result("2330", eligible=True, score=80.0)
-        fingerprint = f"train-data-v{call_count}"
-        result["data_fingerprints"] = [fingerprint]
-        result["rounds"][0]["evaluated"][0]["validation_metrics"][
-            "data_fingerprint"
-        ] = fingerprint
-        return result
+        return f"canonical-train-v{call_count}"
+
+    def eligible_runner(**_: object) -> dict[str, object]:
+        return _research_result("2330", eligible=True, score=80.0)
 
     first = execute_daily_stock_research(
         "2330",
         date(2026, 8, 25),
-        research_runner=changing_runner,
+        research_runner=eligible_runner,
+        train_identity_resolver=changing_identity,
     )
     second = execute_daily_stock_research(
         "2330",
         date(2026, 8, 26),
         prior_training_memory=first["training_memory"],
-        research_runner=changing_runner,
+        research_runner=eligible_runner,
+        train_identity_resolver=changing_identity,
     )
     assert second["training_memory"]["memory_reset_reason"] == (
         "train_data_revision"
@@ -237,6 +275,41 @@ def test_daily_runner_blocks_promotion_when_train_data_revision_resets_memory() 
         "train_data_revision_requires_fresh_cumulative_evidence"
         in second["result"]["promotion_eligibility"]["reasons"]
     )
+
+
+def test_daily_runner_requires_two_matching_train_data_identities() -> None:
+    def eligible_runner(**_: object) -> dict[str, object]:
+        return _research_result("2330", eligible=True, score=80.0)
+
+    def stable_identity(**_: object) -> str:
+        return "canonical-train-v1"
+
+    first = execute_daily_stock_research(
+        "2330",
+        date(2026, 8, 25),
+        research_runner=eligible_runner,
+        train_identity_resolver=stable_identity,
+    )
+    assert first["training_memory"]["train_data_identity_verified"] is False
+    assert first["result"]["promotion_eligibility"][
+        "eligible_for_one_shot_holdout"
+    ] is False
+    assert (
+        "train_data_identity_requires_consecutive_confirmation"
+        in first["result"]["promotion_eligibility"]["reasons"]
+    )
+
+    second = execute_daily_stock_research(
+        "2330",
+        date(2026, 8, 26),
+        prior_training_memory=first["training_memory"],
+        research_runner=eligible_runner,
+        train_identity_resolver=stable_identity,
+    )
+    assert second["training_memory"]["train_data_identity_verified"] is True
+    assert second["result"]["promotion_eligibility"][
+        "eligible_for_one_shot_holdout"
+    ] is True
 
 
 def test_aggregate_requires_every_symbol_and_versions_candidates() -> None:
@@ -253,6 +326,9 @@ def test_aggregate_requires_every_symbol_and_versions_candidates() -> None:
     assert payload["eligible_candidate_count"] == 1
     assert payload["top_candidate"]["stock_code"] == "2330"
     assert payload["training_memory"]["completed_symbol_count"] == 2
+    assert payload["training_memory"][
+        "verified_data_identity_symbol_count"
+    ] == 2
     assert payload["training_memory"]["validation_feedback_used"] is False
     assert len(payload["top_candidate"]["robot_version_id"]) == 24
 

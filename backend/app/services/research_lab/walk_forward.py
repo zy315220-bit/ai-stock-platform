@@ -65,13 +65,21 @@ def run_walk_forward_validation(stock_code: str, split: ResearchSplit, candidate
     positive_slices = 0
 
     for validation_slice in build_validation_slices(split, slice_count=slice_count):
-        report = backtest_fn(stock_code=stock_code, start_date=validation_slice.start_date, end_date=validation_slice.end_date, **candidate.parameters)
+        report = backtest_fn(
+            stock_code=stock_code,
+            start_date=validation_slice.start_date,
+            end_date=validation_slice.end_date,
+            liquidate_at_end=False,
+            **candidate.parameters,
+        )
         metrics = _validation_metrics(report)
         completed = int(metrics.get("completed_trades", 0))
         open_positions = int(metrics.get("open_position_count", 0))
         total_return = float(metrics.get("total_return_percent", 0.0))
         sharpe = float(metrics.get("sharpe_ratio", 0.0) or 0.0)
         max_dd = abs(float(metrics.get("max_drawdown_percent", 0.0) or 0.0))
+        win_rate = float(metrics.get("win_rate_percent", 0.0) or 0.0)
+        alpha = float(metrics.get("alpha_percent", 0.0) or 0.0)
         slice_evidence = assess_validation_evidence(
             {"completed_trades": completed, "open_position_count": open_positions},
             min_trades=min_total_completed_trades,
@@ -88,6 +96,8 @@ def run_walk_forward_validation(stock_code: str, split: ResearchSplit, candidate
             "total_return_percent": total_return,
             "sharpe_ratio": sharpe,
             "max_drawdown_percent": max_dd,
+            "win_rate_percent": win_rate,
+            "alpha_percent": alpha,
             "completed_trades": completed,
             "open_position_count": open_positions,
             "evidence_quality": asdict(slice_evidence),

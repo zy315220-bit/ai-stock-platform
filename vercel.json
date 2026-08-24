@@ -15,7 +15,12 @@
     },
     "backend": {
       "root": "backend/",
-      "entrypoint": "main:app"
+      "entrypoint": "main:app",
+      "functions": {
+        "main.py": {
+          "maxDuration": 300
+        }
+      }
     }
   },
   "rewrites": [

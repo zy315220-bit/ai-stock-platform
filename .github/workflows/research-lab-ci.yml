@@ -6,9 +6,15 @@ on:
       - "backend/app/services/research_lab/**"
       - "backend/app/api/research_lab.py"
       - "backend/app/main.py"
+      - "backend/app/services/backtest/**"
       - "backend/scripts/run_research_lab_audit.py"
       - "backend/tests/test_research_lab*.py"
+      - "backend/tests/test_backtest_no_lookahead.py"
+      - "backend/tests/test_production_split_pipeline.py"
       - "frontend/app/research-lab/**"
+      - "frontend/app/api/research-lab/**"
+      - "frontend/components/ResearchLabPanel.tsx"
+      - "frontend/components/Dashboard.tsx"
       - ".github/workflows/research-lab-ci.yml"
   push:
     branches: ["feature/ai-research-lab"]
@@ -27,7 +33,12 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt pytest
-      - run: python -m pytest -q tests/test_research_lab*.py
+      - name: Run research integrity and execution tests
+        run: >-
+          python -m pytest -q
+          tests/test_research_lab*.py
+          tests/test_backtest_no_lookahead.py
+          tests/test_production_split_pipeline.py
 
   real-data-audit:
     runs-on: ubuntu-latest

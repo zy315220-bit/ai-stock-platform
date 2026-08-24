@@ -41,7 +41,7 @@ def test_autoresearch_stops_when_every_candidate_dies():
         "2330", split(), candidates,
         backtest_fn=weak_report, max_generations=10, max_experiments=100,
     )
-    assert session.experiments_run == len(candidates)
+    assert session.experiments_run == 10
     assert len(session.rounds) == 1
     assert session.stopped_reason == "no_surviving_candidates"
 
@@ -52,10 +52,11 @@ def test_autoresearch_never_calls_holdout_dates():
         calls.append((kwargs["start_date"], kwargs["end_date"]))
         return report_for_score(**kwargs)
 
-    run_autoresearch(
+    session = run_autoresearch(
         "2330", split(), generate_parameter_candidates(entry_scores=(55, 60), exit_scores=(40,)),
         backtest_fn=recording_backtest, max_generations=2, max_experiments=5, target_score=999,
     )
     assert calls
-    assert all(start == "2023-01-01" and end == "2024-12-31" for start, end in calls)
+    assert all(start == "2020-01-01" and end == "2022-12-31" for start, end in calls)
     assert all(start != "2025-01-01" for start, _ in calls)
+    assert all(result.evaluation_phase == "train" for round_ in session.rounds for result in round_.evaluated)

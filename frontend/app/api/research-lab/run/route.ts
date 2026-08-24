@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const backendUrl = process.env.BACKEND_URL;
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch(upstream, {
       method: "POST",
       cache: "no-store",
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(285_000),
     });
     const body = await response.text();
     return new NextResponse(body, {

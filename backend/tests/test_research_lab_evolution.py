@@ -1,4 +1,8 @@
-from app.services.research_lab.evolution import evolve_candidates, generate_parameter_candidates
+from app.services.research_lab.evolution import (
+    evolve_candidates,
+    generate_parameter_candidates,
+    mutate_survivor,
+)
 from app.services.research_lab.models import ExperimentDecision, ExperimentResult, ResearchCandidate
 
 
@@ -13,12 +17,14 @@ def _signature(candidate):
         bool(p.get("require_ema_trend", False)),
         p.get("ema_fast_column", "EMA20"),
         p.get("ema_slow_column", "EMA60"),
+        p.get("exit_mode", "score"),
+        p.get("max_holding_days", 60),
     )
 
 
 def test_grid_generation_is_deterministic_and_structurally_unique():
     candidates = generate_parameter_candidates(entry_scores=(60, 70), exit_scores=(40, 65))
-    assert len(candidates) == 12  # 3 valid score pairs x 4 EMA structures
+    assert len(candidates) == 24  # 3 valid score pairs x 8 structures
     assert all(c.parameters["exit_score"] < c.parameters["entry_score"] for c in candidates)
     signatures = [_signature(c) for c in candidates]
     assert len(signatures) == len(set(signatures))
@@ -43,3 +49,15 @@ def test_evolution_deduplicates_full_strategy_parameters():
     children = evolve_candidates([_result(a, 80), _result(b, 70)], top_k=2)
     signatures = [_signature(c) for c in children]
     assert len(signatures) == len(set(signatures))
+
+
+def test_mutation_identity_is_reproducible() -> None:
+    parent = ResearchCandidate(
+        "parent",
+        "score_engine",
+        {"entry_score": 60, "exit_score": 40, "initial_capital": 1_000_000},
+    )
+    first = mutate_survivor(parent, entry_delta=5, exit_delta=-5)
+    second = mutate_survivor(parent, entry_delta=5, exit_delta=-5)
+    assert first.candidate_id == second.candidate_id
+    assert first.parameters == second.parameters

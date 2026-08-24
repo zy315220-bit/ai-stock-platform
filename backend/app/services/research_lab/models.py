@@ -37,3 +37,4 @@ class ExperimentResult:
     decision: ExperimentDecision
     research_score: float
     reasons: tuple[str, ...] = field(default_factory=tuple)
+    evaluation_phase: str = "validation"

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET() {
   const backendUrl = process.env.BACKEND_URL;
@@ -14,9 +14,14 @@ export async function GET() {
   upstream.searchParams.set("max_generations", "2");
   upstream.searchParams.set("max_experiments", "9");
   upstream.searchParams.set("min_validation_trades", "1");
+  upstream.searchParams.set("validation_finalists", "1");
+  upstream.searchParams.set("walk_forward_slices", "2");
+  upstream.searchParams.set("regime_candidate_count", "1");
+  upstream.searchParams.set("regime_slices", "3");
+  upstream.searchParams.set("min_regime_trades", "1");
 
   try {
-    const response = await fetch(upstream, { method: "POST", cache: "no-store", signal: AbortSignal.timeout(55_000) });
+    const response = await fetch(upstream, { method: "POST", cache: "no-store", signal: AbortSignal.timeout(285_000) });
     const body = await response.json().catch(() => null);
     const rounds = Array.isArray(body?.rounds) ? body.rounds : [];
     const generation2 = rounds.find((round: { generation?: number }) => round.generation === 2);
@@ -29,6 +34,8 @@ export async function GET() {
       typeof body.experiments_run === "number" &&
       typeof body.generations_run === "number" &&
       body.research_audit?.holdout_used_during_search === false &&
+      body.research_audit?.validation_used_during_adaptive_search === false &&
+      body.promotion_eligibility?.holdout_opened === false &&
       body.holdout_status === "LOCKED_REQUIRES_PROMOTION_GATE"
     );
     const systemHealthy = response.ok && researchPayloadValid;

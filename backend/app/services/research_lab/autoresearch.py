@@ -29,11 +29,12 @@ def run_autoresearch(
     target_score: float = 75.0,
     min_validation_trades: int = 8,
 ) -> ResearchSession:
-    """Bounded keep/discard/evolve loop with a generation-aware compute budget.
+    """Bounded train-only keep/discard/evolve loop with a compute budget.
 
     The experiment budget is shared fairly across remaining generations instead
-    of allowing generation 1 to consume everything. Holdout remains deliberately
-    absent from search and is handled only by the separate promotion gate.
+    of allowing generation 1 to consume everything. Validation and holdout are
+    deliberately absent from adaptive search. Validation is a separate finalist
+    gate and holdout is handled only by the one-shot promotion gate.
     """
     candidates = list(initial_candidates)
     rounds: list[EvolutionRound] = []
@@ -64,6 +65,7 @@ def run_autoresearch(
                 batch,
                 backtest_fn=backtest_fn,
                 min_validation_trades=min_validation_trades,
+                evaluation_phase="train",
             )
         )
         experiments += len(evaluated)

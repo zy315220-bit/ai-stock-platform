@@ -4,6 +4,7 @@ from app.services.research_lab import (
     build_research_split,
     evaluate_candidate,
 )
+from app.services.research_lab.scoring import wilson_lower_bound
 
 
 def test_split_leaves_final_holdout():
@@ -37,3 +38,31 @@ def test_strong_candidate_can_reach_holdout_gate():
         "total_trades": 30,
     })
     assert result.decision is ExperimentDecision.HOLDOUT_READY
+
+
+def test_wilson_win_rate_rewards_real_sample_size() -> None:
+    assert wilson_lower_bound(60, 100) > wilson_lower_bound(6, 10)
+
+
+def test_profit_and_conservative_win_rate_improve_research_score() -> None:
+    candidate = ResearchCandidate(
+        "score-quality",
+        "score_threshold",
+        {"entry": 70, "exit": 40},
+    )
+    base = {
+        "sharpe_ratio": 1.2,
+        "sortino_ratio": 1.7,
+        "calmar_ratio": 1.1,
+        "max_drawdown_percent": 10,
+        "completed_trades": 40,
+    }
+    weak = evaluate_candidate(
+        candidate,
+        {**base, "winning_trades": 18, "total_return_percent": 5, "alpha_percent": 1},
+    )
+    strong = evaluate_candidate(
+        candidate,
+        {**base, "winning_trades": 26, "total_return_percent": 20, "alpha_percent": 8},
+    )
+    assert strong.research_score > weak.research_score

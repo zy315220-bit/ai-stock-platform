@@ -1,11 +1,52 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 
-from official_data import _number, _roc_date, _rows_to_frame
+from official_data import (
+    LONG_HISTORY_MONTH_THRESHOLD,
+    MAX_MONTH_WORKERS,
+    _download_market,
+    _month_worker_count,
+    _number,
+    _roc_date,
+    _rows_to_frame,
+)
 
 
 class OfficialDataParsingTests(unittest.TestCase):
+    def test_month_download_concurrency_stays_below_exchange_limit(self) -> None:
+        self.assertEqual(MAX_MONTH_WORKERS, 5)
+        self.assertEqual(LONG_HISTORY_MONTH_THRESHOLD, 24)
+        self.assertEqual(_month_worker_count(13), 5)
+        self.assertEqual(_month_worker_count(66), 5)
+
+    def test_transient_missing_month_is_retried(self) -> None:
+        calls: dict[str, int] = {}
+
+        def flaky_fetcher(_stock_code, month):
+            key = month.isoformat()
+            calls[key] = calls.get(key, 0) + 1
+
+            if calls[key] == 1:
+                raise ValueError("temporary response error")
+
+            frame = _rows_to_frame(
+                [["115/08/20", "1,000", "0", "10", "11", "9", "10.5"]],
+                volume_multiplier=1,
+            )
+            return frame, "test"
+
+        frame, name = _download_market(
+            "00878",
+            [date(2026, 8, 1)],
+            flaky_fetcher,
+        )
+
+        self.assertEqual(len(frame), 1)
+        self.assertEqual(name, "test")
+        self.assertEqual(calls["2026-08-01"], 2)
+
     def test_roc_date_is_converted_to_gregorian_calendar(self) -> None:
         timestamp = _roc_date("115/08/12")
         self.assertIsNotNone(timestamp)

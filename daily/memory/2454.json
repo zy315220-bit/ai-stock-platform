@@ -9,32 +9,48 @@
     "2023-11-24"
   ],
   "as_of_date": "2026-08-25",
-  "last_research_run_id": "61d297fb456ea31325823083",
+  "last_research_run_id": "fa125b0e33e8211907957185",
   "train_data_fingerprints": [
     "d14abdfffc9e77d4b46b"
   ],
   "seen_parameter_signatures": [
+    "0083b0a6eef7615202d027c5",
+    "08301dd2582894ea96d296a0",
     "0c37c4f9b732091e38ec96d5",
     "10fc17d8cbfeb0b5918d7078",
     "13c46f0b1d0548c3a671eccc",
     "14e005d162862372ba555e9f",
     "1c59aa7a4987f220334c4310",
     "249ea1f21794a56a2b3bb729",
+    "27bb538c4408cb6c628d680a",
     "2d07e98910cf87eccedb8744",
+    "3108b759fa94d89606af253e",
     "316afd51447a0cbc003eda29",
     "353db0134d3bf1498d0147b2",
     "4bba3958e99d5a5536ef6a85",
     "4cf0a40557810cf2b64dc8c2",
+    "500e7acbbc6f5ab3c4ac6ad1",
+    "64f35230c1acf0a7c9bd191a",
     "6587ca9dee4612d9cc46e734",
     "66f22d0adc13c2585e5b40f4",
+    "679bd3195125e514164cd49f",
     "697758cd8208435486ff65c9",
+    "6ee84722b2fdd98662f17199",
+    "71675cdd6c2d63ac51bdafd8",
+    "756122734fb25dc0d36c0785",
     "77f0461fb97a1e428a4f7238",
+    "869f05b26765fddb97e04574",
+    "956248cc95883f80e9c65096",
     "a6ca2bc6acdbd5fa1fabbd4c",
     "af52d9a79b142b36aa083e82",
+    "af9d40673dc6a987eedcdd30",
     "b019c5ee26bae816db302259",
+    "b06d068ffb4e400d63a152c9",
+    "c179c0f22f898c89b4c07a91",
     "c3086d44c4f262b2d792988b",
     "c96b062bbd15aaafb3272ac6",
     "cd2e8b013df0780fc6e1db89",
+    "e24441e619d0152d4074cb7e",
     "ee6273e7eefb40002181fa5b",
     "fdbad02c9309360d2b846042",
     "ffcffa6c5b00b0399672d4ba"
@@ -139,6 +155,33 @@
       "reasons": [],
       "source_generation": 2,
       "source_research_run_id": "61d297fb456ea31325823083"
+    },
+    {
+      "candidate": {
+        "candidate_id": "mut-46ef2939a702",
+        "strategy_family": "score_engine",
+        "parameters": {
+          "entry_score": 65,
+          "exit_score": 39,
+          "initial_capital": 1000000.0,
+          "require_ema_trend": false,
+          "ema_fast_column": "EMA20",
+          "ema_slow_column": "EMA60",
+          "entry_mode": "score",
+          "exit_mode": "score_or_time",
+          "max_holding_days": 40
+        },
+        "parent_id": "mut-8c14b26118f7",
+        "hypothesis": "Adaptive fine mutation of mut-8c14b26118f7: entry +0, exit +2"
+      },
+      "parameter_signature": "6ee84722b2fdd98662f17199",
+      "research_score": 43.553,
+      "decision": "KEEP",
+      "reasons": [
+        "needs_more_validation"
+      ],
+      "source_generation": 1,
+      "source_research_run_id": "fa125b0e33e8211907957185"
     },
     {
       "candidate": {
@@ -304,57 +347,6 @@
     }
   ],
   "frontier": [
-    {
-      "candidate_id": "mut-4f6bea9f3716",
-      "strategy_family": "score_engine",
-      "parameters": {
-        "entry_score": 63,
-        "exit_score": 37,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "entry_mode": "score",
-        "exit_mode": "score_or_time",
-        "max_holding_days": 40
-      },
-      "parent_id": "mut-8c14b26118f7",
-      "hypothesis": "Adaptive fine mutation of mut-8c14b26118f7: entry -2, exit +0"
-    },
-    {
-      "candidate_id": "mut-46ef2939a702",
-      "strategy_family": "score_engine",
-      "parameters": {
-        "entry_score": 65,
-        "exit_score": 39,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "entry_mode": "score",
-        "exit_mode": "score_or_time",
-        "max_holding_days": 40
-      },
-      "parent_id": "mut-8c14b26118f7",
-      "hypothesis": "Adaptive fine mutation of mut-8c14b26118f7: entry +0, exit +2"
-    },
-    {
-      "candidate_id": "mut-6b01005b0d5e",
-      "strategy_family": "score_engine",
-      "parameters": {
-        "entry_score": 67,
-        "exit_score": 39,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "entry_mode": "score",
-        "exit_mode": "score_or_time",
-        "max_holding_days": 40
-      },
-      "parent_id": "mut-8c14b26118f7",
-      "hypothesis": "Adaptive fine mutation of mut-8c14b26118f7: entry +2, exit +2"
-    },
     {
       "candidate_id": "mut-123e3a9e5b32",
       "strategy_family": "score_engine",
@@ -1185,14 +1177,30 @@
     0.04366693,
     0.05848086,
     0.05184047,
-    0.0
+    0.0,
+    0.06616126,
+    0.06092379,
+    0.052843,
+    0.03642512,
+    0.05291466,
+    0.05463833,
+    0.05214469,
+    0.0,
+    0.07102257,
+    0.06387484,
+    0.0628592,
+    0.05717058,
+    0.05495634,
+    0.04607226,
+    0.03773507,
+    0.02448985
   ],
-  "lifetime_experiment_count": 24,
-  "lifetime_run_count": 1,
-  "last_run_new_experiment_count": 24,
-  "last_run_duplicate_skip_count": 4,
-  "memory_reset_reason": "missing",
+  "lifetime_experiment_count": 40,
+  "lifetime_run_count": 2,
+  "last_run_new_experiment_count": 16,
+  "last_run_duplicate_skip_count": 1,
+  "memory_reset_reason": null,
   "validation_feedback_used": false,
   "holdout_feedback_used": false,
-  "memory_id": "96abc98f73b8ecbc18c8e946"
+  "memory_id": "163603f6e5b1a2a41fb18545"
 }

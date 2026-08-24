@@ -8,13 +8,17 @@ on:
       - "backend/app/main.py"
       - "backend/app/services/backtest/**"
       - "backend/scripts/run_research_lab_audit.py"
+      - "backend/scripts/run_daily_autoresearch.py"
+      - "backend/scripts/aggregate_daily_autoresearch.py"
       - "backend/tests/test_research_lab*.py"
       - "backend/tests/test_backtest_no_lookahead.py"
       - "backend/tests/test_production_split_pipeline.py"
       - "frontend/app/research-lab/**"
       - "frontend/app/api/research-lab/**"
       - "frontend/components/ResearchLabPanel.tsx"
+      - "frontend/components/DailyResearchStatus.tsx"
       - "frontend/components/Dashboard.tsx"
+      - ".github/workflows/daily-autoresearch.yml"
       - ".github/workflows/research-lab-ci.yml"
   push:
     branches: ["feature/ai-research-lab"]

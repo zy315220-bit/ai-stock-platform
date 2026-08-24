@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "automation": {
     "enabled": true,
     "mode": "daily_unattended",
@@ -12,7 +12,7 @@
   },
   "as_of_date": "2026-08-25",
   "campaign_id": "2026-Q3",
-  "generated_at_utc": "2026-08-24T21:24:36.459208+00:00",
+  "generated_at_utc": "2026-08-24T22:32:53.125827+00:00",
   "universe": [
     "0050",
     "0056",
@@ -41,44 +41,68 @@
   "eligible_candidate_count": 0,
   "holdout_opened": false,
   "integrity_status": "PASS",
+  "training_memory": {
+    "enabled": true,
+    "provenance": "TRAIN_ONLY",
+    "search_space_schema": "score-engine-multistructure-v3",
+    "completed_symbol_count": 20,
+    "continued_symbol_count": 0,
+    "unique_experiment_count": 424,
+    "lifetime_experiment_count": 424,
+    "last_run_new_experiment_count": 424,
+    "last_run_duplicate_skip_count": 45,
+    "train_trial_count": 424,
+    "elite_count": 194,
+    "frontier_count": 794,
+    "strategy_family_count": 4,
+    "strategy_families": [
+      "score_engine",
+      "score_engine_bollinger_breakout",
+      "score_engine_rsi_confirmed",
+      "score_engine_volume_confirmed"
+    ],
+    "validation_feedback_used": false,
+    "holdout_feedback_used": false
+  },
   "ranking_policy": "Exploratory evidence ranking only: promotion gate, regime robustness, walk-forward stability, Wilson lower bound, DSR, score, drawdown. No candidate is called a production champion before one-shot holdout.",
   "top_candidate": {
     "stock_code": "2891",
-    "research_run_id": "c45226c7d13cd2fec0dfb9ed",
+    "research_run_id": "b176ae4aeff946654023fe6b",
     "data_fingerprints": [
-      "14913f5c1e4c0435f65f",
       "2969f19fc81eb9ed2f76",
       "2cefaa6dec75903bb82b",
-      "3f43781897784164f8dc",
+      "30bc52b868e5ce517c3b",
+      "3ca4d6278824de8439ef",
       "426c8f0b478839e53a4f",
       "42c9cc47022a0b29caa5",
-      "47854b8d402162d74eb6",
-      "5eff0b05c8206b6ad578",
+      "535595dd616c3b3baff3",
       "6450cdbc6d3807cef821",
-      "892b0d78a1296a311fae",
-      "8c501ca47e1d2d215d15",
+      "7e7bd1e95617ae583c84",
       "ae9fc4ef3f0d136d13f5",
-      "b6e561516c9438c1baaf",
+      "b26a25721b1f0db0cffe",
       "ba2a1e259acbf780ff0c",
-      "e9a1b7cc304a010fbdc4"
+      "cd606cc0c6f8e000a694",
+      "e9a1b7cc304a010fbdc4",
+      "f430ab1ff9f5fb671eda"
     ],
-    "candidate_id": "mut-5f6a9bbfcfba",
-    "robot_version_id": "79e8fe891af56244caf94be3",
-    "parent_id": "mut-4bd64975d01b",
+    "candidate_id": "mut-9afcd066715d",
+    "robot_version_id": "d9c23f54574bfb6f4a6c558c",
+    "parent_id": "grid-60-35-score_and_volume_confirmation-base-score_or_time-40",
     "strategy_family": "score_engine",
-    "hypothesis": "Adaptive structure mutation of mut-4bd64975d01b: entry +0, exit +0; structure=score with 40-session risk exit",
+    "hypothesis": "Adaptive structure mutation of grid-60-35-score_and_volume_confirmation-base-score_or_time-40: entry +0, exit +0; structure=score with 40-session risk exit",
     "parameters": {
-      "entry_score": 53,
-      "exit_score": 40,
+      "entry_score": 60,
+      "exit_score": 35,
       "initial_capital": 1000000.0,
       "require_ema_trend": false,
       "ema_fast_column": "EMA20",
       "ema_slow_column": "EMA60",
+      "entry_mode": "score",
       "exit_mode": "score_or_time",
       "max_holding_days": 40
     },
     "decision": "KEEP",
-    "research_score": 43.819,
+    "research_score": 44.872,
     "eligible_for_one_shot_holdout": false,
     "gate_reasons": [
       "validation_gate_not_ready",
@@ -93,54 +117,55 @@
       "completed_trades": 5,
       "win_rate_percent": 80.0,
       "wilson_lower_percent": 37.5535,
-      "total_return_percent": 34.53,
-      "alpha_percent": -18.98,
-      "max_drawdown_percent": 16.65,
-      "probabilistic_sharpe_ratio_percent": 92.9562,
-      "deflated_sharpe_probability_percent": 58.6269
+      "total_return_percent": 33.28,
+      "alpha_percent": -20.23,
+      "max_drawdown_percent": 15.3,
+      "probabilistic_sharpe_ratio_percent": 92.9619,
+      "deflated_sharpe_probability_percent": 60.5234
     },
     "regime_robust": false,
-    "regime_score": 44.5929,
+    "regime_score": 33.7212,
     "walk_forward_positive_slice_ratio": 0.6667
   },
   "candidates": [
     {
       "stock_code": "2891",
-      "research_run_id": "c45226c7d13cd2fec0dfb9ed",
+      "research_run_id": "b176ae4aeff946654023fe6b",
       "data_fingerprints": [
-        "14913f5c1e4c0435f65f",
         "2969f19fc81eb9ed2f76",
         "2cefaa6dec75903bb82b",
-        "3f43781897784164f8dc",
+        "30bc52b868e5ce517c3b",
+        "3ca4d6278824de8439ef",
         "426c8f0b478839e53a4f",
         "42c9cc47022a0b29caa5",
-        "47854b8d402162d74eb6",
-        "5eff0b05c8206b6ad578",
+        "535595dd616c3b3baff3",
         "6450cdbc6d3807cef821",
-        "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
+        "7e7bd1e95617ae583c84",
         "ae9fc4ef3f0d136d13f5",
-        "b6e561516c9438c1baaf",
+        "b26a25721b1f0db0cffe",
         "ba2a1e259acbf780ff0c",
-        "e9a1b7cc304a010fbdc4"
+        "cd606cc0c6f8e000a694",
+        "e9a1b7cc304a010fbdc4",
+        "f430ab1ff9f5fb671eda"
       ],
-      "candidate_id": "mut-5f6a9bbfcfba",
-      "robot_version_id": "79e8fe891af56244caf94be3",
-      "parent_id": "mut-4bd64975d01b",
+      "candidate_id": "mut-9afcd066715d",
+      "robot_version_id": "d9c23f54574bfb6f4a6c558c",
+      "parent_id": "grid-60-35-score_and_volume_confirmation-base-score_or_time-40",
       "strategy_family": "score_engine",
-      "hypothesis": "Adaptive structure mutation of mut-4bd64975d01b: entry +0, exit +0; structure=score with 40-session risk exit",
+      "hypothesis": "Adaptive structure mutation of grid-60-35-score_and_volume_confirmation-base-score_or_time-40: entry +0, exit +0; structure=score with 40-session risk exit",
       "parameters": {
-        "entry_score": 53,
-        "exit_score": 40,
+        "entry_score": 60,
+        "exit_score": 35,
         "initial_capital": 1000000.0,
         "require_ema_trend": false,
         "ema_fast_column": "EMA20",
         "ema_slow_column": "EMA60",
+        "entry_mode": "score",
         "exit_mode": "score_or_time",
         "max_holding_days": 40
       },
       "decision": "KEEP",
-      "research_score": 43.819,
+      "research_score": 44.872,
       "eligible_for_one_shot_holdout": false,
       "gate_reasons": [
         "validation_gate_not_ready",
@@ -155,80 +180,19 @@
         "completed_trades": 5,
         "win_rate_percent": 80.0,
         "wilson_lower_percent": 37.5535,
-        "total_return_percent": 34.53,
-        "alpha_percent": -18.98,
-        "max_drawdown_percent": 16.65,
-        "probabilistic_sharpe_ratio_percent": 92.9562,
-        "deflated_sharpe_probability_percent": 58.6269
+        "total_return_percent": 33.28,
+        "alpha_percent": -20.23,
+        "max_drawdown_percent": 15.3,
+        "probabilistic_sharpe_ratio_percent": 92.9619,
+        "deflated_sharpe_probability_percent": 60.5234
       },
       "regime_robust": false,
-      "regime_score": 44.5929,
-      "walk_forward_positive_slice_ratio": 0.6667
-    },
-    {
-      "stock_code": "2330",
-      "research_run_id": "5b7595085258f7868fd57958",
-      "data_fingerprints": [
-        "02209b8b1826e2e61333",
-        "14913f5c1e4c0435f65f",
-        "3f43781897784164f8dc",
-        "47854b8d402162d74eb6",
-        "4ac173b79bfaadae9005",
-        "4ed4593e556b85abd94a",
-        "57a328725077649f692a",
-        "5eff0b05c8206b6ad578",
-        "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
-        "8f45ddfe155aa1d62bf7",
-        "b6e561516c9438c1baaf",
-        "cb3923e82cd102d21fc4",
-        "e281de25022c4175afed",
-        "fadd4dc6d65596488339"
-      ],
-      "candidate_id": "mut-c110cd09fbde",
-      "robot_version_id": "345a5c7cd77278f0eba3f099",
-      "parent_id": "mut-4201dac0778a",
-      "strategy_family": "score_engine",
-      "hypothesis": "Adaptive fine mutation of mut-4201dac0778a: entry -2, exit -2",
-      "parameters": {
-        "entry_score": 63,
-        "exit_score": 33,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "exit_mode": "score_or_time",
-        "max_holding_days": 40
-      },
-      "decision": "KEEP",
-      "research_score": 28.311,
-      "eligible_for_one_shot_holdout": false,
-      "gate_reasons": [
-        "validation_gate_not_ready",
-        "bull_bear_robustness_failed",
-        "walk_forward_sample_insufficient",
-        "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed",
-        "cscv_pbo_failed_or_unavailable",
-        "hansen_spa_failed_or_unavailable"
-      ],
-      "validation": {
-        "completed_trades": 5,
-        "win_rate_percent": 80.0,
-        "wilson_lower_percent": 37.5535,
-        "total_return_percent": 27.68,
-        "alpha_percent": -44.23,
-        "max_drawdown_percent": 24.53,
-        "probabilistic_sharpe_ratio_percent": 80.1354,
-        "deflated_sharpe_probability_percent": 26.781
-      },
-      "regime_robust": false,
-      "regime_score": -8.5526,
+      "regime_score": 33.7212,
       "walk_forward_positive_slice_ratio": 0.6667
     },
     {
       "stock_code": "2882",
-      "research_run_id": "0932d277c0da2bf14e856e59",
+      "research_run_id": "1b0b9c11c4faa198c7735faa",
       "data_fingerprints": [
         "14913f5c1e4c0435f65f",
         "1836babf9debccd40bbb",
@@ -246,88 +210,84 @@
         "de490c99f1c9eef5d158",
         "f252ecc276c150768bde"
       ],
-      "candidate_id": "mut-20f76792afc8",
-      "robot_version_id": "9066d49c1559323bc36b372e",
-      "parent_id": "grid-70-40-base-score_or_time-40",
+      "candidate_id": "grid-55-40-score-base-score_or_time-40",
+      "robot_version_id": "9482b23cb981007cb7cc1d87",
+      "parent_id": null,
       "strategy_family": "score_engine",
-      "hypothesis": "Adaptive fine mutation of grid-70-40-base-score_or_time-40: entry -2, exit -2",
+      "hypothesis": "Systematic score-threshold search with score with 40-session risk exit",
       "parameters": {
-        "entry_score": 68,
-        "exit_score": 38,
+        "entry_score": 55,
+        "exit_score": 40,
         "initial_capital": 1000000.0,
         "require_ema_trend": false,
         "ema_fast_column": "EMA20",
         "ema_slow_column": "EMA60",
+        "entry_mode": "score",
         "exit_mode": "score_or_time",
         "max_holding_days": 40
       },
-      "decision": "HOLDOUT_READY",
-      "research_score": 55.064,
+      "decision": "KEEP",
+      "research_score": 36.657,
       "eligible_for_one_shot_holdout": false,
       "gate_reasons": [
+        "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "walk_forward_sample_insufficient",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
-        "cscv_pbo_failed_or_unavailable",
         "hansen_spa_failed_or_unavailable"
       ],
       "validation": {
-        "completed_trades": 4,
-        "win_rate_percent": 75.0,
-        "wilson_lower_percent": 30.0642,
-        "total_return_percent": 40.62,
-        "alpha_percent": -6.11,
-        "max_drawdown_percent": 14.92,
-        "probabilistic_sharpe_ratio_percent": 94.5353,
-        "deflated_sharpe_probability_percent": 71.0752
+        "completed_trades": 6,
+        "win_rate_percent": 50.0,
+        "wilson_lower_percent": 18.7616,
+        "total_return_percent": 33.5,
+        "alpha_percent": -13.23,
+        "max_drawdown_percent": 15.37,
+        "probabilistic_sharpe_ratio_percent": 89.9111,
+        "deflated_sharpe_probability_percent": 61.678
       },
       "regime_robust": false,
-      "regime_score": 66.3935,
+      "regime_score": 54.9379,
       "walk_forward_positive_slice_ratio": 0.6667
     },
     {
-      "stock_code": "2317",
-      "research_run_id": "70c31f3163a7b8be893a0c4e",
+      "stock_code": "00919",
+      "research_run_id": "3ea213b144e34983074ee495",
       "data_fingerprints": [
-        "02e977102b5f7b545d42",
-        "068f28222301a2e68ef1",
-        "1398c6003b2c1ffb647a",
+        "0d1167fe010f58503a2b",
         "14913f5c1e4c0435f65f",
         "3f43781897784164f8dc",
-        "47854b8d402162d74eb6",
-        "4bc37a41c9baae44ec82",
-        "4cf5b182f6caad72413a",
+        "3ff7f88344f5d491b662",
         "5eff0b05c8206b6ad578",
+        "6d3adcf7ac28ba35d6d3",
+        "70637a901ba6d2fe7c71",
         "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
-        "8f4e214d161e9b5e904a",
-        "b56f04acfa59aec714f3",
-        "b67a74da27909e1fdf70",
-        "b6e561516c9438c1baaf"
+        "94669d2fefb117df444f"
       ],
-      "candidate_id": "mut-a3f31c454115",
-      "robot_version_id": "bbf55f0a47c2993d6e06509a",
-      "parent_id": "grid-70-45-ema5-ema20-score_or_ema_reversal-60",
+      "candidate_id": "mut-e79c876d296e",
+      "robot_version_id": "2e4fa4a6ec1bf95aea73d49b",
+      "parent_id": "grid-60-40-score-ema5-ema20-score_or_ema_reversal-60",
       "strategy_family": "score_engine",
-      "hypothesis": "Adaptive broad mutation of grid-70-45-ema5-ema20-score_or_ema_reversal-60: entry +0, exit +10",
+      "hypothesis": "Adaptive broad mutation of grid-60-40-score-ema5-ema20-score_or_ema_reversal-60: entry -10, exit +0",
       "parameters": {
-        "entry_score": 70,
-        "exit_score": 55,
+        "entry_score": 50,
+        "exit_score": 40,
         "initial_capital": 1000000.0,
         "require_ema_trend": true,
         "ema_fast_column": "EMA5",
         "ema_slow_column": "EMA20",
+        "entry_mode": "score",
         "exit_mode": "score_or_ema_reversal",
         "max_holding_days": 60
       },
-      "decision": "HOLDOUT_READY",
-      "research_score": 52.27,
+      "decision": "KEEP",
+      "research_score": 12.095,
       "eligible_for_one_shot_holdout": false,
       "gate_reasons": [
+        "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "walk_forward_sample_insufficient",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable",
@@ -335,136 +295,83 @@
       ],
       "validation": {
         "completed_trades": 6,
-        "win_rate_percent": 66.67,
-        "wilson_lower_percent": 29.9993,
-        "total_return_percent": 45.19,
-        "alpha_percent": -23.83,
-        "max_drawdown_percent": 10.46,
-        "probabilistic_sharpe_ratio_percent": 99.1408,
-        "deflated_sharpe_probability_percent": 94.5654
+        "win_rate_percent": 50.0,
+        "wilson_lower_percent": 18.7616,
+        "total_return_percent": 8.3,
+        "alpha_percent": -17.36,
+        "max_drawdown_percent": 7.09,
+        "probabilistic_sharpe_ratio_percent": 78.5637,
+        "deflated_sharpe_probability_percent": 3.6543
       },
       "regime_robust": false,
-      "regime_score": -18.9169,
-      "walk_forward_positive_slice_ratio": 0.3333
+      "regime_score": -15.423,
+      "walk_forward_positive_slice_ratio": 0.6667
     },
     {
-      "stock_code": "3711",
-      "research_run_id": "518b946a8b12a732010d9d4a",
+      "stock_code": "2603",
+      "research_run_id": "0e7e8c2bab66fb39e859cd13",
       "data_fingerprints": [
-        "00c39b7658214a2dd14d",
-        "0ec6e80a9a8e5010c6f7",
-        "0ff99c5d8cb207efc79f",
         "14913f5c1e4c0435f65f",
+        "2c838ade35e5278094c3",
         "3f43781897784164f8dc",
         "47854b8d402162d74eb6",
-        "4f34a5a98a7cb145af17",
         "5eff0b05c8206b6ad578",
-        "72b40c327e1b5cdbb516",
+        "86f1bd77de700f6e722e",
         "892b0d78a1296a311fae",
+        "8b6697e1db94fcfc0cad",
         "8c501ca47e1d2d215d15",
-        "a354f9de5527bb4b7594",
-        "acecdf5dbd6be9b3ccf4",
-        "b0b8c09b483acff7d492",
-        "b6e561516c9438c1baaf"
+        "a0d6584a3d0f12d36e06",
+        "a603cecb876ed71df5f3",
+        "b6e561516c9438c1baaf",
+        "be076af65916ea5b9bf6",
+        "c541e1b4978b91b2422a",
+        "f15c639c9c4fa4c1ec95"
       ],
-      "candidate_id": "mut-e8c791838009",
-      "robot_version_id": "7af86cf5c2ee2a64f3ba85f1",
-      "parent_id": "mut-a579d93a623c",
-      "strategy_family": "score_engine",
-      "hypothesis": "Adaptive local mutation of mut-a579d93a623c: entry +0, exit +5",
+      "candidate_id": "mut-216db477a9c1",
+      "robot_version_id": "01e60c21c392b128d9d8e615",
+      "parent_id": "grid-65-50-score_and_volume_confirmation-ema5-ema20-score_or_time_or_ema_reversal-40",
+      "strategy_family": "score_engine_volume_confirmed",
+      "hypothesis": "Adaptive local mutation of grid-65-50-score_and_volume_confirmation-ema5-ema20-score_or_time_or_ema_reversal-40: entry -5, exit +0",
       "parameters": {
         "entry_score": 60,
-        "exit_score": 55,
+        "exit_score": 50,
         "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "exit_mode": "score",
-        "max_holding_days": 60
-      },
-      "decision": "HOLDOUT_READY",
-      "research_score": 61.398,
-      "eligible_for_one_shot_holdout": false,
-      "gate_reasons": [
-        "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
-        "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed",
-        "hansen_spa_failed_or_unavailable"
-      ],
-      "validation": {
-        "completed_trades": 11,
-        "win_rate_percent": 54.55,
-        "wilson_lower_percent": 28.0092,
-        "total_return_percent": 37.93,
-        "alpha_percent": 10.98,
-        "max_drawdown_percent": 18.08,
-        "probabilistic_sharpe_ratio_percent": 87.9673,
-        "deflated_sharpe_probability_percent": 62.8121
-      },
-      "regime_robust": false,
-      "regime_score": -14.0546,
-      "walk_forward_positive_slice_ratio": 0.3333
-    },
-    {
-      "stock_code": "0050",
-      "research_run_id": "3cbb4e22aeb11b95ff0c6898",
-      "data_fingerprints": [
-        "14913f5c1e4c0435f65f",
-        "3f43781897784164f8dc",
-        "47854b8d402162d74eb6",
-        "596784d1e67cb42bef40",
-        "5eff0b05c8206b6ad578",
-        "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
-        "b6e561516c9438c1baaf",
-        "e7f0a6991f940f10b62a"
-      ],
-      "candidate_id": "mut-ff096aa64ab8",
-      "robot_version_id": "5af3b44b3e564685c1a04b07",
-      "parent_id": "mut-2e2128880dec",
-      "strategy_family": "score_engine",
-      "hypothesis": "Adaptive fine mutation of mut-2e2128880dec: entry -2, exit -2",
-      "parameters": {
-        "entry_score": 53,
-        "exit_score": 48,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "exit_mode": "score_or_time",
+        "require_ema_trend": true,
+        "ema_fast_column": "EMA5",
+        "ema_slow_column": "EMA20",
+        "entry_mode": "score_and_volume_confirmation",
+        "exit_mode": "score_or_time_or_ema_reversal",
         "max_holding_days": 40
       },
       "decision": "KEEP",
-      "research_score": 1.571,
+      "research_score": -5.899,
       "eligible_for_one_shot_holdout": false,
       "gate_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "walk_forward_sample_insufficient",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable",
         "hansen_spa_failed_or_unavailable"
       ],
       "validation": {
-        "completed_trades": 8,
-        "win_rate_percent": 50.0,
-        "wilson_lower_percent": 21.5216,
-        "total_return_percent": 10.55,
-        "alpha_percent": -32.74,
-        "max_drawdown_percent": 21.56,
-        "probabilistic_sharpe_ratio_percent": 68.5627,
-        "deflated_sharpe_probability_percent": 21.4507
+        "completed_trades": 5,
+        "win_rate_percent": 40.0,
+        "wilson_lower_percent": 11.7621,
+        "total_return_percent": 7.74,
+        "alpha_percent": -99.82,
+        "max_drawdown_percent": 20.12,
+        "probabilistic_sharpe_ratio_percent": 65.6081,
+        "deflated_sharpe_probability_percent": 5.0406
       },
       "regime_robust": false,
-      "regime_score": -27.7481,
-      "walk_forward_positive_slice_ratio": 0.3333
+      "regime_score": 74.9722,
+      "walk_forward_positive_slice_ratio": 0.6667
     },
     {
       "stock_code": "2881",
-      "research_run_id": "2aa721bfe5c38c017534fcf5",
+      "research_run_id": "f117d3d3c0d9a8c6d07c35c6",
       "data_fingerprints": [
         "037f847c68f2d60bd3ef",
         "14913f5c1e4c0435f65f",
@@ -482,147 +389,141 @@
         "ed6d854ae557c25dc302",
         "fa0e7f19d89c5915a861"
       ],
-      "candidate_id": "grid-65-50-base-score_or_time-40",
-      "robot_version_id": "e7fdf7c060e918821d655e2b",
+      "candidate_id": "grid-70-35-score-base-score_or_time-40",
+      "robot_version_id": "605d87710011dff2b3bffac0",
       "parent_id": null,
       "strategy_family": "score_engine",
       "hypothesis": "Systematic score-threshold search with score with 40-session risk exit",
       "parameters": {
-        "entry_score": 65,
-        "exit_score": 50,
+        "entry_score": 70,
+        "exit_score": 35,
         "initial_capital": 1000000.0,
         "require_ema_trend": false,
         "ema_fast_column": "EMA20",
         "ema_slow_column": "EMA60",
+        "entry_mode": "score",
         "exit_mode": "score_or_time",
         "max_holding_days": 40
       },
-      "decision": "KEEP",
-      "research_score": 40.057,
+      "decision": "HOLDOUT_READY",
+      "research_score": 69.62,
       "eligible_for_one_shot_holdout": false,
       "gate_reasons": [
-        "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "walk_forward_sample_insufficient",
         "walk_forward_stability_failed",
-        "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
-        "cscv_pbo_failed_or_unavailable",
-        "hansen_spa_failed_or_unavailable"
-      ],
-      "validation": {
-        "completed_trades": 6,
-        "win_rate_percent": 50.0,
-        "wilson_lower_percent": 18.7616,
-        "total_return_percent": 30.61,
-        "alpha_percent": -27.22,
-        "max_drawdown_percent": 10.43,
-        "probabilistic_sharpe_ratio_percent": 90.6635,
-        "deflated_sharpe_probability_percent": 34.3062
-      },
-      "regime_robust": false,
-      "regime_score": 82.4612,
-      "walk_forward_positive_slice_ratio": 0.3333
-    },
-    {
-      "stock_code": "2454",
-      "research_run_id": "2ec57b804dd76eb9bc45a61e",
-      "data_fingerprints": [
-        "14913f5c1e4c0435f65f",
-        "3f43781897784164f8dc",
-        "47854b8d402162d74eb6",
-        "5eff0b05c8206b6ad578",
-        "6447d7b6e62e518a0f0d",
-        "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
-        "b6e561516c9438c1baaf",
-        "bdf8c2f08296564c1888",
-        "d14abdfffc9e77d4b46b",
-        "dcc1be1c85f94e6f6182",
-        "e640905a3dc71909f809",
-        "eb33d4b0aa9642b74182",
-        "f00456d1530326f44f58",
-        "fd4022f9421b9fa37673"
-      ],
-      "candidate_id": "grid-70-40-ema5-ema20-score_or_time_or_ema_reversal-40",
-      "robot_version_id": "e196a8c6497b5467fb4da7a2",
-      "parent_id": null,
-      "strategy_family": "score_engine",
-      "hypothesis": "Systematic score-threshold search with fast EMA trend with time and reversal exits",
-      "parameters": {
-        "entry_score": 70,
-        "exit_score": 40,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": true,
-        "ema_fast_column": "EMA5",
-        "ema_slow_column": "EMA20",
-        "exit_mode": "score_or_time_or_ema_reversal",
-        "max_holding_days": 40
-      },
-      "decision": "KEEP",
-      "research_score": -0.399,
-      "eligible_for_one_shot_holdout": false,
-      "gate_reasons": [
-        "validation_gate_not_ready",
-        "bull_bear_robustness_failed",
-        "walk_forward_sample_insufficient",
-        "walk_forward_stability_failed",
-        "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed",
-        "cscv_pbo_failed_or_unavailable",
         "hansen_spa_failed_or_unavailable"
       ],
       "validation": {
         "completed_trades": 4,
-        "win_rate_percent": 50.0,
-        "wilson_lower_percent": 15.0039,
-        "total_return_percent": 7.0,
-        "alpha_percent": -47.68,
-        "max_drawdown_percent": 12.07,
-        "probabilistic_sharpe_ratio_percent": 65.8915,
-        "deflated_sharpe_probability_percent": 23.9217
+        "win_rate_percent": 100.0,
+        "wilson_lower_percent": 51.0109,
+        "total_return_percent": 51.41,
+        "alpha_percent": -6.42,
+        "max_drawdown_percent": 10.43,
+        "probabilistic_sharpe_ratio_percent": 97.5816,
+        "deflated_sharpe_probability_percent": 69.1106
       },
       "regime_robust": false,
-      "regime_score": -35.6036,
+      "regime_score": 89.9697,
       "walk_forward_positive_slice_ratio": 0.3333
     },
     {
-      "stock_code": "2382",
-      "research_run_id": "788ac5e903184712e66c4895",
+      "stock_code": "0050",
+      "research_run_id": "78707c6975d960dbeb099cc4",
       "data_fingerprints": [
         "14913f5c1e4c0435f65f",
-        "2d3f1918cbba398d1777",
         "3f43781897784164f8dc",
         "47854b8d402162d74eb6",
-        "514fb0f7bd94823c41e8",
+        "596784d1e67cb42bef40",
         "5eff0b05c8206b6ad578",
         "892b0d78a1296a311fae",
         "8c501ca47e1d2d215d15",
-        "9c43e642eeac0f43fa3f",
-        "9cf842bcd23ec7ed8687",
-        "a0e7658c07f6cc0b677b",
-        "a2212140d12278c12f78",
-        "a7028e23a04de9d39264",
         "b6e561516c9438c1baaf",
-        "e5d9088bde61dae4736a"
+        "e7f0a6991f940f10b62a"
       ],
-      "candidate_id": "grid-65-45-base-score_or_time-40",
-      "robot_version_id": "d9978d9a883556574d2c3888",
-      "parent_id": null,
-      "strategy_family": "score_engine",
-      "hypothesis": "Systematic score-threshold search with score with 40-session risk exit",
+      "candidate_id": "mut-be06d32f526f",
+      "robot_version_id": "3c73346329f50c8f2e843e96",
+      "parent_id": "mut-f989556aa0e3",
+      "strategy_family": "score_engine_rsi_confirmed",
+      "hypothesis": "Adaptive fine mutation of mut-f989556aa0e3: entry -2, exit +0",
       "parameters": {
-        "entry_score": 65,
+        "entry_score": 61,
         "exit_score": 45,
         "initial_capital": 1000000.0,
         "require_ema_trend": false,
         "ema_fast_column": "EMA20",
         "ema_slow_column": "EMA60",
+        "entry_mode": "score_and_rsi_momentum",
         "exit_mode": "score_or_time",
         "max_holding_days": 40
       },
       "decision": "KEEP",
-      "research_score": -18.165,
+      "research_score": 21.401,
+      "eligible_for_one_shot_holdout": false,
+      "gate_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "validation": {
+        "completed_trades": 5,
+        "win_rate_percent": 80.0,
+        "wilson_lower_percent": 37.5535,
+        "total_return_percent": 18.21,
+        "alpha_percent": -25.08,
+        "max_drawdown_percent": 21.21,
+        "probabilistic_sharpe_ratio_percent": 78.3648,
+        "deflated_sharpe_probability_percent": 22.4313
+      },
+      "regime_robust": false,
+      "regime_score": -17.4688,
+      "walk_forward_positive_slice_ratio": 0.3333
+    },
+    {
+      "stock_code": "3711",
+      "research_run_id": "3e83b74a9ff427c0a623ad92",
+      "data_fingerprints": [
+        "00c39b7658214a2dd14d",
+        "0ec6e80a9a8e5010c6f7",
+        "0ff99c5d8cb207efc79f",
+        "14913f5c1e4c0435f65f",
+        "3f43781897784164f8dc",
+        "47854b8d402162d74eb6",
+        "4f34a5a98a7cb145af17",
+        "5eff0b05c8206b6ad578",
+        "72b40c327e1b5cdbb516",
+        "892b0d78a1296a311fae",
+        "8c501ca47e1d2d215d15",
+        "a354f9de5527bb4b7594",
+        "acecdf5dbd6be9b3ccf4",
+        "b0b8c09b483acff7d492",
+        "b6e561516c9438c1baaf"
+      ],
+      "candidate_id": "grid-65-45-score_and_volume_confirmation-ema5-ema20-score_or_time_or_ema_reversal-40",
+      "robot_version_id": "e51dbcbac9bddc1df46321b9",
+      "parent_id": null,
+      "strategy_family": "score_engine_volume_confirmed",
+      "hypothesis": "Systematic score-threshold search with volume-confirmed fast EMA trend with time and reversal exits",
+      "parameters": {
+        "entry_score": 65,
+        "exit_score": 45,
+        "initial_capital": 1000000.0,
+        "require_ema_trend": true,
+        "ema_fast_column": "EMA5",
+        "ema_slow_column": "EMA20",
+        "entry_mode": "score_and_volume_confirmation",
+        "exit_mode": "score_or_time_or_ema_reversal",
+        "max_holding_days": 40
+      },
+      "decision": "KEEP",
+      "research_score": -14.227,
       "eligible_for_one_shot_holdout": false,
       "gate_reasons": [
         "validation_gate_not_ready",
@@ -638,19 +539,19 @@
         "completed_trades": 4,
         "win_rate_percent": 50.0,
         "wilson_lower_percent": 15.0039,
-        "total_return_percent": 0.16,
-        "alpha_percent": -29.15,
-        "max_drawdown_percent": 23.95,
-        "probabilistic_sharpe_ratio_percent": 57.3901,
-        "deflated_sharpe_probability_percent": 7.5131
+        "total_return_percent": 0.5,
+        "alpha_percent": -26.45,
+        "max_drawdown_percent": 15.47,
+        "probabilistic_sharpe_ratio_percent": 55.2539,
+        "deflated_sharpe_probability_percent": 14.4919
       },
       "regime_robust": false,
-      "regime_score": -24.9596,
+      "regime_score": -31.57,
       "walk_forward_positive_slice_ratio": 0.3333
     },
     {
       "stock_code": "00878",
-      "research_run_id": "0e93f487c88daccd1df63b66",
+      "research_run_id": "a6e2bf1eca55b4111958a2a7",
       "data_fingerprints": [
         "14913f5c1e4c0435f65f",
         "16d75d1f38ce3938bd70",
@@ -666,11 +567,11 @@
         "bf415651030ab11454b8",
         "f33705e74cf03f6b4cd0"
       ],
-      "candidate_id": "grid-60-35-base-score_or_time-40",
-      "robot_version_id": "7660f23fc747e38def3bff30",
-      "parent_id": null,
+      "candidate_id": "mut-a7b12ddcf6ba",
+      "robot_version_id": "06a3729be62e43f7407ce18d",
+      "parent_id": "grid-60-35-score_and_rsi_momentum-base-score_or_time-40",
       "strategy_family": "score_engine",
-      "hypothesis": "Systematic score-threshold search with score with 40-session risk exit",
+      "hypothesis": "Adaptive structure mutation of grid-60-35-score_and_rsi_momentum-base-score_or_time-40: entry +0, exit +0; structure=score with 40-session risk exit",
       "parameters": {
         "entry_score": 60,
         "exit_score": 35,
@@ -678,6 +579,7 @@
         "require_ema_trend": false,
         "ema_fast_column": "EMA20",
         "ema_slow_column": "EMA60",
+        "entry_mode": "score",
         "exit_mode": "score_or_time",
         "max_holding_days": 40
       },
@@ -702,49 +604,50 @@
         "alpha_percent": -18.88,
         "max_drawdown_percent": 13.26,
         "probabilistic_sharpe_ratio_percent": 54.5565,
-        "deflated_sharpe_probability_percent": 5.0306
+        "deflated_sharpe_probability_percent": 1.5974
       },
       "regime_robust": false,
       "regime_score": -10.3808,
       "walk_forward_positive_slice_ratio": 0.3333
     },
     {
-      "stock_code": "0056",
-      "research_run_id": "39c7e19c1d975393b1312760",
+      "stock_code": "2454",
+      "research_run_id": "61d297fb456ea31325823083",
       "data_fingerprints": [
-        "0a1b898ce5b555bc012c",
         "14913f5c1e4c0435f65f",
-        "18c7d237d125d368c060",
-        "240fb5c113ce8df781e8",
         "3f43781897784164f8dc",
         "47854b8d402162d74eb6",
-        "50df9d97f09fbfb0aae0",
         "5eff0b05c8206b6ad578",
+        "6447d7b6e62e518a0f0d",
         "892b0d78a1296a311fae",
         "8c501ca47e1d2d215d15",
-        "a1859e059139394a1443",
-        "ae4572c6b51e58d8e315",
         "b6e561516c9438c1baaf",
-        "bd1197213cce16448ce7",
-        "cf0b716799c93cc775c7"
+        "bdf8c2f08296564c1888",
+        "d14abdfffc9e77d4b46b",
+        "dcc1be1c85f94e6f6182",
+        "e640905a3dc71909f809",
+        "eb33d4b0aa9642b74182",
+        "f00456d1530326f44f58",
+        "fd4022f9421b9fa37673"
       ],
-      "candidate_id": "mut-33efa5447530",
-      "robot_version_id": "e8e97c08617652aadf33199b",
-      "parent_id": "mut-55f2d2f77ec6",
-      "strategy_family": "score_engine",
-      "hypothesis": "Adaptive fine mutation of mut-55f2d2f77ec6: entry +0, exit +2",
+      "candidate_id": "mut-1ca21c8fac08",
+      "robot_version_id": "5d40ec9cff76510fcb0afe4d",
+      "parent_id": "grid-65-35-score_and_volume_confirmation-ema5-ema20-score_or_time_or_ema_reversal-40",
+      "strategy_family": "score_engine_rsi_confirmed",
+      "hypothesis": "Adaptive structure mutation of grid-65-35-score_and_volume_confirmation-ema5-ema20-score_or_time_or_ema_reversal-40: entry +0, exit +0; structure=RSI-confirmed score with 40-session risk exit",
       "parameters": {
-        "entry_score": 55,
-        "exit_score": 44,
+        "entry_score": 65,
+        "exit_score": 35,
         "initial_capital": 1000000.0,
         "require_ema_trend": false,
         "ema_fast_column": "EMA20",
         "ema_slow_column": "EMA60",
+        "entry_mode": "score_and_rsi_momentum",
         "exit_mode": "score_or_time",
         "max_holding_days": 40
       },
       "decision": "KEEP",
-      "research_score": -11.313,
+      "research_score": 25.119,
       "eligible_for_one_shot_holdout": false,
       "gate_reasons": [
         "validation_gate_not_ready",
@@ -753,27 +656,154 @@
         "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
         "hansen_spa_failed_or_unavailable"
       ],
       "validation": {
-        "completed_trades": 5,
-        "win_rate_percent": 40.0,
-        "wilson_lower_percent": 11.7621,
-        "total_return_percent": 1.26,
-        "alpha_percent": -15.23,
-        "max_drawdown_percent": 9.99,
-        "probabilistic_sharpe_ratio_percent": 56.5994,
-        "deflated_sharpe_probability_percent": 7.7208
+        "completed_trades": 4,
+        "win_rate_percent": 75.0,
+        "wilson_lower_percent": 30.0642,
+        "total_return_percent": 23.06,
+        "alpha_percent": -31.62,
+        "max_drawdown_percent": 21.41,
+        "probabilistic_sharpe_ratio_percent": 80.921,
+        "deflated_sharpe_probability_percent": 28.1122
       },
       "regime_robust": false,
-      "regime_score": -12.5469,
-      "walk_forward_positive_slice_ratio": 0.3333
+      "regime_score": 40.1658,
+      "walk_forward_positive_slice_ratio": 0.0
+    },
+    {
+      "stock_code": "2330",
+      "research_run_id": "98e68855327253f45898a173",
+      "data_fingerprints": [
+        "02209b8b1826e2e61333",
+        "14913f5c1e4c0435f65f",
+        "3f43781897784164f8dc",
+        "47854b8d402162d74eb6",
+        "4ac173b79bfaadae9005",
+        "4ed4593e556b85abd94a",
+        "57a328725077649f692a",
+        "5eff0b05c8206b6ad578",
+        "892b0d78a1296a311fae",
+        "8c501ca47e1d2d215d15",
+        "8f45ddfe155aa1d62bf7",
+        "b6e561516c9438c1baaf",
+        "cb3923e82cd102d21fc4",
+        "e281de25022c4175afed",
+        "fadd4dc6d65596488339"
+      ],
+      "candidate_id": "mut-53cb59d74586",
+      "robot_version_id": "bad712dfa1aabc8d696b4645",
+      "parent_id": "mut-7d9222195c5e",
+      "strategy_family": "score_engine_volume_confirmed",
+      "hypothesis": "Adaptive broad mutation of mut-7d9222195c5e: entry +0, exit -10",
+      "parameters": {
+        "entry_score": 70,
+        "exit_score": 40,
+        "initial_capital": 1000000.0,
+        "require_ema_trend": false,
+        "ema_fast_column": "EMA20",
+        "ema_slow_column": "EMA60",
+        "entry_mode": "score_and_volume_confirmation",
+        "exit_mode": "score_or_time",
+        "max_holding_days": 40
+      },
+      "decision": "KEEP",
+      "research_score": -6.708,
+      "eligible_for_one_shot_holdout": false,
+      "gate_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "validation": {
+        "completed_trades": 4,
+        "win_rate_percent": 50.0,
+        "wilson_lower_percent": 15.0039,
+        "total_return_percent": 6.01,
+        "alpha_percent": -65.9,
+        "max_drawdown_percent": 18.9,
+        "probabilistic_sharpe_ratio_percent": 63.4814,
+        "deflated_sharpe_probability_percent": 18.4411
+      },
+      "regime_robust": false,
+      "regime_score": -17.699,
+      "walk_forward_positive_slice_ratio": 0.0
+    },
+    {
+      "stock_code": "2345",
+      "research_run_id": "1ec78529c505520c8a207b91",
+      "data_fingerprints": [
+        "00ad572f18ff85561e4e",
+        "0d422031b2bbe0cf2ce5",
+        "14913f5c1e4c0435f65f",
+        "3f43781897784164f8dc",
+        "43517feda5ca8c2ca3dd",
+        "47854b8d402162d74eb6",
+        "5eff0b05c8206b6ad578",
+        "60b5e2a06e1c9df56e90",
+        "85bb5e8172a6cb7c81ee",
+        "892b0d78a1296a311fae",
+        "8c501ca47e1d2d215d15",
+        "9d199fc18b66797bc7de",
+        "b6e561516c9438c1baaf",
+        "bcce68df230ed7ec6df5",
+        "d0b182d416690c150563"
+      ],
+      "candidate_id": "mut-2579960bd30d",
+      "robot_version_id": "08245f4ef7638ac34897e464",
+      "parent_id": "mut-5e7a0a85a13c",
+      "strategy_family": "score_engine_volume_confirmed",
+      "hypothesis": "Adaptive broad mutation of mut-5e7a0a85a13c: entry -10, exit +0",
+      "parameters": {
+        "entry_score": 60,
+        "exit_score": 55,
+        "initial_capital": 1000000.0,
+        "require_ema_trend": true,
+        "ema_fast_column": "EMA5",
+        "ema_slow_column": "EMA20",
+        "entry_mode": "score_and_volume_confirmation",
+        "exit_mode": "score_or_time_or_ema_reversal",
+        "max_holding_days": 40
+      },
+      "decision": "KEEP",
+      "research_score": -18.729,
+      "eligible_for_one_shot_holdout": false,
+      "gate_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "validation": {
+        "completed_trades": 6,
+        "win_rate_percent": 33.33,
+        "wilson_lower_percent": 9.6771,
+        "total_return_percent": 2.34,
+        "alpha_percent": -16.46,
+        "max_drawdown_percent": 26.32,
+        "probabilistic_sharpe_ratio_percent": 58.5024,
+        "deflated_sharpe_probability_percent": 11.5003
+      },
+      "regime_robust": false,
+      "regime_score": -17.7962,
+      "walk_forward_positive_slice_ratio": 0.0
     }
   ],
   "runs": [
     {
       "stock_code": "0050",
-      "research_run_id": "3cbb4e22aeb11b95ff0c6898",
+      "research_run_id": "78707c6975d960dbeb099cc4",
       "data_fingerprints": [
         "14913f5c1e4c0435f65f",
         "3f43781897784164f8dc",
@@ -786,34 +816,65 @@
         "e7f0a6991f940f10b62a"
       ],
       "experiments_run": 24,
-      "candidate_offset": 24
+      "candidate_offset": 24,
+      "training_memory": {
+        "memory_id": "68a51f12e0e302e5cd5ebbe0",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 46,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 4,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "0056",
-      "research_run_id": "39c7e19c1d975393b1312760",
+      "research_run_id": "9212d61d4e435730733a8c9a",
       "data_fingerprints": [
         "0a1b898ce5b555bc012c",
-        "14913f5c1e4c0435f65f",
-        "18c7d237d125d368c060",
-        "240fb5c113ce8df781e8",
-        "3f43781897784164f8dc",
-        "47854b8d402162d74eb6",
-        "50df9d97f09fbfb0aae0",
-        "5eff0b05c8206b6ad578",
-        "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
-        "a1859e059139394a1443",
-        "ae4572c6b51e58d8e315",
-        "b6e561516c9438c1baaf",
-        "bd1197213cce16448ce7",
-        "cf0b716799c93cc775c7"
+        "bd1197213cce16448ce7"
       ],
       "experiments_run": 24,
-      "candidate_offset": 75
+      "candidate_offset": 43,
+      "training_memory": {
+        "memory_id": "0c8579c89fccb7ff2bc1b285",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 43,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 3,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "00878",
-      "research_run_id": "0e93f487c88daccd1df63b66",
+      "research_run_id": "a6e2bf1eca55b4111958a2a7",
       "data_fingerprints": [
         "14913f5c1e4c0435f65f",
         "16d75d1f38ce3938bd70",
@@ -829,21 +890,73 @@
         "bf415651030ab11454b8",
         "f33705e74cf03f6b4cd0"
       ],
-      "experiments_run": 24,
-      "candidate_offset": 121
+      "experiments_run": 16,
+      "candidate_offset": 57,
+      "training_memory": {
+        "memory_id": "158aa194187e8f58f5f9ab26",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 16,
+        "elite_count": 11,
+        "frontier_count": 47,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 16,
+        "lifetime_experiment_count": 16,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 16,
+        "last_run_duplicate_skip_count": 0,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "00919",
-      "research_run_id": "d583a4fa557f9ca72897e55e",
+      "research_run_id": "3ea213b144e34983074ee495",
       "data_fingerprints": [
-        "0d1167fe010f58503a2b"
+        "0d1167fe010f58503a2b",
+        "14913f5c1e4c0435f65f",
+        "3f43781897784164f8dc",
+        "3ff7f88344f5d491b662",
+        "5eff0b05c8206b6ad578",
+        "6d3adcf7ac28ba35d6d3",
+        "70637a901ba6d2fe7c71",
+        "892b0d78a1296a311fae",
+        "94669d2fefb117df444f"
       ],
-      "experiments_run": 8,
-      "candidate_offset": 12
+      "experiments_run": 24,
+      "candidate_offset": 172,
+      "training_memory": {
+        "memory_id": "bcb3387e4fd719a21018dc98",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 8,
+        "frontier_count": 45,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 1,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2330",
-      "research_run_id": "5b7595085258f7868fd57958",
+      "research_run_id": "98e68855327253f45898a173",
       "data_fingerprints": [
         "02209b8b1826e2e61333",
         "14913f5c1e4c0435f65f",
@@ -862,34 +975,65 @@
         "fadd4dc6d65596488339"
       ],
       "experiments_run": 24,
-      "candidate_offset": 110
+      "candidate_offset": 46,
+      "training_memory": {
+        "memory_id": "b147e43fe1aae78c1a60cb76",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 11,
+        "frontier_count": 46,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 4,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2317",
-      "research_run_id": "70c31f3163a7b8be893a0c4e",
+      "research_run_id": "270e3d73176cd72f1762255f",
       "data_fingerprints": [
-        "02e977102b5f7b545d42",
-        "068f28222301a2e68ef1",
-        "1398c6003b2c1ffb647a",
-        "14913f5c1e4c0435f65f",
-        "3f43781897784164f8dc",
-        "47854b8d402162d74eb6",
-        "4bc37a41c9baae44ec82",
-        "4cf5b182f6caad72413a",
-        "5eff0b05c8206b6ad578",
-        "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
         "8f4e214d161e9b5e904a",
-        "b56f04acfa59aec714f3",
-        "b67a74da27909e1fdf70",
-        "b6e561516c9438c1baaf"
+        "b56f04acfa59aec714f3"
       ],
       "experiments_run": 24,
-      "candidate_offset": 76
+      "candidate_offset": 204,
+      "training_memory": {
+        "memory_id": "75527cb2b382d120e85ee361",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 46,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 4,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2454",
-      "research_run_id": "2ec57b804dd76eb9bc45a61e",
+      "research_run_id": "61d297fb456ea31325823083",
       "data_fingerprints": [
         "14913f5c1e4c0435f65f",
         "3f43781897784164f8dc",
@@ -908,72 +1052,205 @@
         "fd4022f9421b9fa37673"
       ],
       "experiments_run": 24,
-      "candidate_offset": 43
+      "candidate_offset": 75,
+      "training_memory": {
+        "memory_id": "96abc98f73b8ecbc18c8e946",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 10,
+        "frontier_count": 50,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 4,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2308",
-      "research_run_id": "c3fa35b9e4d8e27ff6103213",
+      "research_run_id": "961048385ef65cdb1b825c4c",
       "data_fingerprints": [
         "088bfaddf9ea5186afa0",
         "fc5065bdcb4363cf4f55"
       ],
       "experiments_run": 24,
-      "candidate_offset": 39
+      "candidate_offset": 7,
+      "training_memory": {
+        "memory_id": "bfc5c910596ff578a85d4a2d",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 46,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 3,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2382",
-      "research_run_id": "788ac5e903184712e66c4895",
+      "research_run_id": "c54a8a6c76f224fd3f92353c",
       "data_fingerprints": [
-        "14913f5c1e4c0435f65f",
         "2d3f1918cbba398d1777",
-        "3f43781897784164f8dc",
-        "47854b8d402162d74eb6",
-        "514fb0f7bd94823c41e8",
-        "5eff0b05c8206b6ad578",
-        "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
-        "9c43e642eeac0f43fa3f",
-        "9cf842bcd23ec7ed8687",
-        "a0e7658c07f6cc0b677b",
-        "a2212140d12278c12f78",
-        "a7028e23a04de9d39264",
-        "b6e561516c9438c1baaf",
-        "e5d9088bde61dae4736a"
+        "a2212140d12278c12f78"
       ],
-      "experiments_run": 8,
-      "candidate_offset": 110
+      "experiments_run": 24,
+      "candidate_offset": 142,
+      "training_memory": {
+        "memory_id": "abf48b5f1af80236f6f194cc",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 44,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 2,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2303",
-      "research_run_id": "46e171e32dc533e9a81a59a4",
+      "research_run_id": "38f7cb9a4224e7d5298a2985",
       "data_fingerprints": [
-        "7d23032f9827cb8382a3"
+        "7d23032f9827cb8382a3",
+        "7fc9325532ae8c057b48"
       ],
-      "experiments_run": 8,
-      "candidate_offset": 90
+      "experiments_run": 24,
+      "candidate_offset": 154,
+      "training_memory": {
+        "memory_id": "9e78f610a7912c6b765bfc5b",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 51,
+        "strategy_family_count": 3,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 0,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2345",
-      "research_run_id": "14b356185b01d101c272364f",
+      "research_run_id": "1ec78529c505520c8a207b91",
       "data_fingerprints": [
-        "9d199fc18b66797bc7de"
+        "00ad572f18ff85561e4e",
+        "0d422031b2bbe0cf2ce5",
+        "14913f5c1e4c0435f65f",
+        "3f43781897784164f8dc",
+        "43517feda5ca8c2ca3dd",
+        "47854b8d402162d74eb6",
+        "5eff0b05c8206b6ad578",
+        "60b5e2a06e1c9df56e90",
+        "85bb5e8172a6cb7c81ee",
+        "892b0d78a1296a311fae",
+        "8c501ca47e1d2d215d15",
+        "9d199fc18b66797bc7de",
+        "b6e561516c9438c1baaf",
+        "bcce68df230ed7ec6df5",
+        "d0b182d416690c150563"
       ],
-      "experiments_run": 8,
-      "candidate_offset": 71
+      "experiments_run": 24,
+      "candidate_offset": 167,
+      "training_memory": {
+        "memory_id": "bfdff7048fdc13701076ae0f",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 8,
+        "frontier_count": 30,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 1,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2379",
-      "research_run_id": "345f2a9d0da055701f5362ae",
+      "research_run_id": "6b216756b728b1ea5a8676f6",
       "data_fingerprints": [
         "0fcd5b9cdc3d45243f1b",
         "46530e25e5736115e49a"
       ],
       "experiments_run": 24,
-      "candidate_offset": 48
+      "candidate_offset": 176,
+      "training_memory": {
+        "memory_id": "eec552af0a3a7fd4f97f921f",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 47,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 3,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2881",
-      "research_run_id": "2aa721bfe5c38c017534fcf5",
+      "research_run_id": "f117d3d3c0d9a8c6d07c35c6",
       "data_fingerprints": [
         "037f847c68f2d60bd3ef",
         "14913f5c1e4c0435f65f",
@@ -992,11 +1269,32 @@
         "fa0e7f19d89c5915a861"
       ],
       "experiments_run": 8,
-      "candidate_offset": 35
+      "candidate_offset": 35,
+      "training_memory": {
+        "memory_id": "99f8a5256cbc86e66eb998c4",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 8,
+        "elite_count": 8,
+        "frontier_count": 56,
+        "strategy_family_count": 3,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 8,
+        "lifetime_experiment_count": 8,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 8,
+        "last_run_duplicate_skip_count": 0,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2882",
-      "research_run_id": "0932d277c0da2bf14e856e59",
+      "research_run_id": "1b0b9c11c4faa198c7735faa",
       "data_fingerprints": [
         "14913f5c1e4c0435f65f",
         "1836babf9debccd40bbb",
@@ -1015,71 +1313,215 @@
         "f252ecc276c150768bde"
       ],
       "experiments_run": 24,
-      "candidate_offset": 69
+      "candidate_offset": 101,
+      "training_memory": {
+        "memory_id": "a7b80d277bc87028088b8415",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 42,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 4,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2891",
-      "research_run_id": "c45226c7d13cd2fec0dfb9ed",
+      "research_run_id": "b176ae4aeff946654023fe6b",
       "data_fingerprints": [
-        "14913f5c1e4c0435f65f",
         "2969f19fc81eb9ed2f76",
         "2cefaa6dec75903bb82b",
-        "3f43781897784164f8dc",
+        "30bc52b868e5ce517c3b",
+        "3ca4d6278824de8439ef",
         "426c8f0b478839e53a4f",
         "42c9cc47022a0b29caa5",
-        "47854b8d402162d74eb6",
-        "5eff0b05c8206b6ad578",
+        "535595dd616c3b3baff3",
         "6450cdbc6d3807cef821",
-        "892b0d78a1296a311fae",
-        "8c501ca47e1d2d215d15",
+        "7e7bd1e95617ae583c84",
         "ae9fc4ef3f0d136d13f5",
-        "b6e561516c9438c1baaf",
+        "b26a25721b1f0db0cffe",
         "ba2a1e259acbf780ff0c",
-        "e9a1b7cc304a010fbdc4"
+        "cd606cc0c6f8e000a694",
+        "e9a1b7cc304a010fbdc4",
+        "f430ab1ff9f5fb671eda"
       ],
       "experiments_run": 24,
-      "candidate_offset": 111
+      "candidate_offset": 79,
+      "training_memory": {
+        "memory_id": "49e89a181cb5b5fce405a979",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 47,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 3,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2603",
-      "research_run_id": "9175cf16078362cb54c8cfd1",
+      "research_run_id": "0e7e8c2bab66fb39e859cd13",
       "data_fingerprints": [
-        "a0d6584a3d0f12d36e06"
+        "14913f5c1e4c0435f65f",
+        "2c838ade35e5278094c3",
+        "3f43781897784164f8dc",
+        "47854b8d402162d74eb6",
+        "5eff0b05c8206b6ad578",
+        "86f1bd77de700f6e722e",
+        "892b0d78a1296a311fae",
+        "8b6697e1db94fcfc0cad",
+        "8c501ca47e1d2d215d15",
+        "a0d6584a3d0f12d36e06",
+        "a603cecb876ed71df5f3",
+        "b6e561516c9438c1baaf",
+        "be076af65916ea5b9bf6",
+        "c541e1b4978b91b2422a",
+        "f15c639c9c4fa4c1ec95"
       ],
-      "experiments_run": 8,
-      "candidate_offset": 108
+      "experiments_run": 24,
+      "candidate_offset": 44,
+      "training_memory": {
+        "memory_id": "4f8f2a200c64095682ab25cd",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 7,
+        "frontier_count": 31,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 3,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "2615",
-      "research_run_id": "326eaa6031bb673c6a307972",
+      "research_run_id": "b982b6843ed87be7a3e15e6d",
       "data_fingerprints": [
         "b5606f70cebbebe82f6a"
       ],
       "experiments_run": 8,
-      "candidate_offset": 22
+      "candidate_offset": 182,
+      "training_memory": {
+        "memory_id": "d314ef8fb86e69310c6c7bd0",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 8,
+        "elite_count": 0,
+        "frontier_count": 0,
+        "strategy_family_count": 3,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 8,
+        "lifetime_experiment_count": 8,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 8,
+        "last_run_duplicate_skip_count": 0,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "3037",
-      "research_run_id": "c7178ba7c5bc02f6837bd844",
+      "research_run_id": "ca4a887c655d8fa9b4cd29b5",
       "data_fingerprints": [
         "e2cf6ab545732859c11d"
       ],
       "experiments_run": 8,
-      "candidate_offset": 122
+      "candidate_offset": 218,
+      "training_memory": {
+        "memory_id": "3a24b39964abfb66fff78525",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 8,
+        "elite_count": 0,
+        "frontier_count": 0,
+        "strategy_family_count": 3,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed"
+        ],
+        "train_trial_count": 8,
+        "lifetime_experiment_count": 8,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 8,
+        "last_run_duplicate_skip_count": 0,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "3231",
-      "research_run_id": "09bc69b7c2f2dcdb7980531f",
+      "research_run_id": "56dc40f77425e8327ba77704",
       "data_fingerprints": [
         "a1bb0eeefbf7a5434a63",
         "a39385e0ccc3e9e503ef"
       ],
       "experiments_run": 24,
-      "candidate_offset": 29
+      "candidate_offset": 125,
+      "training_memory": {
+        "memory_id": "6dd6566250ddda156aff28fa",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 12,
+        "frontier_count": 43,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 4,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     },
     {
       "stock_code": "3711",
-      "research_run_id": "518b946a8b12a732010d9d4a",
+      "research_run_id": "3e83b74a9ff427c0a623ad92",
       "data_fingerprints": [
         "00c39b7658214a2dd14d",
         "0ec6e80a9a8e5010c6f7",
@@ -1098,7 +1540,29 @@
         "b6e561516c9438c1baaf"
       ],
       "experiments_run": 24,
-      "candidate_offset": 82
+      "candidate_offset": 178,
+      "training_memory": {
+        "memory_id": "b8fae04154aa8b64bb2c9191",
+        "search_space_schema": "score-engine-multistructure-v3",
+        "prior_memory_continued": false,
+        "unique_experiment_count": 24,
+        "elite_count": 11,
+        "frontier_count": 34,
+        "strategy_family_count": 4,
+        "strategy_families": [
+          "score_engine",
+          "score_engine_bollinger_breakout",
+          "score_engine_rsi_confirmed",
+          "score_engine_volume_confirmed"
+        ],
+        "train_trial_count": 24,
+        "lifetime_experiment_count": 24,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 24,
+        "last_run_duplicate_skip_count": 2,
+        "validation_feedback_used": false,
+        "holdout_feedback_used": false
+      }
     }
   ]
 }

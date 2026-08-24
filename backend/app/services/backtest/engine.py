@@ -15,6 +15,7 @@ from app.services.history_policy import (
     BACKTEST_WARMUP_MONTHS,
     RESEARCH_HISTORY_MONTHS,
     default_research_start_date,
+    effective_history_start_date,
 )
 from app.services.research_history import frame_coverage
 from indicators import add_indicators
@@ -92,6 +93,7 @@ def _copy_frame_with_attrs(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _history_snapshot_covers(
     frame: pd.DataFrame,
+    stock_code: str,
     required_start: pd.Timestamp,
     required_end: pd.Timestamp,
 ) -> bool:
@@ -100,8 +102,14 @@ def _history_snapshot_covers(
     coverage = frame_coverage(frame)
     actual_start = pd.Timestamp(frame.index.min()).normalize()
     actual_end = pd.Timestamp(frame.index.max()).normalize()
+    effective_start = pd.Timestamp(
+        effective_history_start_date(
+            stock_code,
+            required_start.date(),
+        )
+    ).normalize()
     return bool(
-        actual_start <= required_start
+        actual_start.to_period("M") <= effective_start.to_period("M")
         and actual_end >= required_end - pd.Timedelta(days=10)
         and coverage["complete_month_coverage"]
     )
@@ -117,6 +125,7 @@ def _get_history_snapshot(
         frame = _HISTORY_SNAPSHOT_CACHE.get(key)
         if frame is None or not _history_snapshot_covers(
             frame,
+            stock_code,
             required_start,
             required_end,
         ):
@@ -306,6 +315,12 @@ def _download_backtest_history(
     required_end = pd.Timestamp(
         required_end_date or pd.Timestamp.today()
     ).normalize()
+    effective_required_start = pd.Timestamp(
+        effective_history_start_date(
+            stock_code,
+            required_start.date(),
+        )
+    ).normalize()
     cached = _get_history_snapshot(
         stock_code,
         required_start,
@@ -357,7 +372,10 @@ def _download_backtest_history(
         coverage = frame_coverage(candidate)
         actual_start = pd.Timestamp(candidate.index.min()).normalize()
         actual_end = pd.Timestamp(candidate.index.max()).normalize()
-        covers_start = actual_start <= required_start
+        covers_start = (
+            actual_start.to_period("M")
+            <= effective_required_start.to_period("M")
+        )
         covers_end = actual_end >= required_end - pd.Timedelta(days=10)
         complete_months = bool(coverage["complete_month_coverage"])
         covers_requested_span = (

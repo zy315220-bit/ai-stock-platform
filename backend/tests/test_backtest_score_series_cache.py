@@ -175,3 +175,49 @@ def test_daily_history_snapshot_avoids_repeated_provider_downloads(
     assert calls == 1
     assert first.attrs["history_recovery"]["cache_hit"] is False
     assert second.attrs["history_recovery"]["cache_hit"] is True
+
+
+def test_listing_aware_snapshot_does_not_retry_pre_listing_months(
+    monkeypatch,
+) -> None:
+    calls = 0
+    dates = pd.bdate_range("2020-07-20", "2025-12-31")
+    source = pd.DataFrame(
+        {
+            "Open": 20.0,
+            "High": 20.5,
+            "Low": 19.5,
+            "Close": 20.0,
+            "Volume": 1_000_000,
+        },
+        index=dates,
+    )
+    source.attrs.update(
+        source="test",
+        split_adjusted=True,
+        corporate_action_validated=True,
+        price_basis="split_adjusted",
+    )
+
+    def fake_download(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return source.copy()
+
+    monkeypatch.setattr(engine, "download_stock", fake_download)
+    engine._clear_history_snapshot_cache()
+    first = engine._download_backtest_history(
+        "00878",
+        required_start_date="2020-01-01",
+        required_end_date="2025-12-31",
+    )
+    second = engine._download_backtest_history(
+        "00878",
+        required_start_date="2020-01-01",
+        required_end_date="2025-12-31",
+    )
+
+    assert calls == 1
+    assert first.attrs["history_recovery"]["attempts"] == 1
+    assert first.attrs["history_recovery"]["cache_hit"] is False
+    assert second.attrs["history_recovery"]["cache_hit"] is True

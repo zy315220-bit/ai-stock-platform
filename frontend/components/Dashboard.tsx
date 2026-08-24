@@ -12,12 +12,19 @@ import {
 } from "react";
 
 import StockChart from "@/components/StockChart";
+import { clearRecoveryAttempt } from "@/lib/client-recovery";
+import {
+  readClientStorage,
+  removeClientStorage,
+  writeClientStorage,
+} from "@/lib/client-storage";
 import {
   fetchAnalysis,
   fetchBacktest,
   fetchCompetition,
   fetchDailyScanner,
   fetchHealth,
+  fetchMarketOverview,
   isRetryableRequestError,
 } from "@/lib/api";
 import {
@@ -28,6 +35,7 @@ import type {
   AnalysisResponse,
   BacktestResponse,
   CompetitionResponse,
+  MarketOverviewResponse,
   PositionStatus,
   ScannerCandidate,
   ScannerResponse,
@@ -245,6 +253,346 @@ function formatInteger(
 }
 
 
+function formatPeriodSpan(
+  start: string | undefined,
+  end: string | undefined,
+): string {
+  if (!start || !end) {
+    return "";
+  }
+
+  const startTime = Date.parse(`${start}T00:00:00Z`);
+  const endTime = Date.parse(`${end}T00:00:00Z`);
+
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime < startTime) {
+    return "";
+  }
+
+  const inclusiveDays = Math.floor((endTime - startTime) / 86_400_000) + 1;
+  const years = inclusiveDays / 365.2425;
+
+  if (years >= 0.9) {
+    const roundedYears = Math.round(years);
+    return `${Math.abs(years - roundedYears) < 0.08 ? roundedYears : formatNumber(years, 1)} 年`;
+  }
+
+  const months = inclusiveDays / 30.436875;
+  const roundedMonths = Math.max(1, Math.round(months));
+  return `${roundedMonths} 個月`;
+}
+
+
+const COMPETITION_CACHE_KEY = "ai-stock-competition-v3";
+const COMPETITION_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+
+function readCompetitionCache(): CompetitionResponse | null {
+  try {
+    const stored = readClientStorage(COMPETITION_CACHE_KEY);
+    if (!stored) {
+      return null;
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("savedAt" in parsed) ||
+      typeof parsed.savedAt !== "number" ||
+      !("data" in parsed) ||
+      typeof parsed.data !== "object" ||
+      parsed.data === null ||
+      !("status" in parsed.data) ||
+      parsed.data.status !== "completed" ||
+      !("robots" in parsed.data) ||
+      !Array.isArray(parsed.data.robots) ||
+      Date.now() - parsed.savedAt > COMPETITION_CACHE_MAX_AGE_MS
+    ) {
+      removeClientStorage(COMPETITION_CACHE_KEY);
+      return null;
+    }
+
+    return parsed.data as CompetitionResponse;
+  } catch {
+    removeClientStorage(COMPETITION_CACHE_KEY);
+    return null;
+  }
+}
+
+
+function writeCompetitionCache(data: CompetitionResponse): void {
+  writeClientStorage(
+    COMPETITION_CACHE_KEY,
+    JSON.stringify({ savedAt: Date.now(), data }),
+  );
+}
+
+
+function clearCompetitionCache(): void {
+  removeClientStorage(COMPETITION_CACHE_KEY);
+}
+
+
+function competitionLoadingStage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 12) {
+    return "連線並檢查 ETF 歷史資料";
+  }
+  if (elapsedSeconds < 55) {
+    return "整理五年行情、分割與配息";
+  }
+  if (elapsedSeconds < 105) {
+    return "16 台機器人逐筆模擬交易";
+  }
+  return "統計勝率區間並建立排行榜";
+}
+
+
+function analysisLoadingStage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 6) {
+    return "取得交易所日線與最新成交";
+  }
+  if (elapsedSeconds < 16) {
+    return "檢查缺月與資料筆數";
+  }
+  if (elapsedSeconds < 32) {
+    return "計算技術指標與三面向評分";
+  }
+  return "整理風險與持股建議";
+}
+
+
+function backtestLoadingStage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 15) {
+    return "取得長期歷史行情";
+  }
+  if (elapsedSeconds < 45) {
+    return "驗證缺月、分割與配息";
+  }
+  if (elapsedSeconds < 120) {
+    return "逐日模擬訊號與交易成本";
+  }
+  return "統計報酬、回撤與交易紀錄";
+}
+
+
+function marketLoadingStage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 7) {
+    return "取得證交所與櫃買中心盤後資料";
+  }
+  if (elapsedSeconds < 14) {
+    return "定位最近 5／20 個交易日";
+  }
+  if (elapsedSeconds < 22) {
+    return "統計市場廣度與 20 日量能";
+  }
+  return "確認產業個股擴散與趨勢排名";
+}
+
+
+function formatElapsedTime(elapsedSeconds: number): string {
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+
+function CompetitionLoader({ elapsedSeconds }: { elapsedSeconds: number }) {
+  const [showMusicVideo, setShowMusicVideo] = useState(false);
+
+  return (
+    <div className="competition-loader">
+      <div className="competition-loader-status" role="status" aria-live="polite">
+        <div className="competition-loader-arena" aria-hidden="true">
+          <span className="competition-loader-trophy">♜</span>
+          <i className="robot-runner runner-one" />
+          <i className="robot-runner runner-two" />
+          <i className="robot-runner runner-three" />
+          <i className="robot-runner runner-four" />
+        </div>
+        <strong>{competitionLoadingStage(elapsedSeconds)}</strong>
+        <p>完整資料正在驗證；完成後會快取，之後開啟可直接顯示。</p>
+        <small>已執行 {formatElapsedTime(elapsedSeconds)}，請保持此頁開啟</small>
+      </div>
+
+      <aside className="competition-music-video">
+        {showMusicVideo ? (
+          <iframe
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            src="https://www.youtube-nocookie.com/embed/m7pL4FprmjI?autoplay=1&mute=0&loop=1&playlist=m7pL4FprmjI&playsinline=1&controls=1&rel=0"
+            title="夢的翅膀受了傷卡點舞配樂影片"
+          />
+        ) : (
+          <button
+            className="competition-music-start"
+            onClick={() => setShowMusicVideo(true)}
+            type="button"
+          >
+            <span aria-hidden="true">▶</span>
+            播放配樂舞蹈
+          </button>
+        )}
+        <strong>夢的翅膀受了傷・卡點舞</strong>
+        <small>手機禁止自動出聲，點一下才會播放音樂。</small>
+      </aside>
+    </div>
+  );
+}
+
+
+function DataLoadingPanel({
+  code,
+  elapsedSeconds,
+  kind,
+  onCancel,
+}: {
+  code: string;
+  elapsedSeconds: number;
+  kind: "analysis" | "backtest" | "market";
+  onCancel: () => void;
+}) {
+  const isBacktest = kind === "backtest";
+  const isMarket = kind === "market";
+  const stage = isBacktest
+    ? backtestLoadingStage(elapsedSeconds)
+    : isMarket
+      ? marketLoadingStage(elapsedSeconds)
+      : analysisLoadingStage(elapsedSeconds);
+
+  return (
+    <div className={`data-loading-panel ${isBacktest ? "compact" : ""}`} role="status" aria-live="polite">
+      <div className="data-loading-visual" aria-hidden="true">
+        <span className="data-loading-orbit" />
+        <div className="data-loading-bars">
+          <i /><i /><i /><i /><i />
+        </div>
+      </div>
+      <div className="data-loading-copy">
+        <span>{isBacktest ? "HISTORICAL TEST" : isMarket ? "OFFICIAL MARKET DATA" : "REAL DATA ANALYSIS"}</span>
+        <strong>{code || "股票"}・{stage}</strong>
+        <p>
+          {isBacktest
+            ? "系統會先確認長期資料完整度，再計入分割、配息與交易成本。"
+            : isMarket
+              ? "系統會分開計算價格趨勢、上市股票廣度與量能，不把少數權值股上漲當成全產業同步。"
+              : "系統正在交叉檢查資料完整度；若筆數不足會自動改用長期來源重抓。"}
+        </p>
+        <small>已執行 {formatElapsedTime(elapsedSeconds)}</small>
+      </div>
+      <button onClick={onCancel} type="button">取消</button>
+    </div>
+  );
+}
+
+
+type ScannerProgressItem = {
+  code: string;
+  status: ScannerAnalysisEntry["status"];
+};
+
+
+function ScannerRankingAnimation({
+  items,
+  readyCount,
+  settledCount,
+}: {
+  items: ScannerProgressItem[];
+  readyCount: number;
+  settledCount: number;
+}) {
+  const total = items.length;
+  const processingCodes = items
+    .filter((item) => item.status === "loading")
+    .slice(0, 3)
+    .map((item) => item.code);
+  const failedCount = items.filter(
+    (item) => item.status === "error",
+  ).length;
+  const progress = total > 0 ? (settledCount / total) * 100 : 0;
+
+  return (
+    <section
+      aria-label={`候選股三面向分析進度，${settledCount}／${total} 檔已檢查`}
+      aria-valuemax={total}
+      aria-valuemin={0}
+      aria-valuenow={settledCount}
+      aria-valuetext={`${readyCount} 檔分析完成${failedCount > 0 ? `，${failedCount} 檔失敗` : ""}`}
+      className="scanner-journey"
+      role="progressbar"
+    >
+      <div className="scanner-journey-head">
+        <div>
+          <span>CANDIDATE CHECKPOINT</span>
+          <strong>
+            {processingCodes.length > 0
+              ? `${processingCodes.length} 檔候選股並行穿越三道檢查門`
+              : "正在組裝正式排名"}
+          </strong>
+        </div>
+        <b>
+          {readyCount}
+          <small>／{total} 檔</small>
+        </b>
+      </div>
+
+      <div className="scanner-gate-track" aria-hidden="true">
+        <div className="scanner-token-stream">
+          {processingCodes.map((code) => (
+            <span className="scanner-stock-token" key={code}>
+              <i>↗</i>
+              {code}
+            </span>
+          ))}
+        </div>
+        <div className="scanner-gate scanner-technical-gate">
+          <i>技</i>
+          <small>技術面</small>
+        </div>
+        <div className="scanner-gate scanner-fundamental-gate">
+          <i>基</i>
+          <small>基本面</small>
+        </div>
+        <div className="scanner-gate scanner-news-gate">
+          <i>消</i>
+          <small>消息面</small>
+        </div>
+        <div className="scanner-gate scanner-rank-gate">
+          <i>#</i>
+          <small>正式排名</small>
+        </div>
+      </div>
+
+      <div className="scanner-journey-progress" aria-hidden="true">
+        <i style={{ width: `${progress}%` }} />
+      </div>
+
+      <div className="scanner-checkpoint-grid" aria-hidden="true">
+        {items.map((item, index) => (
+          <span
+            className={`scanner-checkpoint ${item.status}`}
+            key={item.code}
+          >
+            <i>
+              {item.status === "ready"
+                ? "✓"
+                : item.status === "error"
+                  ? "!"
+                  : index + 1}
+            </i>
+            <small>{item.code}</small>
+          </span>
+        ))}
+      </div>
+
+      <p>
+        每完成一檔才點亮一格；技術、基本、消息三面向未齊全，不會提前排入正式名次。
+      </p>
+    </section>
+  );
+}
+
+
 const stateLabels: Record<string, string> = {
   LONG: "偏多",
   SHORT: "偏空",
@@ -412,15 +760,6 @@ function PerspectiveCard({
 }
 
 
-function LoadingPanel() {
-  return (
-    <div className="loading-panel">
-      正在取得官方行情並計算指標，第一次查詢會比重複查詢稍久……
-    </div>
-  );
-}
-
-
 function isAbortError(reason: unknown): boolean {
   return (
     reason instanceof Error &&
@@ -576,6 +915,9 @@ export default function Dashboard() {
   const [pendingStockCode, setPendingStockCode] =
     useState("");
 
+  const [analysisLoadingSeconds, setAnalysisLoadingSeconds] =
+    useState(0);
+
   const [error, setError] =
     useState("");
 
@@ -587,6 +929,9 @@ export default function Dashboard() {
 
   const [backtestLoading, setBacktestLoading] =
     useState(false);
+
+  const [backtestLoadingSeconds, setBacktestLoadingSeconds] =
+    useState(0);
 
   const [backtestError, setBacktestError] =
     useState("");
@@ -633,11 +978,35 @@ export default function Dashboard() {
   const [competitionRefreshKey, setCompetitionRefreshKey] =
     useState(0);
 
+  const [competitionLoadingSeconds, setCompetitionLoadingSeconds] =
+    useState(0);
+
+  const [competitionRankingView, setCompetitionRankingView] =
+    useState<"confidence" | "return">("confidence");
+
   const [competitionTradeRobotId, setCompetitionTradeRobotId] =
     useState("TECHNICAL-v1");
 
   const [competitionTradeSegment, setCompetitionTradeSegment] =
     useState<"backtest" | "forward">("forward");
+
+  const [marketOverview, setMarketOverview] =
+    useState<MarketOverviewResponse | null>(null);
+
+  const [marketLoading, setMarketLoading] =
+    useState(false);
+
+  const [marketLoadingSeconds, setMarketLoadingSeconds] =
+    useState(0);
+
+  const [marketError, setMarketError] =
+    useState("");
+
+  const [marketRefreshKey, setMarketRefreshKey] =
+    useState(0);
+
+  const [industryRankingView, setIndustryRankingView] =
+    useState<"trend" | "daily">("trend");
 
   const scannerAnalysesRef =
     useRef<Record<string, ScannerAnalysisEntry>>({});
@@ -660,13 +1029,18 @@ export default function Dashboard() {
   const healthControllerRef =
     useRef<AbortController | null>(null);
 
+  const marketControllerRef =
+    useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    clearRecoveryAttempt();
+  }, []);
+
   useEffect(() => {
     let timer = 0;
 
     try {
-      const stored = window.localStorage.getItem(
-        "ai-stock-watchlist-v1",
-      );
+      const stored = readClientStorage("ai-stock-watchlist-v1");
 
       if (!stored) {
         return;
@@ -688,9 +1062,7 @@ export default function Dashboard() {
         }, 0);
       }
     } catch {
-      window.localStorage.removeItem(
-        "ai-stock-watchlist-v1",
-      );
+      removeClientStorage("ai-stock-watchlist-v1");
     }
 
     return () => window.clearTimeout(timer);
@@ -845,19 +1217,35 @@ export default function Dashboard() {
       return;
     }
 
+    if (competitionRefreshKey === 0) {
+      const cachedCompetition = readCompetitionCache();
+      if (cachedCompetition) {
+        const cachedTimer = window.setTimeout(() => {
+          setCompetition(cachedCompetition);
+        }, 0);
+        return () => window.clearTimeout(cachedTimer);
+      }
+    }
+
     let active = true;
     const controller = new AbortController();
     competitionControllerRef.current = controller;
     const timer = window.setTimeout(() => {
+      setCompetitionLoadingSeconds(0);
       setCompetitionLoading(true);
       setCompetitionError("");
 
-      void fetchCompetition(100_000, { signal: controller.signal })
+      void fetchCompetition(100_000, {
+        signal: controller.signal,
+        cache: competitionRefreshKey ? "no-store" : "default",
+        refreshKey: competitionRefreshKey || undefined,
+      })
         .then((response) => {
           if (!active) {
             return;
           }
           setCompetition(response);
+          writeCompetitionCache(response);
           track("robot_competition_completed", {
             run_id: response.run_id,
             leader: response.leader.robot_id,
@@ -890,6 +1278,118 @@ export default function Dashboard() {
       }
     };
   }, [activePage, competition, competitionRefreshKey]);
+
+
+  useEffect(() => {
+    if (!competitionLoading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setCompetitionLoadingSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [competitionLoading]);
+
+
+  useEffect(() => {
+    if (!loading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setAnalysisLoadingSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [loading]);
+
+
+  useEffect(() => {
+    if (!backtestLoading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setBacktestLoadingSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [backtestLoading]);
+
+
+  useEffect(() => {
+    if (
+      !["market", "industry"].includes(activePage) ||
+      marketOverview
+    ) {
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+    marketControllerRef.current = controller;
+    const timer = window.setTimeout(() => {
+      setMarketLoadingSeconds(0);
+      setMarketLoading(true);
+      setMarketError("");
+
+      void fetchMarketOverview({
+        signal: controller.signal,
+        refreshKey: marketRefreshKey || undefined,
+      })
+        .then((response) => {
+          if (!active) {
+            return;
+          }
+
+          setMarketOverview(response);
+          track("market_overview_loaded", {
+            updated_at: response.updated_at,
+            sectors: response.sectors.length,
+          });
+        })
+        .catch((reason: unknown) => {
+          if (!active || isAbortError(reason)) {
+            return;
+          }
+
+          setMarketError(
+            reason instanceof Error
+              ? reason.message
+              : "市場總覽更新失敗。",
+          );
+        })
+        .finally(() => {
+          if (active) {
+            setMarketLoading(false);
+          }
+        });
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+      if (marketControllerRef.current === controller) {
+        marketControllerRef.current = null;
+      }
+    };
+  }, [activePage, marketOverview, marketRefreshKey]);
+
+
+  useEffect(() => {
+    if (!marketLoading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setMarketLoadingSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [marketLoading]);
 
 
   useEffect(() => {
@@ -968,6 +1468,7 @@ export default function Dashboard() {
       analysisControllerRef.current?.abort();
       backtestControllerRef.current?.abort();
       competitionControllerRef.current?.abort();
+      marketControllerRef.current?.abort();
     };
   }, []);
 
@@ -1021,11 +1522,16 @@ export default function Dashboard() {
     analysisControllerRef.current = controller;
     backtestRequestIdRef.current += 1;
 
+    setAnalysisLoadingSeconds(0);
     setLoading(true);
     setPendingStockCode(normalizedCode);
     setBacktestLoading(false);
     setError("");
     setAnalysisCanRetry(false);
+
+    if (openAnalysisPage) {
+      setActivePage("analysis");
+    }
 
     try {
       const response =
@@ -1052,9 +1558,6 @@ export default function Dashboard() {
         ),
       });
 
-      if (openAnalysisPage) {
-        setActivePage("analysis");
-      }
     } catch (reason) {
       if (
         isAbortError(reason) ||
@@ -1101,7 +1604,7 @@ export default function Dashboard() {
 
   function saveWatchlist(next: WatchItem[]) {
     setSavedWatchlist(next);
-    window.localStorage.setItem(
+    writeClientStorage(
       "ai-stock-watchlist-v1",
       JSON.stringify(next),
     );
@@ -1158,6 +1661,18 @@ export default function Dashboard() {
   }
 
 
+  function refreshMarketOverview() {
+    setMarketOverview(null);
+    setMarketError("");
+    setMarketRefreshKey((value) => value + 1);
+  }
+
+
+  function cancelMarketOverview() {
+    marketControllerRef.current?.abort();
+  }
+
+
   function selectScannerCandidate(
     item: ScannerCandidate,
   ) {
@@ -1200,6 +1715,7 @@ export default function Dashboard() {
       return;
     }
 
+    setBacktestLoadingSeconds(0);
     setBacktestLoading(true);
     setBacktestError("");
     setBacktestCanRetry(false);
@@ -1287,7 +1803,14 @@ export default function Dashboard() {
 
   function renderAnalysisOverview() {
     if (loading && !data) {
-      return <LoadingPanel />;
+      return (
+        <DataLoadingPanel
+          code={pendingStockCode || stockCode.trim()}
+          elapsedSeconds={analysisLoadingSeconds}
+          kind="analysis"
+          onCancel={cancelAnalysis}
+        />
+      );
     }
 
     if (!data) {
@@ -1491,6 +2014,25 @@ export default function Dashboard() {
               ma20={data.chart.ma20}
               ma60={data.chart.ma60}
             />
+
+            {data.meta.history_coverage?.start && data.meta.history_coverage.end ? (
+              <>
+                <p className="backtest-period">
+                  圖表資料期間：{data.meta.history_coverage.start} 至 {data.meta.history_coverage.end}
+                  {" ・ "}{data.meta.daily_source}
+                </p>
+                {!data.meta.history_coverage.complete_month_coverage ? (
+                  <p className="backtest-note">
+                    官方資料缺少月份：{data.meta.history_coverage.missing_months.join("、")}，目前不視為完整一年資料。
+                  </p>
+                ) : null}
+                {data.meta.history_recovery?.recovered ? (
+                  <p className="data-recovery-note">
+                    系統偵測到首批資料不完整，已自動補齊 {data.meta.history_recovery.initial_rows} → {data.meta.history_recovery.final_rows} 筆（共嘗試 {data.meta.history_recovery.attempts} 次）。
+                  </p>
+                ) : null}
+              </>
+            ) : null}
           </article>
 
           <article className="panel score-panel">
@@ -1883,10 +2425,19 @@ export default function Dashboard() {
           {backtestLoading && backtest ? (
             <div className="request-notice request-notice-compact" role="status">
               <div>
-                <strong>正在重新計算回測</strong>
-                <span>目前顯示的是上一筆回測結果，完成後會自動更新。</span>
+                <strong>{backtestLoadingStage(backtestLoadingSeconds)}</strong>
+                <span>已執行 {formatElapsedTime(backtestLoadingSeconds)}；目前顯示上一筆結果，完成後會自動更新。</span>
               </div>
             </div>
+          ) : null}
+
+          {backtestLoading && !backtest ? (
+            <DataLoadingPanel
+              code={data.stock.code}
+              elapsedSeconds={backtestLoadingSeconds}
+              kind="backtest"
+              onCancel={cancelBacktest}
+            />
           ) : null}
 
           {backtest ? (
@@ -1894,16 +2445,31 @@ export default function Dashboard() {
               <p className="backtest-period">
                 實際資料期間：{backtest.actual_start_date} 至 {backtest.actual_end_date}
                 {" ・ "}{backtest.data_source}
+                {" ・ "}約 {formatNumber(backtest.history_coverage.available_years)} 年
               </p>
+              {!backtest.history_coverage.long_horizon_qualified ? (
+                <p className="backtest-note">
+                  {!backtest.history_coverage.complete_month_coverage
+                    ? `官方資料缺少月份：${backtest.history_coverage.missing_months.join("、")}，本次不能視為完整長期回測。`
+                    : "這檔商品可用資料不足 3 年，不能視為長期回測；可能是上市時間較短。"}
+                </p>
+              ) : null}
+              {backtest.history_recovery?.recovered ? (
+                <p className="data-recovery-note">
+                  系統偵測到首批歷史資料不足，已自動補齊 {backtest.history_recovery.initial_rows} → {backtest.history_recovery.final_rows} 筆（共嘗試 {backtest.history_recovery.attempts} 次）。
+                </p>
+              ) : null}
               <div className="backtest-grid">
                 <MetricCard
                   label="策略報酬"
                   value={`${formatNumber(backtest.total_return_percent)}%`}
+                  detail={`含配息 NT$${formatInteger(backtest.total_dividends)}`}
                   tone={backtest.total_return_percent >= 0 ? "positive" : "negative"}
                 />
                 <MetricCard
-                  label="同期持有"
+                  label="同期持有（含息）"
                   value={`${formatNumber(backtest.buy_and_hold.return_percent)}%`}
+                  detail={`配息 NT$${formatInteger(backtest.buy_and_hold.total_dividends)}`}
                   tone={backtest.buy_and_hold.return_percent >= 0 ? "positive" : "negative"}
                 />
                 <MetricCard
@@ -1922,14 +2488,12 @@ export default function Dashboard() {
                 />
               </div>
               <p className="backtest-note">
-                過去績效不代表未來結果；若策略報酬低於同期持有，代表目前規則仍需調整，不能因名稱含 AI 就視為有效。
+                已依股價分割調整歷史價格，並納入證交所公告配息；過去績效不代表未來結果。若策略報酬低於同期持有，代表目前規則仍需調整，不能因名稱含 AI 就視為有效。
               </p>
             </>
-          ) : (
+          ) : backtestLoading ? null : (
             <p className="empty-state">
-              {backtestLoading
-                ? "正在計算歷史資料；你可以按下「取消回測」停止等待。"
-                : "回測不會自動下單。按下執行後，系統會用歷史資料比較量化策略與同期持有績效。"}
+              回測不會自動下單。按下執行後，系統會用最近五年官方資料比較量化策略與同期持有績效。
             </p>
           )}
         </article>
@@ -2365,6 +2929,12 @@ export default function Dashboard() {
     ).length;
     const rankingFinished =
       candidates.length > 0 && settledCount === candidates.length;
+    const scannerProgressItems: ScannerProgressItem[] = candidates.map(
+      (candidate) => ({
+        code: candidate.code,
+        status: scannerAnalyses[candidate.code]?.status ?? "loading",
+      }),
+    );
 
     if (rankingFinished) {
       candidates.sort((left, right) => {
@@ -2416,6 +2986,11 @@ export default function Dashboard() {
           <MetricCard
             label="完整分析"
             value={scanner ? `${readyCount} / ${candidates.length} 檔` : "—"}
+            detail={
+              scanner && !rankingFinished
+                ? "完成一檔，進度才增加一格"
+                : undefined
+            }
           />
 
           <MetricCard
@@ -2475,6 +3050,13 @@ export default function Dashboard() {
                 </strong>
                 <span>行情更新：{scanner.updated_at}</span>
               </div>
+              {!rankingFinished && scannerProgressItems.length > 0 ? (
+                <ScannerRankingAnimation
+                  items={scannerProgressItems}
+                  readyCount={readyCount}
+                  settledCount={settledCount}
+                />
+              ) : null}
               <div className="scanner-list">
                 {candidates.map((item, index) => {
                   const entry = scannerAnalyses[item.code];
@@ -2546,6 +3128,14 @@ export default function Dashboard() {
 
   function renderCompetitionPage() {
     const leaderRobot = competition?.robots[0] ?? null;
+    const displayedCompetitionRobots = competition
+      ? competitionRankingView === "confidence"
+        ? competition.robots
+        : [...competition.robots].sort((left, right) =>
+            right.forward.total_return_percent - left.forward.total_return_percent ||
+            right.wilson_lower_percent - left.wilson_lower_percent,
+          )
+      : [];
     const selectedTradeRobot =
       competition?.robots.find(
         (robot) => robot.robot_id === competitionTradeRobotId,
@@ -2572,6 +3162,7 @@ export default function Dashboard() {
 
     function rerunCompetition() {
       competitionControllerRef.current?.abort();
+      clearCompetitionCache();
       setCompetition(null);
       setCompetitionError("");
       setCompetitionRefreshKey((value) => value + 1);
@@ -2582,7 +3173,7 @@ export default function Dashboard() {
         <PageHeader
           eyebrow="ROBOT COMPETITION"
           title="AI 策略機器人競賽"
-          description="16 個固定規則機器人使用同一批官方 ETF 歷史資料與相同資金、成本、風控；先做 2 個月歷史檢查，再以最後 1 個月 walk-forward 模擬排名。"
+          description="16 個固定規則機器人使用同一批完整 ETF 歷史資料與相同資金、成本、風控；行情來源逐檔揭露，以前 4 年檢查，再用最後 1 年 walk-forward 模擬排名。"
         />
 
         <section className="metrics-grid">
@@ -2606,18 +3197,25 @@ export default function Dashboard() {
         </section>
 
         <div className="competition-runbar">
-          <div>
+          <div className="competition-run-copy">
             <strong>
               {competitionLoading
-                ? "16 個機器人正在讀取官方資料並逐筆模擬交易"
+                ? competitionLoadingStage(competitionLoadingSeconds)
                 : competition
                   ? `資料期間：${competition.periods.backtest.start} 至 ${competition.periods.forward.end}`
                   : "尚未取得本次競賽結果"}
             </strong>
-            <span>收盤產生訊號、下一交易日開盤成交；每筆交易計入手續費與 ETF 證交稅。</span>
+            <span>
+              {competitionLoading
+                ? `已執行 ${formatElapsedTime(competitionLoadingSeconds)}；首次更新較久，完成後會快取。`
+                : "收盤產生訊號、下一交易日開盤成交；每筆交易計入手續費與 ETF 證交稅。"}
+            </span>
+            {competitionLoading ? (
+              <span className="competition-loading-track" aria-hidden="true"><i /></span>
+            ) : null}
           </div>
           <button disabled={competitionLoading} onClick={rerunCompetition} type="button">
-            {competitionLoading ? "競賽執行中…" : competition ? "重新執行" : "執行公平競賽"}
+            {competitionLoading ? "競賽執行中…" : competition ? "更新當日結果" : "執行公平競賽"}
           </button>
         </div>
 
@@ -2633,29 +3231,63 @@ export default function Dashboard() {
             <div className="panel-header">
               <div>
                 <span className="panel-kicker">WALK-FORWARD LEADERBOARD</span>
-                <h2>前瞻勝率排行榜</h2>
+                <h2>{competitionRankingView === "confidence" ? "前瞻勝率證據排行榜" : "前瞻報酬率比較"}</h2>
               </div>
               <span className={`data-badge ${competition?.leader.qualified ? "" : "neutral"}`}>
-                {competition?.leader.qualified ? "已達樣本門檻" : "暫定排名"}
+                {competitionRankingView === "return"
+                  ? "比較檢視"
+                  : competition?.leader.qualified
+                    ? "已達樣本門檻"
+                    : "暫定排名"}
+              </span>
+            </div>
+            <div className="ranking-view-tabs" aria-label="選擇排行榜檢視">
+              <button
+                className={competitionRankingView === "confidence" ? "active" : ""}
+                onClick={() => setCompetitionRankingView("confidence")}
+                type="button"
+              >
+                正式勝率排名
+              </button>
+              <button
+                className={competitionRankingView === "return" ? "active" : ""}
+                onClick={() => setCompetitionRankingView("return")}
+                type="button"
+              >
+                報酬率比較
+              </button>
+            </div>
+            <div className="ranking-method-note">
+              <strong>
+                {competitionRankingView === "confidence"
+                  ? "名次先比 Wilson 95% 下界，不是先比報酬率"
+                  : "此處只按前瞻總報酬排序，不會改變正式冠軍"}
+              </strong>
+              <span>
+                {competitionRankingView === "confidence"
+                  ? (
+                    <>
+                      Wilson（1927）提供勝率與樣本數的統計區間；平台依「勝率優先」目標採下界排序，同分才比較報酬。
+                      <a href="https://doi.org/10.1080/01621459.1927.10502953" rel="noreferrer" target="_blank">查看原始論文</a>
+                    </>
+                  )
+                  : "切回正式勝率排名，可查看以勝率證據為目標的競賽結果。"}
               </span>
             </div>
             {competitionLoading && !competition ? (
-              <div className="ranking-empty">
-                <strong>正在執行 16 套固定策略</strong>
-                <p>逐檔讀取 0050、0056、00878、00919 官方日線，完成後會顯示逐筆交易與排名。</p>
-              </div>
+              <CompetitionLoader elapsedSeconds={competitionLoadingSeconds} />
             ) : competition ? (
               <div className="leaderboard-table">
                 <div className="leaderboard-row leaderboard-head">
                   <span>名次／機器人</span>
                   <span>前瞻交易／勝率</span>
-                  <span>Wilson 下界</span>
-                  <span>報酬／回撤</span>
+                  <span>{competitionRankingView === "confidence" ? "排名分數：Wilson 下界" : "Wilson 下界"}</span>
+                  <span>{competitionRankingView === "return" ? "比較分數：報酬" : "報酬／回撤"}</span>
                 </div>
-                {competition.robots.map((robot) => (
+                {displayedCompetitionRobots.map((robot, index) => (
                   <div className="leaderboard-row" key={robot.robot_id}>
                     <span className="leaderboard-name">
-                      <b>#{robot.rank}</b>
+                      <b>#{competitionRankingView === "confidence" ? robot.rank : index + 1}</b>
                       <span><strong>{robot.name}</strong><small>{robot.robot_id}</small></span>
                     </span>
                     <span>
@@ -2692,7 +3324,21 @@ export default function Dashboard() {
             </div>
             <ul className="fairness-list">
               <li>每個機器人相同本金：NT${competition ? formatInteger(competition.fairness.initial_capital) : "100,000"}</li>
-              <li>相同股票池：0050、0056、00878、00919</li>
+              <li>相同股票池：0050、0056、00878、00919（未滿五年者自上市日起）</li>
+              {competition ? (
+                <li>
+                  實際資料起點：{Object.entries(competition.history_coverage)
+                    .map(([code, coverage]) => `${code} ${coverage.start ?? "無資料"}`)
+                    .join("、")}
+                </li>
+              ) : null}
+              {competition ? (
+                <li>
+                  行情來源：{Object.entries(competition.data_sources)
+                    .map(([code, source]) => `${code} ${source}`)
+                    .join("、")}
+                </li>
+              ) : null}
               <li>手續費 0.1425%，ETF 賣出稅 0.1%</li>
               <li>相同 2 ATR 停損、4 ATR 停利</li>
               <li>收盤訊號、下一交易日開盤成交</li>
@@ -2707,42 +3353,6 @@ export default function Dashboard() {
           </article>
         </section>
 
-        <article className="panel robot-registry">
-          <div className="panel-header">
-            <div>
-              <span className="panel-kicker">ROBOT REGISTRY</span>
-              <h2>固定規則機器人</h2>
-            </div>
-            <span className="data-badge neutral">
-              {competition ? "本次規則指紋已驗證" : "等待執行"}
-            </span>
-          </div>
-          <div className="robot-card-grid">
-            {robotSpecs.map((robot) => {
-              const result = competition?.robots.find((item) => item.robot_id === robot.id);
-              return (
-                <article className="robot-card" key={robot.id}>
-                  <div>
-                    <span className="robot-focus">{robot.focus}</span>
-                    <span className="robot-status">規則已固定</span>
-                  </div>
-                  <h3>{robot.name}</h3>
-                  <p>{robot.rule}</p>
-                  <code>{robot.id}{result ? ` ・ ${result.rule_fingerprint.slice(0, 10)}` : ""}</code>
-                  {result ? (
-                    <div className="robot-result-line">
-                      <span>前瞻損益</span>
-                      <strong className={result.forward.total_return_percent >= 0 ? "positive" : "negative"}>
-                        {result.forward.total_return_percent >= 0 ? "+" : ""}{formatNumber(result.forward.total_return_percent)}%
-                      </strong>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        </article>
-
         <article className="panel competition-trades">
           <div className="panel-header">
             <div>
@@ -2755,32 +3365,39 @@ export default function Dashboard() {
           </div>
 
           <div className="trade-ledger-controls">
-            <div className="trade-robot-tabs" aria-label="選擇機器人交易紀錄">
-              {(competition?.robots ?? []).map((robot) => (
-                <button
-                  className={selectedTradeRobot?.robot_id === robot.robot_id ? "active" : ""}
-                  key={robot.robot_id}
-                  onClick={() => setCompetitionTradeRobotId(robot.robot_id)}
-                  type="button"
-                >
-                  #{robot.rank} {robot.name}
-                </button>
-              ))}
-            </div>
+            <label className="trade-robot-select">
+              <span>查看機器人</span>
+              <select
+                disabled={!competition}
+                onChange={(event) => setCompetitionTradeRobotId(event.target.value)}
+                value={selectedTradeRobot?.robot_id ?? ""}
+              >
+                {!competition ? <option value="">等待競賽結果</option> : null}
+                {(competition?.robots ?? []).map((robot) => (
+                  <option key={robot.robot_id} value={robot.robot_id}>
+                    #{robot.rank} {robot.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="trade-segment-tabs" aria-label="選擇測試區間">
               <button
                 className={competitionTradeSegment === "backtest" ? "active" : ""}
                 onClick={() => setCompetitionTradeSegment("backtest")}
                 type="button"
               >
-                2 個月歷史段
+                {competition
+                  ? `${formatPeriodSpan(competition.periods.backtest.start, competition.periods.backtest.end)}歷史段`
+                  : "歷史段"}
               </button>
               <button
                 className={competitionTradeSegment === "forward" ? "active" : ""}
                 onClick={() => setCompetitionTradeSegment("forward")}
                 type="button"
               >
-                1 個月前瞻段
+                {competition
+                  ? `${formatPeriodSpan(competition.periods.forward.start, competition.periods.forward.end)}前瞻段`
+                  : "前瞻段"}
               </button>
             </div>
           </div>
@@ -2838,6 +3455,45 @@ export default function Dashboard() {
           )}
         </article>
 
+        <details className="panel robot-registry">
+          <summary className="robot-registry-summary">
+            <span>
+              <small>策略稽核資料</small>
+              <strong>查看固定規則與驗證指紋</strong>
+            </span>
+            <span className="data-badge neutral">
+              {competition ? "16 套規則已驗證" : "等待執行"}
+            </span>
+          </summary>
+          <p className="robot-registry-note">
+            指紋只用來證明策略規則沒有在看到結果後被偷偷修改，不影響日常查看交易紀錄。
+          </p>
+          <div className="robot-card-grid">
+            {robotSpecs.map((robot) => {
+              const result = competition?.robots.find((item) => item.robot_id === robot.id);
+              return (
+                <article className="robot-card" key={robot.id}>
+                  <div>
+                    <span className="robot-focus">{robot.focus}</span>
+                    <span className="robot-status">規則已固定</span>
+                  </div>
+                  <h3>{robot.name}</h3>
+                  <p>{robot.rule}</p>
+                  <code>{robot.id}{result ? ` ・ ${result.rule_fingerprint.slice(0, 10)}` : ""}</code>
+                  {result ? (
+                    <div className="robot-result-line">
+                      <span>前瞻損益</span>
+                      <strong className={result.forward.total_return_percent >= 0 ? "positive" : "negative"}>
+                        {result.forward.total_return_percent >= 0 ? "+" : ""}{formatNumber(result.forward.total_return_percent)}%
+                      </strong>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        </details>
+
         {competition ? (
           <article className="panel competition-disclosures">
             <div className="panel-header">
@@ -2861,7 +3517,7 @@ export default function Dashboard() {
           <EmptyPanel
             eyebrow="ANTI-OVERFITTING"
             title="規則改變就建立新版本"
-            description="每個策略保存規則指紋。修改參數後不能沿用舊績效，並將最後 1 個月保留給 walk-forward 模擬。"
+            description="每個策略保存規則指紋。修改參數後不能沿用舊績效，並將最後 1 年保留給 walk-forward 模擬。"
           />
           <EmptyPanel
             eyebrow="AUDITABLE RESULTS"
@@ -2887,92 +3543,481 @@ export default function Dashboard() {
 
 
   function renderMarketPage() {
+    const twse = marketOverview?.indices.twse ?? null;
+    const tpex = marketOverview?.indices.tpex ?? null;
+    const market = marketOverview?.market ?? null;
+    const marketTrend = marketOverview?.market_trend ?? null;
+    const trendAvailable = marketOverview?.sector_trend.available ?? false;
+    const topSectors = marketOverview
+      ? trendAvailable
+        ? [...marketOverview.sectors]
+            .sort((left, right) => (left.trend_rank ?? 999) - (right.trend_rank ?? 999))
+            .slice(0, 5)
+        : marketOverview.sectors.slice(0, 5)
+      : [];
+
     return (
       <>
         <PageHeader
           eyebrow="MARKET OVERVIEW"
           title="台股市場總覽"
-          description="整合加權指數、櫃買指數、成交量、漲跌家數與市場環境。"
+          description="整合官方盤後指數、單日漲跌家數、上市 5／20 日市場廣度與量價確認。"
         />
+
+        <div className="market-page-actions">
+          <span>
+            {marketOverview
+              ? `最新資料：${marketOverview.updated_at || "交易所最新盤後"}`
+              : "等待官方盤後資料"}
+          </span>
+          <button
+            disabled={marketLoading}
+            onClick={refreshMarketOverview}
+            type="button"
+          >
+            {marketLoading ? "更新中…" : "重新整理"}
+          </button>
+        </div>
+
+        {marketError ? (
+          <div className="error-banner" role="alert">
+            <span>{marketError}</span>
+            <button
+              disabled={marketLoading}
+              onClick={refreshMarketOverview}
+              type="button"
+            >
+              重新嘗試
+            </button>
+          </div>
+        ) : null}
+
+        {marketLoading && !marketOverview ? (
+          <DataLoadingPanel
+            code="市場與產業"
+            elapsedSeconds={marketLoadingSeconds}
+            kind="market"
+            onCancel={cancelMarketOverview}
+          />
+        ) : null}
 
         <section className="metrics-grid">
           <MetricCard
             label="加權指數"
-            value="—"
+            value={formatNumber(twse?.close)}
+            detail={
+              twse?.change_percent === null || twse?.change_percent === undefined
+                ? twse?.date
+                : `${twse.change_percent >= 0 ? "+" : ""}${formatNumber(twse.change_percent)}%｜${twse.date}`
+            }
+            tone={
+              (twse?.change_percent ?? 0) >= 0
+                ? "positive"
+                : "negative"
+            }
           />
 
           <MetricCard
             label="櫃買指數"
-            value="—"
+            value={formatNumber(tpex?.close)}
+            detail={
+              tpex?.change_percent === null || tpex?.change_percent === undefined
+                ? tpex?.date
+                : `${tpex.change_percent >= 0 ? "+" : ""}${formatNumber(tpex.change_percent)}%｜${tpex.date}`
+            }
+            tone={
+              (tpex?.change_percent ?? 0) >= 0
+                ? "positive"
+                : "negative"
+            }
           />
 
           <MetricCard
-            label="台指期近月"
-            value="—"
+            label="上市櫃股票成交金額"
+            value={
+              market
+                ? `NT$${formatNumber(market.turnover_billion * 10, 0)}億`
+                : "—"
+            }
+            detail="僅統計四位數普通股"
           />
 
           <MetricCard
-            label="市場趨勢"
-            value="待串接"
+            label="上漲／下跌家數"
+            value={
+              market
+                ? `${market.advancing}／${market.declining}`
+                : "—"
+            }
+            detail={
+              market
+                ? `平盤 ${market.unchanged} 家`
+                : undefined
+            }
           />
 
           <MetricCard
-            label="市場廣度"
-            value="待串接"
+            label="市場環境"
+            value={market?.regime ?? "—"}
+            detail={
+              market
+                ? `綜合分數 ${formatNumber(market.regime_score, 1)}`
+                : undefined
+            }
+            tone={
+              market?.regime === "偏多"
+                ? "positive"
+                : market?.regime === "偏空"
+                  ? "negative"
+                  : "default"
+            }
           />
         </section>
 
-        <EmptyPanel
-          eyebrow="MARKET DATA"
-          title="市場指數尚未連線"
-          description="已移除容易誤導的固定示範數字；正式連接可靠來源前不再顯示假即時行情。"
-        />
+        {marketOverview && market ? (
+          <section className="market-overview-grid">
+            <article className="panel market-breadth-panel">
+              <div className="panel-header">
+                <div>
+                  <span className="panel-kicker">MARKET BREADTH</span>
+                  <h2>市場廣度</h2>
+                </div>
+                <span className={`data-badge ${market.regime === "中性" ? "neutral" : ""}`}>
+                  {market.regime}
+                </span>
+              </div>
+
+              <div className="breadth-bar" aria-label="上市櫃上漲與下跌家數比例">
+                <span
+                  className="breadth-up"
+                  style={{
+                    width: `${Math.max(
+                      3,
+                      market.advancing + market.declining > 0
+                        ? market.advancing / (market.advancing + market.declining) * 100
+                        : 50,
+                    )}%`,
+                  }}
+                />
+                <span className="breadth-down" />
+              </div>
+
+              <div className="breadth-values">
+                <span><i className="up" />上漲<strong>{market.advancing}</strong></span>
+                <span><i className="flat" />平盤<strong>{market.unchanged}</strong></span>
+                <span><i className="down" />下跌<strong>{market.declining}</strong></span>
+              </div>
+
+              <p>{market.regime_reason}</p>
+
+              {marketTrend?.available ? (
+                <div className="breadth-trend-grid">
+                  <span>
+                    <small>上市 5 日平均上漲比</small>
+                    <strong className={(marketTrend.average_advance_ratio_5d ?? 0) >= 50 ? "positive" : "negative"}>
+                      {formatNumber(marketTrend.average_advance_ratio_5d, 1)}%
+                    </strong>
+                    <em>
+                      {marketTrend.positive_breadth_days_5d ?? "—"}／5 日上漲家數較多
+                    </em>
+                  </span>
+                  <span>
+                    <small>上市 20 日平均上漲比</small>
+                    <strong className={(marketTrend.average_advance_ratio_20d ?? 0) >= 50 ? "positive" : "negative"}>
+                      {marketTrend.average_advance_ratio_20d === null
+                        ? "—"
+                        : `${formatNumber(marketTrend.average_advance_ratio_20d, 1)}%`}
+                    </strong>
+                    <em>
+                      {marketTrend.positive_breadth_days_20d ?? "—"}／20 日正廣度
+                    </em>
+                  </span>
+                  <span>
+                    <small>上市成交值／20 日均值</small>
+                    <strong className={(marketTrend.turnover_ratio_20d ?? 1) >= 1 ? "positive" : "negative"}>
+                      {marketTrend.turnover_ratio_20d === null
+                        ? "—"
+                        : `${formatNumber(marketTrend.turnover_ratio_20d, 2)} 倍`}
+                    </strong>
+                    <em>{marketTrend.volume_label}</em>
+                  </span>
+                </div>
+              ) : null}
+
+              {marketTrend?.available ? (
+                <div className="breadth-trend-verdict">
+                  <strong>{marketTrend.breadth_label}</strong>
+                  <small>
+                    多日口徑截至 {marketTrend.as_of}；與上方上市櫃單日家數分開計算。
+                  </small>
+                </div>
+              ) : null}
+            </article>
+
+            <article className="panel sector-leaders-panel">
+              <div className="panel-header">
+                <div>
+                  <span className="panel-kicker">SECTOR LEADERS</span>
+                  <h2>{trendAvailable ? "多日產業趨勢前五名" : "今日產業強弱前五名"}</h2>
+                </div>
+                <button onClick={() => changePage("industry")} type="button">
+                  查看完整排名
+                </button>
+              </div>
+
+              <div className="sector-mini-list">
+                {topSectors.map((sector) => (
+                  <div key={sector.index_name}>
+                    <span>{trendAvailable ? sector.trend_rank ?? "—" : sector.rank}</span>
+                    <strong>{sector.name}</strong>
+                    <b className={(trendAvailable ? sector.return_20d ?? 0 : sector.change_percent) >= 0 ? "positive" : "negative"}>
+                      {trendAvailable ? "20日 " : ""}
+                      {(trendAvailable ? sector.return_20d ?? 0 : sector.change_percent) >= 0 ? "+" : ""}
+                      {formatNumber(trendAvailable ? sector.return_20d : sector.change_percent)}%
+                    </b>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        ) : null}
+
+        {marketOverview ? (
+          <article className="market-method-note">
+            <strong>計算方式</strong>
+            <p>{marketOverview.method}</p>
+            {marketOverview.market_trend.available ? (
+              <p>{marketOverview.market_trend.method}</p>
+            ) : null}
+            {!marketOverview.dates_aligned ? (
+              <small>
+                注意：兩個交易所目前回傳日期不同（{marketOverview.source_dates.join("、")}），畫面分別標示各自日期，不把它包裝成同步即時行情。
+              </small>
+            ) : null}
+            <div>
+              {marketOverview.sources.map((source) => (
+                <a href={source.url} key={source.url} rel="noreferrer" target="_blank">
+                  {source.name}
+                </a>
+              ))}
+            </div>
+          </article>
+        ) : null}
       </>
     );
   }
 
 
   function renderIndustryPage() {
+    const sectors = marketOverview?.sectors ?? [];
+    const trendAvailable = marketOverview?.sector_trend.available ?? false;
+    const effectiveRankingView = trendAvailable ? industryRankingView : "daily";
+    const rankedSectors = effectiveRankingView === "trend"
+      ? [...sectors].sort(
+          (left, right) => (left.trend_rank ?? 999) - (right.trend_rank ?? 999),
+        )
+      : [...sectors].sort((left, right) => left.rank - right.rank);
+    const strongest = rankedSectors[0] ?? null;
+    const advancingSectors = sectors.filter(
+      (sector) => sector.change_percent > 0,
+    ).length;
+    const averageChange = sectors.length
+      ? sectors.reduce(
+          (sum, sector) => sum + sector.change_percent,
+          0,
+        ) / sectors.length
+      : null;
+
     return (
       <>
         <PageHeader
           eyebrow="INDUSTRY ANALYSIS"
           title="產業分析"
-          description="比較半導體、電子、金融、航運與其他產業的強弱及資金輪動。"
+          description="比較官方產業指數 1／5／20 日表現，並檢查產業內上市個股是否同步上漲。"
         />
+
+        <div className="market-page-actions">
+          <span>
+            {marketOverview
+              ? `產業指數日期：${strongest?.date ?? marketOverview.updated_at}`
+              : "等待官方產業指數"}
+          </span>
+          <button
+            disabled={marketLoading}
+            onClick={refreshMarketOverview}
+            type="button"
+          >
+            {marketLoading ? "更新中…" : "重新整理"}
+          </button>
+        </div>
+
+        {marketError ? (
+          <div className="error-banner" role="alert">
+            <span>{marketError}</span>
+            <button
+              disabled={marketLoading}
+              onClick={refreshMarketOverview}
+              type="button"
+            >
+              重新嘗試
+            </button>
+          </div>
+        ) : null}
+
+        {marketLoading && !marketOverview ? (
+          <DataLoadingPanel
+            code="產業趨勢"
+            elapsedSeconds={marketLoadingSeconds}
+            kind="market"
+            onCancel={cancelMarketOverview}
+          />
+        ) : null}
 
         <section className="metrics-grid">
           <MetricCard
-            label="最強產業"
-            value="待分析"
+            label={effectiveRankingView === "trend" ? "趨勢最強" : "今日最強"}
+            value={strongest?.name ?? "—"}
+            detail={
+              strongest
+                ? effectiveRankingView === "trend"
+                  ? `趨勢分數 ${formatNumber(strongest.trend_score, 1)}`
+                  : `${strongest.change_percent >= 0 ? "+" : ""}${formatNumber(strongest.change_percent)}%`
+                : undefined
+            }
+            tone="positive"
           />
 
           <MetricCard
-            label="資金流入"
-            value="待分析"
+            label="5 日表現"
+            value={strongest?.return_5d === null || strongest?.return_5d === undefined
+              ? "—"
+              : `${strongest.return_5d >= 0 ? "+" : ""}${formatNumber(strongest.return_5d)}%`}
+            detail={
+              marketOverview?.sector_trend.five_session_start
+                ? `自 ${marketOverview.sector_trend.five_session_start}`
+                : undefined
+            }
+            tone={(strongest?.return_5d ?? 0) >= 0 ? "positive" : "negative"}
           />
 
           <MetricCard
-            label="產業動能"
-            value="待分析"
+            label="20 日表現"
+            value={strongest?.return_20d === null || strongest?.return_20d === undefined
+              ? "—"
+              : `${strongest.return_20d >= 0 ? "+" : ""}${formatNumber(strongest.return_20d)}%`}
+            detail={
+              marketOverview?.sector_trend.twenty_session_start
+                ? `自 ${marketOverview.sector_trend.twenty_session_start}`
+                : undefined
+            }
+            tone={(strongest?.return_20d ?? 0) >= 0 ? "positive" : "negative"}
           />
 
           <MetricCard
-            label="領先股票"
-            value="待分析"
+            label="20 日超額大盤"
+            value={strongest?.excess_20d === null || strongest?.excess_20d === undefined
+              ? "—"
+              : `${strongest.excess_20d >= 0 ? "+" : ""}${formatNumber(strongest.excess_20d)}%`}
+            detail="產業報酬－加權指數報酬"
+            tone={(strongest?.excess_20d ?? 0) >= 0 ? "positive" : "negative"}
           />
 
           <MetricCard
-            label="更新時間"
-            value="尚未執行"
+            label="最強產業個股擴散"
+            value={strongest?.advance_ratio === null || strongest?.advance_ratio === undefined
+              ? "—"
+              : `${formatNumber(strongest.advance_ratio, 1)}%`}
+            detail={strongest?.advancing === null || strongest?.declining === null
+              ? averageChange === null
+                ? undefined
+                : `${advancingSectors}／${sectors.length} 個產業上漲`
+              : `${strongest.advancing} 漲／${strongest.declining} 跌｜${strongest.breadth_label}`}
+            tone={(strongest?.advance_ratio ?? 50) >= 50 ? "positive" : "negative"}
           />
         </section>
 
-        <EmptyPanel
-          eyebrow="SECTOR ROTATION"
-          title="產業輪動模型準備中"
-          description="後續會依據產業指數、相對強弱、成交量與個股分數建立產業排名。"
-        />
+        {marketOverview ? (
+          <article className="panel sector-ranking-panel">
+            <div className="panel-header">
+              <div>
+                <span className="panel-kicker">SECTOR STRENGTH</span>
+                <h2>{effectiveRankingView === "trend" ? "多日趨勢完整排名" : "當日強弱完整排名"}</h2>
+              </div>
+              <span className="data-badge neutral">
+                {effectiveRankingView === "trend" ? "1／5／20 日綜合" : "依當日漲跌幅"}
+              </span>
+            </div>
+
+            <div className="sector-view-tabs" aria-label="選擇產業排名期間">
+              <button
+                className={effectiveRankingView === "trend" ? "active" : ""}
+                disabled={!trendAvailable}
+                onClick={() => setIndustryRankingView("trend")}
+                type="button"
+              >
+                多日趨勢排名
+              </button>
+              <button
+                className={effectiveRankingView === "daily" ? "active" : ""}
+                onClick={() => setIndustryRankingView("daily")}
+                type="button"
+              >
+                當日漲跌排名
+              </button>
+            </div>
+
+            <div className="sector-ranking-head" aria-hidden="true">
+              <span>排名</span>
+              <span>產業</span>
+              <span>當日</span>
+              <span>5 日</span>
+              <span>20 日</span>
+              <span>趨勢分數</span>
+            </div>
+
+            <div className="sector-ranking-list">
+              {rankedSectors.map((sector) => (
+                <div key={sector.index_name}>
+                  <span className="sector-rank-number">
+                    {effectiveRankingView === "trend" ? sector.trend_rank ?? "—" : sector.rank}
+                  </span>
+                  <div className="sector-name-cell">
+                    <strong>{sector.name}</strong>
+                    <small>
+                      {sector.advance_ratio === null
+                        ? "個股擴散資料不足"
+                        : `${sector.advancing} 漲／${sector.declining} 跌 · ${sector.breadth_label}`}
+                    </small>
+                  </div>
+                  <b className={sector.change_percent >= 0 ? "positive" : "negative"}>
+                    {sector.change_percent >= 0 ? "+" : ""}{formatNumber(sector.change_percent)}%
+                  </b>
+                  <b className={(sector.return_5d ?? 0) >= 0 ? "positive" : "negative"}>
+                    {sector.return_5d === null ? "—" : `${sector.return_5d >= 0 ? "+" : ""}${formatNumber(sector.return_5d)}%`}
+                  </b>
+                  <b className={(sector.return_20d ?? 0) >= 0 ? "positive" : "negative"}>
+                    {sector.return_20d === null ? "—" : `${sector.return_20d >= 0 ? "+" : ""}${formatNumber(sector.return_20d)}%`}
+                  </b>
+                  <span className="sector-trend-cell">
+                    <strong>{formatNumber(sector.trend_score, 1)}</strong>
+                    <small>{sector.trend_label}</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {marketOverview ? (
+          <article className="market-method-note">
+            <strong>多日趨勢怎麼算？</strong>
+            <p>
+              {marketOverview.sector_trend.available
+                ? `${marketOverview.sector_trend.method} 資料期間 ${marketOverview.sector_trend.twenty_session_start} 至 ${marketOverview.sector_trend.as_of}。個股擴散只用來確認是否由少數權值股帶動，不納入排名分數；這不是資金流向或買進建議。`
+                : "官方歷史產業指數暫時不完整，因此本次只顯示當日排名，不用缺漏資料冒充多日趨勢。"}
+            </p>
+          </article>
+        ) : null}
       </>
     );
   }
@@ -3178,8 +4223,8 @@ export default function Dashboard() {
                 </strong>
                 <span>
                   {data
-                    ? `目前顯示的是上一筆 ${data.stock.code} ${data.stock.name} 的結果。`
-                    : "正在取得行情與計算指標；你可以隨時取消。"}
+                    ? `${analysisLoadingStage(analysisLoadingSeconds)}・${formatElapsedTime(analysisLoadingSeconds)}；目前顯示上一筆 ${data.stock.code} ${data.stock.name} 的結果。`
+                    : `${analysisLoadingStage(analysisLoadingSeconds)}・已執行 ${formatElapsedTime(analysisLoadingSeconds)}。`}
                 </span>
               </div>
 

@@ -2,6 +2,11 @@ import { NextRequest } from "next/server";
 
 import { BACKEND_API_URL } from "@/lib/server/backend";
 
+export const maxDuration = 300;
+
+const MARKET_CACHE_CONTROL =
+  "public, max-age=0, s-maxage=300, stale-while-revalidate=3600";
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -9,7 +14,8 @@ export async function GET(
   const { path } = await context.params;
   const controller = new AbortController();
   const isBacktest = path.at(-1) === "backtest";
-  const timeoutMs = isBacktest ? 110_000 : 60_000;
+  const isMarketOverview = path.join("/") === "market/overview";
+  const timeoutMs = isBacktest ? 270_000 : 60_000;
   let timedOut = false;
 
   const cancel = () => controller.abort();
@@ -41,7 +47,9 @@ export async function GET(
     return new Response(body, {
       status: response.status,
       headers: {
-        "cache-control": "no-store",
+        "cache-control": response.ok && isMarketOverview
+          ? MARKET_CACHE_CONTROL
+          : "no-store",
         "content-type": response.headers.get("content-type") ?? "application/json",
       },
     });

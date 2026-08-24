@@ -19,6 +19,7 @@ from app.services.research_lab.training_memory import (
 
 
 TRAIN_WINDOW = ("2020-01-01", "2023-11-04")
+TRAIN_IDENTITY = "canonical-train-v1"
 
 
 def _pipeline_result(
@@ -74,6 +75,7 @@ def test_training_memory_continues_with_novel_train_only_candidates() -> None:
         stock_code="2330",
         campaign_id="2026-Q3",
         train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
         rotated_grid=grid,
         prior_memory=None,
     )
@@ -90,6 +92,7 @@ def test_training_memory_continues_with_novel_train_only_candidates() -> None:
         stock_code="2330",
         campaign_id="2026-Q3",
         train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
         as_of_date="2026-08-25",
         result=_pipeline_result(
             evaluated_day_one,
@@ -108,6 +111,7 @@ def test_training_memory_continues_with_novel_train_only_candidates() -> None:
         stock_code="2330",
         campaign_id="2026-Q3",
         train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
         rotated_grid=grid,
         prior_memory=first_memory,
     )
@@ -126,8 +130,13 @@ def test_training_memory_continues_with_novel_train_only_candidates() -> None:
         stock_code="2330",
         campaign_id="2026-Q3",
         train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
         as_of_date="2026-08-26",
-        result=_pipeline_result(evaluated_day_two, run_id="day-two"),
+        result=_pipeline_result(
+            evaluated_day_two,
+            run_id="day-two",
+            fingerprint="strategy-specific-frame-v2",
+        ),
         prior_memory=first_memory,
     )
     summary = training_memory_summary(second_memory)
@@ -137,6 +146,7 @@ def test_training_memory_continues_with_novel_train_only_candidates() -> None:
     assert summary["unique_experiment_count"] == 4
     assert summary["last_run_new_experiment_count"] == 2
     assert summary["train_trial_count"] == 4
+    assert summary["train_data_identity_verified"] is True
     assert summary["validation_feedback_used"] is False
     assert summary["holdout_feedback_used"] is False
 
@@ -148,6 +158,7 @@ def test_training_memory_refuses_validation_feedback() -> None:
             stock_code="2330",
             campaign_id="2026-Q3",
             train_window=TRAIN_WINDOW,
+            train_data_identity=TRAIN_IDENTITY,
             as_of_date="2026-08-25",
             result=_pipeline_result(
                 [candidate],
@@ -167,6 +178,7 @@ def test_training_memory_refuses_non_train_rounds() -> None:
             stock_code="2330",
             campaign_id="2026-Q3",
             train_window=TRAIN_WINDOW,
+            train_data_identity=TRAIN_IDENTITY,
             as_of_date="2026-08-25",
             result=result,
             prior_memory=None,
@@ -179,6 +191,7 @@ def test_campaign_or_train_data_revision_resets_adaptive_memory() -> None:
         stock_code="2330",
         campaign_id="2026-Q3",
         train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
         as_of_date="2026-08-25",
         result=_pipeline_result([grid[0]], run_id="first"),
         prior_memory=None,
@@ -187,24 +200,80 @@ def test_campaign_or_train_data_revision_resets_adaptive_memory() -> None:
         stock_code="2330",
         campaign_id="2026-Q4",
         train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
         rotated_grid=grid,
         prior_memory=first_memory,
     )
     assert new_campaign_plan.audit["prior_memory_loaded"] is False
     assert new_campaign_plan.audit["memory_reset_reason"] == "campaign_changed"
 
+    revised_plan = prepare_daily_candidate_plan(
+        stock_code="2330",
+        campaign_id="2026-Q3",
+        train_window=TRAIN_WINDOW,
+        train_data_identity="canonical-train-v2",
+        rotated_grid=grid,
+        prior_memory=first_memory,
+    )
+    assert revised_plan.audit["prior_memory_loaded"] is False
+    assert revised_plan.audit["memory_reset_reason"] == "train_data_revision"
+
     revised_memory = build_training_memory(
         stock_code="2330",
         campaign_id="2026-Q3",
         train_window=TRAIN_WINDOW,
+        train_data_identity="canonical-train-v2",
         as_of_date="2026-08-26",
         result=_pipeline_result(
             [grid[1]],
             run_id="revised",
-            fingerprint="train-data-v2",
+            fingerprint="train-data-v1",
         ),
         prior_memory=first_memory,
     )
     assert revised_memory["memory_reset_reason"] == "train_data_revision"
     assert revised_memory["lifetime_run_count"] == 1
     assert revised_memory["lifetime_experiment_count"] == 1
+
+
+def test_existing_memory_migrates_to_canonical_identity_without_reset() -> None:
+    grid = generate_parameter_candidates()
+    first_memory = build_training_memory(
+        stock_code="2330",
+        campaign_id="2026-Q3",
+        train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
+        as_of_date="2026-08-25",
+        result=_pipeline_result([grid[0]], run_id="first"),
+        prior_memory=None,
+    )
+    first_memory.pop("train_data_identity")
+    first_memory.pop("train_data_identity_schema")
+    first_memory.pop("train_data_identity_verified")
+    first_memory.pop("train_data_identity_migrated")
+
+    plan = prepare_daily_candidate_plan(
+        stock_code="2330",
+        campaign_id="2026-Q3",
+        train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
+        rotated_grid=grid,
+        prior_memory=first_memory,
+    )
+    assert plan.audit["prior_memory_loaded"] is True
+    assert plan.audit["train_data_identity_migrated"] is True
+
+    migrated = build_training_memory(
+        stock_code="2330",
+        campaign_id="2026-Q3",
+        train_window=TRAIN_WINDOW,
+        train_data_identity=TRAIN_IDENTITY,
+        as_of_date="2026-08-26",
+        result=_pipeline_result([grid[1]], run_id="second"),
+        prior_memory=first_memory,
+    )
+    assert migrated["memory_reset_reason"] is None
+    assert migrated["train_data_identity_migrated"] is True
+    assert migrated["train_data_identity_verified"] is False
+    assert migrated["lifetime_run_count"] == 2
+    assert migrated["lifetime_experiment_count"] == 2

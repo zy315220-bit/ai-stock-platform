@@ -15,6 +15,7 @@ from .models import ExperimentDecision, ExperimentResult, ResearchCandidate
 
 
 TRAINING_MEMORY_SCHEMA_VERSION = 1
+TRAIN_DATA_IDENTITY_SCHEMA = "canonical-train-score-series-v1"
 MAX_ELITES = 12
 MAX_FRONTIER = 96
 MAX_SEEN_SIGNATURES = 10_000
@@ -76,7 +77,11 @@ def _memory_compatibility(
     stock_code: str,
     campaign_id: str,
     train_window: tuple[str, str],
+    train_data_identity: str,
 ) -> tuple[dict[str, Any] | None, str | None]:
+    normalized_identity = str(train_data_identity or "").strip()
+    if not normalized_identity:
+        raise ValueError("Canonical train data identity is required")
     if not isinstance(memory, dict):
         return None, "missing"
     checks = (
@@ -92,6 +97,15 @@ def _memory_compatibility(
     for safe, reason in checks:
         if not safe:
             return None, reason
+    prior_identity = str(memory.get("train_data_identity") or "").strip()
+    if prior_identity:
+        if (
+            memory.get("train_data_identity_schema")
+            != TRAIN_DATA_IDENTITY_SCHEMA
+        ):
+            return None, "train_data_identity_schema_changed"
+        if prior_identity != normalized_identity:
+            return None, "train_data_revision"
     return memory, None
 
 
@@ -116,6 +130,7 @@ def prepare_daily_candidate_plan(
     stock_code: str,
     campaign_id: str,
     train_window: tuple[str, str],
+    train_data_identity: str,
     rotated_grid: Iterable[ResearchCandidate],
     prior_memory: dict[str, Any] | None,
 ) -> DailyCandidatePlan:
@@ -125,6 +140,14 @@ def prepare_daily_candidate_plan(
         stock_code=stock_code,
         campaign_id=campaign_id,
         train_window=train_window,
+        train_data_identity=train_data_identity,
+    )
+    prior_identity = str(
+        (compatible or {}).get("train_data_identity") or ""
+    ).strip()
+    identity_migrated = bool(compatible and not prior_identity)
+    identity_verified = bool(
+        compatible and prior_identity == str(train_data_identity).strip()
     )
     seen = {
         str(signature)
@@ -176,6 +199,10 @@ def prepare_daily_candidate_plan(
         "prior_memory_loaded": compatible is not None,
         "prior_memory_id": (compatible or {}).get("memory_id"),
         "memory_reset_reason": reset_reason,
+        "train_data_identity_schema": TRAIN_DATA_IDENTITY_SCHEMA,
+        "train_data_identity": str(train_data_identity).strip(),
+        "train_data_identity_verified": identity_verified,
+        "train_data_identity_migrated": identity_migrated,
         "prior_seen_signature_count": len(seen),
         "prior_elite_count": len(elite_results),
         "prior_frontier_count": len(frontier),
@@ -260,6 +287,7 @@ def build_training_memory(
     stock_code: str,
     campaign_id: str,
     train_window: tuple[str, str],
+    train_data_identity: str,
     as_of_date: str,
     result: dict[str, Any],
     prior_memory: dict[str, Any] | None,
@@ -276,6 +304,7 @@ def build_training_memory(
         stock_code=stock_code,
         campaign_id=campaign_id,
         train_window=train_window,
+        train_data_identity=train_data_identity,
     )
     records = _training_records(result)
     current_fingerprints = sorted(
@@ -289,14 +318,13 @@ def build_training_memory(
         str(item)
         for item in (compatible or {}).get("train_data_fingerprints", [])
     )
-    data_revision_reset = bool(
-        compatible
-        and current_fingerprints
-        and prior_fingerprints
-        and current_fingerprints != prior_fingerprints
+    prior_identity = str(
+        (compatible or {}).get("train_data_identity") or ""
+    ).strip()
+    identity_migrated = bool(compatible and not prior_identity)
+    identity_verified = bool(
+        compatible and prior_identity == str(train_data_identity).strip()
     )
-    if data_revision_reset:
-        compatible = None
 
     prior_seen = {
         str(item)
@@ -391,6 +419,10 @@ def build_training_memory(
         "train_window": list(train_window),
         "as_of_date": as_of_date,
         "last_research_run_id": source_run_id,
+        "train_data_identity_schema": TRAIN_DATA_IDENTITY_SCHEMA,
+        "train_data_identity": str(train_data_identity).strip(),
+        "train_data_identity_verified": identity_verified,
+        "train_data_identity_migrated": identity_migrated,
         "train_data_fingerprints": current_fingerprints or prior_fingerprints,
         "seen_parameter_signatures": merged_seen,
         "elites": elites,
@@ -403,11 +435,7 @@ def build_training_memory(
         "last_run_duplicate_skip_count": int(
             result.get("skipped_duplicate_count", 0) or 0
         ),
-        "memory_reset_reason": (
-            "train_data_revision"
-            if data_revision_reset
-            else compatibility_reason
-        ),
+        "memory_reset_reason": compatibility_reason,
         "validation_feedback_used": False,
         "holdout_feedback_used": False,
     }
@@ -416,6 +444,10 @@ def build_training_memory(
             "stock_code": memory["stock_code"],
             "campaign_id": campaign_id,
             "train_window": memory["train_window"],
+            "train_data_identity_schema": memory[
+                "train_data_identity_schema"
+            ],
+            "train_data_identity": memory["train_data_identity"],
             "train_data_fingerprints": memory["train_data_fingerprints"],
             "seen_parameter_signatures": memory["seen_parameter_signatures"],
             "elites": memory["elites"],
@@ -439,6 +471,16 @@ def training_memory_summary(memory: dict[str, Any]) -> dict[str, Any]:
     return {
         "memory_id": memory.get("memory_id"),
         "search_space_schema": memory.get("search_space_schema"),
+        "train_data_identity_schema": memory.get(
+            "train_data_identity_schema"
+        ),
+        "train_data_identity": memory.get("train_data_identity"),
+        "train_data_identity_verified": bool(
+            memory.get("train_data_identity_verified")
+        ),
+        "train_data_identity_migrated": bool(
+            memory.get("train_data_identity_migrated")
+        ),
         "prior_memory_continued": memory.get("memory_reset_reason") is None,
         "unique_experiment_count": len(
             memory.get("seen_parameter_signatures") or []

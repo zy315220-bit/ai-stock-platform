@@ -11,6 +11,7 @@ from typing import Any, Iterable
 from app.services.scanner_service import SCANNER_UNIVERSE
 from app.services.research_lab.evolution import SEARCH_SPACE_SCHEMA
 from app.services.research_lab.training_memory import (
+    TRAIN_DATA_IDENTITY_SCHEMA,
     TRAINING_MEMORY_SCHEMA_VERSION,
     training_memory_summary,
 )
@@ -167,6 +168,15 @@ def aggregate_payloads(
             raise ValueError(f"{symbol} training memory campaign mismatch")
         if memory.get("search_space_schema") != SEARCH_SPACE_SCHEMA:
             raise ValueError(f"{symbol} training memory search schema mismatch")
+        if (
+            memory.get("train_data_identity_schema")
+            != TRAIN_DATA_IDENTITY_SCHEMA
+        ):
+            raise ValueError(
+                f"{symbol} canonical train data identity schema mismatch"
+            )
+        if not str(memory.get("train_data_identity") or "").strip():
+            raise ValueError(f"{symbol} canonical train data identity is missing")
         memories[symbol] = memory
 
     candidates = [
@@ -221,6 +231,14 @@ def aggregate_payloads(
             "completed_symbol_count": len(memories),
             "continued_symbol_count": sum(
                 bool(summary.get("prior_memory_continued"))
+                for summary in memory_summaries.values()
+            ),
+            "verified_data_identity_symbol_count": sum(
+                bool(summary.get("train_data_identity_verified"))
+                for summary in memory_summaries.values()
+            ),
+            "migrated_data_identity_symbol_count": sum(
+                bool(summary.get("train_data_identity_migrated"))
                 for summary in memory_summaries.values()
             ),
             "unique_experiment_count": sum(

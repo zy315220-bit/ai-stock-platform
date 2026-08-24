@@ -5,7 +5,10 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from app.services.backtest.engine import backtest_stock
+from app.services.backtest.engine import (
+    InsufficientBacktestHistoryError,
+    backtest_stock,
+)
 
 
 class BacktestNoLookaheadTests(unittest.TestCase):
@@ -133,6 +136,22 @@ class BacktestNoLookaheadTests(unittest.TestCase):
                 entry_score=75,
                 exit_score=55,
                 entry_mode="future_magic",
+            )
+
+    @patch("app.services.backtest.engine._prepare_stock_data")
+    @patch("app.services.backtest.engine._download_backtest_history")
+    def test_pre_inception_slice_is_classified_as_insufficient_history(
+        self, download, prepare
+    ) -> None:
+        download.return_value = self._frame()
+        prepare.side_effect = ValueError(
+            "指定日期範圍內沒有歷史資料：2019-07-01 至 2020-11-11"
+        )
+        with self.assertRaises(InsufficientBacktestHistoryError):
+            backtest_stock(
+                "LATE",
+                start_date="2019-07-01",
+                end_date="2020-11-11",
             )
 
 

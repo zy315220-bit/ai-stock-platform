@@ -515,11 +515,16 @@ def backtest_stock(
     history_recovery = dict(df.attrs.get("history_recovery", {}))
     corporate_action_attrs = dict(df.attrs)
     corporate_action_metadata = research_metadata(df)
-    df = _prepare_stock_data(
-        df=df,
-        start_date=warmup_start_date,
-        end_date=end_date,
-    )
+    try:
+        df = _prepare_stock_data(
+            df=df,
+            start_date=warmup_start_date,
+            end_date=end_date,
+        )
+    except ValueError as exc:
+        if "指定日期範圍內沒有歷史資料" not in str(exc):
+            raise
+        raise InsufficientBacktestHistoryError(str(exc)) from exc
     df = add_indicators(df.copy())
     if df is None or df.empty:
         raise InsufficientBacktestHistoryError(

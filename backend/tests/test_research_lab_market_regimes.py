@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.services.backtest.engine import InsufficientBacktestHistoryError
 from app.services.research_lab.market_regimes import (
     MarketRegime,
     build_pre_holdout_regime_slices,
@@ -175,3 +176,55 @@ def test_missing_bear_regime_fails_closed_and_benchmark_is_cached() -> None:
     assert first.robustness["robust_across_required_regimes"] is False
     assert "missing_bear_regime" in first.robustness["reasons"]
     assert benchmark_calls == 6
+
+
+def test_short_regime_slice_is_recorded_and_fails_closed() -> None:
+    slices = build_pre_holdout_regime_slices(_split(), slice_count=6)
+    first_start = slices[0].start_date
+
+    def strategy_backtest(**kwargs):
+        if kwargs["start_date"] == first_start:
+            raise InsufficientBacktestHistoryError(
+                "計算技術指標後的歷史資料不足"
+            )
+        return {
+            "total_return_percent": 3.0,
+            "max_drawdown_percent": 4.0,
+            "completed_trades": 2,
+            "winning_trade_count": 1,
+        }
+
+    def benchmark_backtest(**kwargs):
+        return {"buy_and_hold": {"return_percent": 1.0}}
+
+    matrix = run_market_regime_validation(
+        "00878",
+        _split(),
+        _candidate(),
+        backtest_fn=strategy_backtest,
+        benchmark_backtest_fn=benchmark_backtest,
+        slice_count=6,
+        min_completed_trades_per_regime=1,
+        regime_label_fn=lambda item: (
+            MarketRegime.BULL
+            if item.slice_id in {"R1", "R3", "R5"}
+            else MarketRegime.BEAR,
+            {
+                "as_of_date": item.start_date,
+                "method": "test_point_in_time_label",
+                "confidence": 1.0,
+                "future_observations_used": False,
+            },
+        ),
+    )
+
+    assert len(matrix.slices) == 6
+    assert matrix.slices[0]["evidence_available"] is False
+    assert matrix.slices[0]["evidence_reason"] == (
+        "insufficient_indicator_history"
+    )
+    assert matrix.robustness["robust_across_required_regimes"] is False
+    assert matrix.robustness["unavailable_slice_count"] == 1
+    assert "insufficient_regime_slice_history" in (
+        matrix.robustness["reasons"]
+    )

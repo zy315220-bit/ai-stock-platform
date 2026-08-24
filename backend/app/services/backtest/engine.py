@@ -59,6 +59,10 @@ EXIT_MODES = {
     "score_or_ema_reversal",
     "score_or_time_or_ema_reversal",
 }
+
+
+class InsufficientBacktestHistoryError(ValueError):
+    """The requested evaluation slice cannot support indicator research."""
 SCORE_SERIES_CACHE_SCHEMA = "score-engine-series-v1"
 _SCORE_SERIES_CACHE_MAX_ENTRIES = 32
 _SCORE_SERIES_CACHE: OrderedDict[
@@ -509,7 +513,9 @@ def backtest_stock(
     )
     df = add_indicators(df.copy())
     if df is None or df.empty:
-        raise ValueError("技術指標計算後沒有可用資料。")
+        raise InsufficientBacktestHistoryError(
+            "技術指標計算後沒有可用資料。"
+        )
 
     required_columns = list(BACKTEST_REQUIRED_COLUMNS)
     if require_ema_trend or "ema_reversal" in exit_mode:
@@ -526,7 +532,7 @@ def backtest_stock(
     )
     df.attrs.update(corporate_action_attrs)
     if len(df) < 61:
-        raise ValueError(
+        raise InsufficientBacktestHistoryError(
             "計算技術指標後的歷史資料不足，至少需要約 61 個有效交易日。"
         )
 

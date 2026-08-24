@@ -9,7 +9,10 @@ from typing import Any, Callable
 import pandas as pd
 
 from app.services.backtest.corporate_action_gate import prepare_research_frame
-from app.services.backtest.engine import _download_backtest_history
+from app.services.backtest.engine import (
+    InsufficientBacktestHistoryError,
+    _download_backtest_history,
+)
 from corporate_actions import dividends_by_ex_date
 
 from .causal_regimes import estimate_hamilton_regime_as_of
@@ -198,8 +201,16 @@ def _aggregate_regime_rows(
     required = (MarketRegime.BULL.value, MarketRegime.BEAR.value)
 
     for regime in MarketRegime:
-        selected = [row for row in rows if row["market_regime"] == regime.value]
+        labelled = [
+            row for row in rows
+            if row["market_regime"] == regime.value
+        ]
+        selected = [
+            row for row in labelled
+            if row.get("evidence_available", True)
+        ]
         slice_count = len(selected)
+        unavailable_slice_count = len(labelled) - slice_count
         completed = sum(int(row["completed_trades"]) for row in selected)
         wins = sum(int(row["winning_trades"]) for row in selected)
         denominator = max(1, slice_count)
@@ -224,7 +235,9 @@ def _aggregate_regime_rows(
         )
         wilson_percent = wilson_lower_bound(wins, completed) * 100.0
         by_regime[regime.value] = {
+            "labelled_slice_count": len(labelled),
             "slice_count": slice_count,
+            "unavailable_slice_count": unavailable_slice_count,
             "completed_trades": completed,
             "winning_trades": wins,
             "win_rate_percent": round(
@@ -244,6 +257,13 @@ def _aggregate_regime_rows(
             ),
             "worst_drawdown_percent": round(worst_drawdown, 4),
         }
+
+    unavailable_slice_count = sum(
+        int(item["unavailable_slice_count"])
+        for item in by_regime.values()
+    )
+    if unavailable_slice_count:
+        reasons.append("insufficient_regime_slice_history")
 
     for regime in required:
         item = by_regime[regime]
@@ -313,6 +333,7 @@ def _aggregate_regime_rows(
         "conservative_alpha_percent": round(conservative_alpha, 4),
         "robustness_score": round(robustness_score, 4),
         "reasons": reasons,
+        "unavailable_slice_count": unavailable_slice_count,
         "holdout_used": False,
         "regime_labels_point_in_time": True,
         "regime_labels_are_trading_signals": False,
@@ -367,13 +388,64 @@ def run_market_regime_validation(
         split,
         slice_count=slice_count,
     ):
-        report = backtest_fn(
-            stock_code=stock_code,
-            start_date=regime_slice.start_date,
-            end_date=regime_slice.end_date,
-            liquidate_at_end=False,
-            **candidate.parameters,
-        )
+        if regime_label_fn is not None:
+            regime, regime_audit = regime_label_fn(regime_slice)
+        else:
+            if causal_returns is None:
+                raise ValueError("Point-in-time regime returns are unavailable")
+            estimate_key = regime_slice.start_date
+            cached_estimate = estimate_cache.get(estimate_key)
+            if cached_estimate is None:
+                as_of_date = (
+                    pd.Timestamp(regime_slice.start_date)
+                    - pd.Timedelta(days=1)
+                )
+                estimate = estimate_hamilton_regime_as_of(
+                    causal_returns,
+                    as_of_date,
+                )
+                cached_estimate = (
+                    MarketRegime(estimate.regime),
+                    estimate.to_dict(),
+                )
+                estimate_cache[estimate_key] = cached_estimate
+            regime, regime_audit = cached_estimate
+
+        try:
+            report = backtest_fn(
+                stock_code=stock_code,
+                start_date=regime_slice.start_date,
+                end_date=regime_slice.end_date,
+                liquidate_at_end=False,
+                **candidate.parameters,
+            )
+        except InsufficientBacktestHistoryError as exc:
+            rows.append(
+                {
+                    **asdict(regime_slice),
+                    "market_regime": regime.value,
+                    "regime_as_of_date": regime_audit.get("as_of_date"),
+                    "regime_method": regime_audit.get("method"),
+                    "regime_confidence": regime_audit.get("confidence"),
+                    "regime_audit": regime_audit,
+                    "benchmark_code": benchmark_code,
+                    "evidence_available": False,
+                    "evidence_reason": "insufficient_indicator_history",
+                    "evidence_detail": str(exc),
+                    "strategy_data_fingerprint": None,
+                    "benchmark_data_fingerprint": None,
+                    "benchmark_return_percent": 0.0,
+                    "total_return_percent": 0.0,
+                    "alpha_percent": 0.0,
+                    "completed_trades": 0,
+                    "winning_trades": 0,
+                    "win_rate_percent": 0.0,
+                    "wilson_win_rate_lower_bound_percent": 0.0,
+                    "max_drawdown_percent": 0.0,
+                    "open_position_count": 0,
+                }
+            )
+            continue
         metrics = _validation_metrics(report)
         cache_key = (regime_slice.start_date, regime_slice.end_date)
         if stock_code.strip().upper() == benchmark_code.strip().upper():
@@ -408,28 +480,6 @@ def run_market_regime_validation(
         )
         completed = int(metrics.get("completed_trades", 0) or 0)
         winning = int(metrics.get("winning_trades", 0) or 0)
-        if regime_label_fn is not None:
-            regime, regime_audit = regime_label_fn(regime_slice)
-        else:
-            if causal_returns is None:
-                raise ValueError("Point-in-time regime returns are unavailable")
-            estimate_key = regime_slice.start_date
-            cached_estimate = estimate_cache.get(estimate_key)
-            if cached_estimate is None:
-                as_of_date = (
-                    pd.Timestamp(regime_slice.start_date)
-                    - pd.Timedelta(days=1)
-                )
-                estimate = estimate_hamilton_regime_as_of(
-                    causal_returns,
-                    as_of_date,
-                )
-                cached_estimate = (
-                    MarketRegime(estimate.regime),
-                    estimate.to_dict(),
-                )
-                estimate_cache[estimate_key] = cached_estimate
-            regime, regime_audit = cached_estimate
         rows.append(
             {
                 **asdict(regime_slice),
@@ -439,6 +489,8 @@ def run_market_regime_validation(
                 "regime_confidence": regime_audit.get("confidence"),
                 "regime_audit": regime_audit,
                 "benchmark_code": benchmark_code,
+                "evidence_available": True,
+                "evidence_reason": None,
                 "strategy_data_fingerprint": strategy_fingerprint,
                 "benchmark_data_fingerprint": benchmark_fingerprint,
                 "benchmark_return_percent": round(benchmark_return, 4),

@@ -21,8 +21,17 @@ class BacktestNoLookaheadTests(unittest.TestCase):
             },
             index=dates,
         )
-        frame.attrs["split_adjusted"] = True
-        frame.attrs["dividends"] = []
+        frame.attrs.update(
+            {
+                "stock_code": "TEST",
+                "source": "synthetic-test",
+                "split_adjusted": True,
+                "price_basis": "latest-unit split-adjusted",
+                "corporate_action_validated": True,
+                "split_adjustments": [],
+                "dividends": [],
+            }
+        )
         return frame
 
     @patch("app.services.backtest.engine._download_backtest_history")
@@ -36,8 +45,10 @@ class BacktestNoLookaheadTests(unittest.TestCase):
         # valid. This bar must survive the production data-quality filter.
         # The signal may execute at this open, but calculate_score must not see
         # any t+1 information when producing the t signal.
-        frame.iloc[61, frame.columns.get_loc("Open")] = 250.0
-        frame.iloc[61, frame.columns.get_loc("High")] = 251.0
+        # Keep the jump below the structural-break gate; this fixture tests
+        # look-ahead execution rather than pretending to contain a reverse split.
+        frame.iloc[61, frame.columns.get_loc("Open")] = 175.0
+        frame.iloc[61, frame.columns.get_loc("High")] = 176.0
         download.return_value = frame
 
         def indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -69,7 +80,7 @@ class BacktestNoLookaheadTests(unittest.TestCase):
         self.assertLess(seen_last_dates[0], frame.index[61])
         self.assertGreaterEqual(len(result["trades"]), 1)
         self.assertEqual(result["trades"][0]["entry_date"], frame.index[61].strftime("%Y-%m-%d"))
-        self.assertEqual(result["trades"][0]["entry_price"], 250.0)
+        self.assertEqual(result["trades"][0]["entry_price"], 175.0)
 
 
 if __name__ == "__main__":

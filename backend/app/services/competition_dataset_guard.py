@@ -28,6 +28,7 @@ def competition_dataset_manifest(frames: dict[str, pd.DataFrame]) -> dict[str, A
         meta = research_metadata(frames[code])
         symbols[code] = {
             "research_dataset_version": meta.get("research_dataset_version"),
+            "research_dataset_manifest": meta.get("research_dataset_manifest", {}),
             "corporate_action_validated": bool(meta.get("corporate_action_validated")),
             "price_basis": meta.get("price_basis"),
             "split_adjustments": meta.get("split_adjustments", []),

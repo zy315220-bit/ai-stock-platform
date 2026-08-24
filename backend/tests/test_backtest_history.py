@@ -11,6 +11,26 @@ from indicators import add_indicators as real_add_indicators
 
 
 class BacktestHistoryTests(unittest.TestCase):
+    def test_backtest_rejects_unvalidated_corporate_action_basis(self) -> None:
+        dates = pd.bdate_range("2021-01-01", "2026-08-20")
+        prices = np.linspace(20, 34, len(dates))
+        frame = pd.DataFrame(
+            {
+                "Open": prices,
+                "High": prices + 0.5,
+                "Low": prices - 0.5,
+                "Close": prices,
+                "Volume": np.full(len(dates), 1_000_000),
+            },
+            index=dates,
+        )
+        with patch(
+            "app.services.backtest.engine.download_stock",
+            return_value=frame,
+        ):
+            with self.assertRaisesRegex(ValueError, "basis 尚未驗證"):
+                backtest_stock("00878", start_date="2021-08-20")
+
     def test_backtest_requests_warmup_and_preserves_five_year_period(self) -> None:
         dates = pd.bdate_range("2021-01-01", "2026-08-20")
         prices = np.linspace(20, 34, len(dates))
@@ -24,7 +44,14 @@ class BacktestHistoryTests(unittest.TestCase):
             },
             index=dates,
         )
-        frame.attrs["source"] = "synthetic-official"
+        frame.attrs.update({
+            "source": "synthetic-official",
+            "price_basis": "latest-unit split-adjusted",
+            "split_adjusted": True,
+            "split_adjustments": [],
+            "corporate_action_validated": True,
+            "dividends": [],
+        })
         calls: list[dict] = []
 
         def fake_download(_code: str, **kwargs) -> pd.DataFrame:
@@ -76,7 +103,14 @@ class BacktestHistoryTests(unittest.TestCase):
                 },
                 index=dates,
             )
-            frame.attrs["source"] = "test"
+            frame.attrs.update({
+                "source": "test",
+                "price_basis": "latest-unit split-adjusted",
+                "split_adjusted": True,
+                "split_adjustments": [],
+                "corporate_action_validated": True,
+                "dividends": [],
+            })
             return frame
 
         calls: list[dict] = []
@@ -124,6 +158,14 @@ class BacktestHistoryTests(unittest.TestCase):
             },
             index=dates,
         )
+        frame.attrs.update({
+            "source": "synthetic-official",
+            "price_basis": "latest-unit split-adjusted",
+            "split_adjusted": True,
+            "split_adjustments": [],
+            "corporate_action_validated": True,
+            "dividends": [],
+        })
 
         def indicators_with_optional_nan(data: pd.DataFrame) -> pd.DataFrame:
             enriched = real_add_indicators(data)
@@ -168,6 +210,13 @@ class BacktestHistoryTests(unittest.TestCase):
         )
         ex_date = dates[180].strftime("%Y-%m-%d")
         frame.attrs["dividends"] = [{"ex_date": ex_date, "amount": 1.0}]
+        frame.attrs.update({
+            "source": "synthetic-official",
+            "price_basis": "latest-unit split-adjusted",
+            "split_adjusted": True,
+            "split_adjustments": [],
+            "corporate_action_validated": True,
+        })
 
         with (
             patch(

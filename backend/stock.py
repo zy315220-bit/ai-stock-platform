@@ -1,11 +1,18 @@
 """Taiwan stock historical data downloader."""
 from typing import Any
 import pandas as pd
+import requests
 import yfinance as yf
 from official_data import download_official_history
 from corporate_actions import apply_split_adjustments, attach_official_dividends, split_events
 
 REQUIRED_OHLCV_COLUMNS=["Open","High","Low","Close","Volume"]
+YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+YAHOO_CHART_TIMEOUT_SECONDS = 20
+YAHOO_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "User-Agent": "Mozilla/5.0 (compatible; AI-Stock-Platform/1.0)",
+}
 
 def normalize_stock_code(stock_code:Any)->str:
     if stock_code is None:raise ValueError("股票代號不能是 None。")
@@ -52,11 +59,52 @@ def _clean_ohlcv(df,require_all_columns=True):
     if "Volume" in df.columns:df["Volume"]=df["Volume"].fillna(0).clip(lower=0)
     df=df[~df.index.duplicated(keep="last")].copy().sort_index();df.attrs.update(attrs);return df
 
+def _download_yahoo_chart(ticker,period,interval,prepost=False):
+    """No-crumb Yahoo chart fallback when yfinance is temporarily rate-limited."""
+    try:
+        response=requests.get(
+            YAHOO_CHART_URL.format(ticker=ticker),
+            params={
+                "range":period,
+                "interval":interval,
+                "events":"div,splits",
+                "includePrePost":str(bool(prepost)).lower(),
+            },
+            headers=YAHOO_HEADERS,
+            timeout=YAHOO_CHART_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status();payload=response.json();chart=payload.get("chart") or {}
+        if chart.get("error"):return pd.DataFrame()
+        results=chart.get("result") or []
+        if not results:return pd.DataFrame()
+        result=results[0];timestamps=result.get("timestamp") or [];quotes=(result.get("indicators") or {}).get("quote") or []
+        if not timestamps or not quotes:return pd.DataFrame()
+        quote=quotes[0];row_count=len(timestamps)
+        columns={
+            "Open":quote.get("open") or [None]*row_count,
+            "High":quote.get("high") or [None]*row_count,
+            "Low":quote.get("low") or [None]*row_count,
+            "Close":quote.get("close") or [None]*row_count,
+            "Volume":quote.get("volume") or [None]*row_count,
+        }
+        if any(len(values)!=row_count for values in columns.values()):return pd.DataFrame()
+        frame=pd.DataFrame(columns,index=pd.to_datetime(timestamps,unit="s",utc=True))
+    except (requests.RequestException,ValueError,TypeError,KeyError):
+        return pd.DataFrame()
+    frame.attrs["source"]="Yahoo Finance";frame.attrs["price_basis"]="yahoo_raw_close_unverified";frame.attrs["download_transport"]="chart-api-fallback";return frame
+
 def _download_yfinance(ticker,period,interval,prepost=False):
+    # Research/competition history is materially faster and less rate-limit
+    # prone through Yahoo's single chart response. Keep yfinance as the second
+    # transport, and retain the same raw-price corporate-action normalization.
+    prefer_chart=interval=="1d" and period in {"5y","10y","max"}
+    if prefer_chart:
+        chart=_download_yahoo_chart(ticker,period,interval,prepost)
+        if not chart.empty:return chart
     try:df=yf.download(tickers=ticker,period=period,interval=interval,progress=False,auto_adjust=False,threads=False,prepost=prepost,group_by="column")
-    except Exception:return pd.DataFrame()
-    if df is None:return pd.DataFrame()
-    df.attrs["source"]="Yahoo Finance";df.attrs["price_basis"]="yahoo_raw_close_unverified";return df
+    except Exception:df=pd.DataFrame()
+    if df is None or df.empty:return _download_yahoo_chart(ticker,period,interval,prepost)
+    df.attrs["source"]="Yahoo Finance";df.attrs["price_basis"]="yahoo_raw_close_unverified";df.attrs["download_transport"]="yfinance";return df
 
 def _aggregate_latest_intraday(intraday):
     if intraday is None or intraday.empty:return None

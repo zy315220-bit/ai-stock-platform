@@ -26,6 +26,9 @@ def research_metadata(frame: pd.DataFrame) -> dict[str, object]:
             frame.attrs.get("corporate_action_validated")
         ),
         "research_dataset_version": frame.attrs.get("research_dataset_version"),
+        "research_dataset_manifest": dict(
+            frame.attrs.get("research_dataset_manifest", {})
+        ),
         "price_basis": frame.attrs.get("price_basis"),
         "split_adjustments": list(frame.attrs.get("split_adjustments", [])),
         "dividend_source": frame.attrs.get("dividend_source"),

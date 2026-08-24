@@ -18,12 +18,10 @@ def _require_split_safe_basis(df: pd.DataFrame) -> None:
     """Never publish a benchmark from an unverified/raw split price basis."""
     split_adjusted = df.attrs.get("split_adjusted")
     price_basis = str(df.attrs.get("price_basis") or "").strip().lower()
-    split_adjustments = df.attrs.get("split_adjustments")
-    safe_basis = split_adjusted is True or "split_adjusted" in price_basis
-    # Official/raw data are acceptable only after the normalizer has explicitly
-    # left an audit trail (including an empty list after validation).
-    if not safe_basis and split_adjustments is not None:
-        safe_basis = True
+    validated = df.attrs.get("corporate_action_validated") is True
+    safe_basis = validated and (
+        split_adjusted is True or "split_adjusted" in price_basis
+    )
     if not safe_basis:
         raise ValueError(
             "研究價格基準未通過拆分驗證，拒絕計算同期持有報酬，"

@@ -51,8 +51,6 @@ def _month_starts(as_of: date, months: int) -> list[date]:
 def _month_worker_count(month_count: int) -> int:
     if month_count <= 0:
         return 1
-    if month_count > LONG_HISTORY_MONTH_THRESHOLD:
-        return 1
     return min(MAX_MONTH_WORKERS, month_count)
 
 
@@ -211,9 +209,10 @@ def _download_market(
 
         return pd.DataFrame(), fetched_name
 
-    # TWSE／TPEx 對長期間大量月查詢會暫時限流，且可能只留下近期月份。
-    # 兩年內互動圖表維持並行；超過兩年的研究／競賽資料改為單線程並節流，
-    # 避免官方端限流後只留下少數近期月份，卻被誤當成完整歷史。
+    # Keep concurrency bounded for both short and long histories. Long-history
+    # requests are still gently delayed/retried above, while the downstream
+    # coverage gate fails closed if any requested month is missing. Serializing
+    # 60+ months made a cold competition run exceed the deployment timeout.
     worker_count = _month_worker_count(len(months))
     with ThreadPoolExecutor(
         max_workers=worker_count
@@ -287,6 +286,12 @@ def download_official_history(
     code = str(stock_code).strip().upper()
     current_month = date.today().strftime("%Y-%m")
     if force_refresh:
-        _download_cached.cache_clear()
+        clear_official_history_cache()
     frame = _download_cached(code, market, months, current_month)
     return frame.copy()
+
+
+def clear_official_history_cache() -> None:
+    """Invalidate every cached exchange-month history before a forced rerun."""
+
+    _download_cached.cache_clear()

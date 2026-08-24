@@ -41,6 +41,52 @@ def test_tpex_stock_dividend_percent_is_converted_to_incremental_ratio():
     assert events[0]["ratio"] == pytest.approx(0.15)
 
 
+def test_twse_openapi_schema_and_roc_date_are_mapped() -> None:
+    events = map_twse_exright_record({
+        "Date": "1150828",
+        "Code": "1453",
+        "StockDividendRatio": "0.03000000",
+        "SubscriptionRatio": "",
+        "SubscriptionPricePerShare": "",
+        "CashDividend": "0",
+    })
+    assert events == [{
+        "stock_code": "1453",
+        "effective_date": "2026-08-28",
+        "source": "TWSE_official",
+        "event_type": "stock_dividend",
+        "ratio": 0.03,
+    }]
+
+
+def test_tpex_openapi_ratio_is_not_divided_by_one_hundred() -> None:
+    events = map_tpex_exright_record({
+        "ExRrightsExDividendDate": "1150825",
+        "SecuritiesCompanyCode": "4554",
+        "StockDividendRatio": "0.15000002",
+        "SubscriptionRatioToNewSharesIssued": "0.00000000",
+        "SubscriptionPricePerShare": "0.00",
+        "CashDividend": "0.50000000",
+    })
+    assert events[0]["effective_date"] == "2026-08-25"
+    assert events[0]["cash_per_share"] == pytest.approx(0.5)
+    assert events[1]["ratio"] == pytest.approx(0.15000002)
+
+
+def test_tpex_openapi_rights_ratio_and_price_are_mapped() -> None:
+    events = map_tpex_exright_record({
+        "ExRrightsExDividendDate": "1150820",
+        "SecuritiesCompanyCode": "5206",
+        "StockDividendRatio": "0.00000000",
+        "SubscriptionRatioToNewSharesIssued": "0.11660618",
+        "SubscriptionPricePerShare": "20.00",
+        "CashDividend": "0.00000000",
+    })
+    assert events[0]["effective_date"] == "2026-08-20"
+    assert events[0]["rights_ratio"] == pytest.approx(0.11660618)
+    assert events[0]["subscription_price"] == pytest.approx(20.0)
+
+
 def test_mapper_ratio_matches_ledger_share_accounting_once():
     item = map_twse_exright_record({
         "股票代號": "TEST",

@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from corporate_actions import dividends_by_ex_date
+from corporate_actions import CORPORATE_ACTION_STATIC_VERSION, dividends_by_ex_date
 from indicators import add_indicators
 
 from app.services.competition_service import (
@@ -712,12 +712,10 @@ def _date_text(value: Any) -> str:
 def _prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if frame is None or frame.empty:
         raise ValueError("競賽股票資料為空白。")
-    corporate_action_attrs = {
-        "dividends": list(frame.attrs.get("dividends", [])),
-        "split_adjustments": list(frame.attrs.get("split_adjustments", [])),
-        "dividend_source": frame.attrs.get("dividend_source"),
-        "price_basis": frame.attrs.get("price_basis"),
-    }
+    # Indicator operations may drop DataFrame attrs. Preserve the complete
+    # corporate-action provenance/gate metadata, not only dividends and splits,
+    # because the API validates and versions the prepared frame afterwards.
+    corporate_action_attrs = dict(frame.attrs)
     prepared = add_indicators(frame.copy()).sort_index()
     prepared["Prior20High"] = (
         prepared["High"].shift(1).rolling(window=20, min_periods=20).max()
@@ -1330,7 +1328,7 @@ def run_competition_on_frames(
         "latest_date": _date_text(latest_date),
         "capital": capital,
         "universe": list(COMPETITION_UNIVERSE),
-        "corporate_actions_version": "TWSE-SPLIT-DIVIDEND-v1",
+        "corporate_actions_version": CORPORATE_ACTION_STATIC_VERSION,
         "fingerprints": [robot["rule_fingerprint"] for robot in robot_outputs],
     }
     run_id = hashlib.sha256(

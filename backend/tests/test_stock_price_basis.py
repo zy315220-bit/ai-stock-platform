@@ -5,7 +5,12 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from stock import _clean_ohlcv, _normalize_datetime_index, _normalize_price_basis
+from stock import (
+    _clean_ohlcv,
+    _download_yfinance,
+    _normalize_datetime_index,
+    _normalize_price_basis,
+)
 
 
 class StockPriceBasisTests(unittest.TestCase):
@@ -50,6 +55,61 @@ class StockPriceBasisTests(unittest.TestCase):
         self.assertEqual(normalized.attrs["source"], "Yahoo Finance")
         self.assertTrue(normalized.attrs["split_adjusted"])
         self.assertEqual(normalized.attrs["price_basis"], "yahoo_split_adjusted_close")
+
+    @patch("stock.requests.get")
+    @patch("stock.yf.download", return_value=pd.DataFrame())
+    def test_chart_api_recovers_when_yfinance_is_rate_limited(
+        self,
+        _yfinance_download,
+        request_get,
+    ) -> None:
+        response = request_get.return_value
+        response.json.return_value = {
+            "chart": {
+                "error": None,
+                "result": [
+                    {
+                        "timestamp": [1717376400, 1717462800],
+                        "indicators": {
+                            "quote": [
+                                {
+                                    "open": [100.0, 101.0],
+                                    "high": [102.0, 103.0],
+                                    "low": [99.0, 100.0],
+                                    "close": [101.0, 102.0],
+                                    "volume": [1_000, 1_100],
+                                }
+                            ]
+                        },
+                    }
+                ],
+            }
+        }
+
+        frame = _download_yfinance("0050.TW", "1y", "1d")
+
+        response.raise_for_status.assert_called_once_with()
+        self.assertEqual(len(frame), 2)
+        self.assertEqual(frame.attrs["source"], "Yahoo Finance")
+        self.assertEqual(frame.attrs["download_transport"], "chart-api-fallback")
+        self.assertEqual(float(frame.iloc[-1]["Close"]), 102.0)
+
+    @patch("stock._download_yahoo_chart")
+    @patch("stock.yf.download")
+    def test_long_daily_history_prefers_single_chart_request(
+        self,
+        yfinance_download,
+        chart_download,
+    ) -> None:
+        expected = self._frame()
+        expected.attrs["download_transport"] = "chart-api-fallback"
+        chart_download.return_value = expected
+
+        result = _download_yfinance("0050.TW", "10y", "1d")
+
+        chart_download.assert_called_once_with("0050.TW", "10y", "1d", False)
+        yfinance_download.assert_not_called()
+        pd.testing.assert_frame_equal(result, expected)
 
 
 if __name__ == "__main__":

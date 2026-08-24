@@ -44,6 +44,25 @@ def _synthetic_frame(offset: float) -> pd.DataFrame:
 
 
 class CompetitionRunnerTests(unittest.TestCase):
+    def test_prepare_frame_preserves_corporate_action_provenance(self) -> None:
+        frame = _synthetic_frame(0.0)
+        frame.attrs.update({
+            "stock_code": "0050",
+            "source": "official-test",
+            "price_basis": "latest-unit split-adjusted",
+            "corporate_action_validated": True,
+            "split_adjustments": [],
+            "dividends": [{"ex_date": "2026-07-21", "amount": 0.6}],
+            "corporate_action_catalog_revision": "test-revision",
+        })
+        prepared = _prepare_frame(frame)
+        self.assertTrue(prepared.attrs["corporate_action_validated"])
+        self.assertEqual(prepared.attrs["price_basis"], "latest-unit split-adjusted")
+        self.assertEqual(
+            prepared.attrs["corporate_action_catalog_revision"],
+            "test-revision",
+        )
+
     def test_history_months_respect_etf_listing_date(self) -> None:
         as_of = date(2026, 8, 20)
         self.assertEqual(_competition_official_months("00878", as_of=as_of), 66)

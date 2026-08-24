@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 import pandas as pd
 from app.services.backtest.benchmark import _calculate_buy_and_hold
-from corporate_actions import adjust_dividends_for_splits, apply_split_adjustments, download_twse_etf_dividends, parse_twse_dividend_html
+from corporate_actions import OFFICIAL_DIVIDEND_FALLBACK_REVISION, adjust_dividends_for_splits, apply_split_adjustments, download_twse_etf_dividends, parse_twse_dividend_html
 
 class CorporateActionTests(unittest.TestCase):
     def test_0050_split_removes_non_economic_price_drop(self):
@@ -32,11 +32,29 @@ class CorporateActionTests(unittest.TestCase):
     def test_official_dividend_html_parser(self):
         html="""<table><tbody><tr><td>0050</td><td>元大台灣50</td><td>115年07月21日</td><td>115年07月27日</td><td>115年08月10日</td><td>0.6</td></tr></tbody></table>"""; events=parse_twse_dividend_html(html,"0050"); self.assertEqual(events[0]["ex_date"],"2026-07-21")
     def test_buy_and_hold_total_return_includes_dividends(self):
-        frame=pd.DataFrame({"Date":pd.to_datetime(["2025-01-02","2025-07-21","2025-12-31"]),"Open":[10.]*3,"High":[10.]*3,"Low":[10.]*3,"Close":[10.]*3,"Volume":[1000]*3}); frame.attrs.update({"dividends":[{"ex_date":"2025-07-21","amount":1.0}],"split_adjusted":True,"price_basis":"test_split_adjusted"}); result=_calculate_buy_and_hold(frame,10_000,0.,0.); self.assertEqual(result["return_percent"],10.0)
+        frame=pd.DataFrame({"Date":pd.to_datetime(["2025-01-02","2025-07-21","2025-12-31"]),"Open":[10.]*3,"High":[10.]*3,"Low":[10.]*3,"Close":[10.]*3,"Volume":[1000]*3}); frame.attrs.update({"dividends":[{"ex_date":"2025-07-21","amount":1.0}],"split_adjusted":True,"price_basis":"test_split_adjusted","corporate_action_validated":True}); result=_calculate_buy_and_hold(frame,10_000,0.,0.); self.assertEqual(result["return_percent"],10.0)
     def test_buy_and_hold_rejects_unverified_split_basis(self):
         frame=pd.DataFrame({"Date":pd.to_datetime(["2025-01-02","2025-12-31"]),"Open":[100.,25.],"High":[101.,26.],"Low":[99.,24.],"Close":[100.,25.],"Volume":[1000,4000]})
+        with self.assertRaisesRegex(ValueError,"拒絕計算同期持有報酬"): _calculate_buy_and_hold(frame,10_000,0.,0.)
+    def test_empty_split_list_does_not_fake_validation(self):
+        frame=pd.DataFrame({"Date":pd.to_datetime(["2025-01-02","2025-12-31"]),"Open":[10.,11.],"High":[11.,12.],"Low":[9.,10.],"Close":[10.,11.],"Volume":[1000,1000]})
+        frame.attrs["split_adjustments"]=[]
         with self.assertRaisesRegex(ValueError,"拒絕計算同期持有報酬"): _calculate_buy_and_hold(frame,10_000,0.,0.)
     def test_audited_fallback_survives_twse_page_timeout(self):
         with patch("corporate_actions._download_twse_etf_dividends_cached",side_effect=ValueError("timeout")): events=download_twse_etf_dividends("0050",start=pd.Timestamp("2025-01-01"),end=pd.Timestamp("2025-12-31"))
         self.assertEqual([(e["ex_date"],e["amount"]) for e in events],[("2025-01-17",2.7),("2025-07-21",0.36)])
+        self.assertIn(OFFICIAL_DIVIDEND_FALLBACK_REVISION, events[0]["source"])
+    def test_audited_fallback_covers_entire_competition_universe(self):
+        expected={
+            "0050":(14,"2026-07-21",0.6),
+            "0056":(16,"2026-07-21",1.35),
+            "00878":(24,"2026-08-18",1.01),
+            "00919":(13,"2026-06-16",1.0),
+        }
+        with patch("corporate_actions._download_twse_etf_dividends_cached",side_effect=ValueError("timeout")):
+            for code,(count,last_date,last_amount) in expected.items():
+                events=download_twse_etf_dividends(code,start=pd.Timestamp("2020-01-01"),end=pd.Timestamp("2026-08-25"))
+                self.assertEqual(len(events),count,code)
+                self.assertEqual((events[-1]["ex_date"],events[-1]["amount"]),(last_date,last_amount),code)
+                self.assertIn(OFFICIAL_DIVIDEND_FALLBACK_REVISION,events[-1]["source"])
 if __name__=="__main__": unittest.main()

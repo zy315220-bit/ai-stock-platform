@@ -7,6 +7,8 @@ a vendor rewrites only part of the pre-split history (0052 is a real example).
 from __future__ import annotations
 from functools import lru_cache
 from html.parser import HTMLParser
+import hashlib
+import json
 import math
 from typing import Any
 import pandas as pd
@@ -22,7 +24,102 @@ MAX_INFERRED_SPLIT_RELATIVE_ERROR=0.05
 KNOWN_SPLIT_DEDUP_DAYS=14
 _HEADERS={"Accept":"text/html,application/xhtml+xml","User-Agent":"Mozilla/5.0 (compatible; AI-Stock-Platform/1.0; +https://github.com/zy315220-bit/ai-stock-platform)"}
 KNOWN_SPLITS={"0050":[{"effective_date":"2025-06-18","ratio":4.0,"source":TWSE_0050_SPLIT_SOURCE}],"0052":[{"effective_date":"2025-11-26","ratio":7.0,"source":TWSE_0052_SPLIT_SOURCE}]}
-OFFICIAL_DIVIDEND_FALLBACK={"0050":(("2020-01-31","2020-03-06",2.9),("2020-07-21","2020-08-24",0.7),("2021-01-22","2021-03-09",3.05),("2021-07-21","2021-08-24",0.35),("2022-01-21","2022-03-04",3.2),("2022-07-18","2022-08-19",1.8),("2023-01-30","2023-03-07",2.6),("2023-07-18","2023-08-11",1.9),("2024-01-17","2024-02-21",3.0),("2024-07-16","2024-08-09",1.0),("2025-01-17","2025-02-20",2.7),("2025-07-21","2025-08-08",0.36),("2026-01-22","2026-02-11",1.0),("2026-07-21","2026-08-10",0.6)),"0056":(("2020-10-28","2020-12-01",1.6),("2021-10-22","2021-11-25",1.8),("2022-10-19","2022-11-22",2.1)),"00878":(),"00919":()}
+
+# Audited snapshot of the official TWSE ETF distribution table. The live page
+# remains the preferred source; this snapshot prevents a transient exchange
+# outage from silently deleting dividends from Total Return and competition
+# rankings. Keep all four competition ETFs complete through the snapshot date.
+OFFICIAL_DIVIDEND_FALLBACK_REVISION = "TWSE-ETF-DIVIDENDS-2026-08-25"
+OFFICIAL_DIVIDEND_FALLBACK = {
+    "0050": (
+        ("2020-01-31", "2020-03-06", 2.9),
+        ("2020-07-21", "2020-08-24", 0.7),
+        ("2021-01-22", "2021-03-09", 3.05),
+        ("2021-07-21", "2021-08-24", 0.35),
+        ("2022-01-21", "2022-03-04", 3.2),
+        ("2022-07-18", "2022-08-19", 1.8),
+        ("2023-01-30", "2023-03-07", 2.6),
+        ("2023-07-18", "2023-08-11", 1.9),
+        ("2024-01-17", "2024-02-21", 3.0),
+        ("2024-07-16", "2024-08-09", 1.0),
+        ("2025-01-17", "2025-02-20", 2.7),
+        ("2025-07-21", "2025-08-08", 0.36),
+        ("2026-01-22", "2026-02-11", 1.0),
+        ("2026-07-21", "2026-08-10", 0.6),
+    ),
+    "0056": (
+        ("2020-10-28", "2020-12-01", 1.6),
+        ("2021-10-22", "2021-11-25", 1.8),
+        ("2022-10-19", "2022-11-22", 2.1),
+        ("2023-07-18", "2023-08-11", 1.0),
+        ("2023-10-19", "2023-11-14", 1.2),
+        ("2024-01-17", "2024-02-21", 0.7),
+        ("2024-04-18", "2024-05-15", 0.79),
+        ("2024-07-16", "2024-08-09", 1.07),
+        ("2024-10-17", "2024-11-12", 1.07),
+        ("2025-01-17", "2025-02-20", 1.07),
+        ("2025-04-23", "2025-05-14", 1.07),
+        ("2025-07-21", "2025-08-08", 0.866),
+        ("2025-10-23", "2025-11-14", 0.866),
+        ("2026-01-22", "2026-02-11", 0.866),
+        ("2026-04-23", "2026-05-14", 1.0),
+        ("2026-07-21", "2026-08-10", 1.35),
+    ),
+    "00878": (
+        ("2020-11-17", "2020-12-18", 0.05),
+        ("2021-02-25", "2021-03-31", 0.15),
+        ("2021-05-18", "2021-06-21", 0.25),
+        ("2021-08-17", "2021-09-17", 0.3),
+        ("2021-11-16", "2021-12-17", 0.28),
+        ("2022-02-22", "2022-03-28", 0.3),
+        ("2022-05-18", "2022-06-21", 0.32),
+        ("2022-08-16", "2022-09-19", 0.28),
+        ("2022-11-16", "2022-12-19", 0.28),
+        ("2023-02-16", "2023-03-22", 0.27),
+        ("2023-05-17", "2023-06-12", 0.27),
+        ("2023-08-16", "2023-09-11", 0.35),
+        ("2023-11-16", "2023-12-12", 0.35),
+        ("2024-02-27", "2024-03-25", 0.4),
+        ("2024-05-17", "2024-06-13", 0.51),
+        ("2024-08-16", "2024-09-11", 0.55),
+        ("2024-11-18", "2024-12-12", 0.55),
+        ("2025-02-20", "2025-03-18", 0.5),
+        ("2025-05-19", "2025-06-13", 0.47),
+        ("2025-08-18", "2025-09-11", 0.4),
+        ("2025-11-18", "2025-12-12", 0.4),
+        ("2026-02-26", "2026-03-23", 0.42),
+        ("2026-05-19", "2026-06-12", 0.66),
+        ("2026-08-18", "2026-09-11", 1.01),
+    ),
+    "00919": (
+        ("2023-06-16", "2023-07-14", 0.54),
+        ("2023-09-18", "2023-10-17", 0.54),
+        ("2023-12-18", "2024-01-12", 0.55),
+        ("2024-03-18", "2024-04-15", 0.66),
+        ("2024-06-24", "2024-07-15", 0.7),
+        ("2024-09-23", "2024-10-15", 0.72),
+        ("2024-12-20", "2025-01-13", 0.72),
+        ("2025-03-18", "2025-04-15", 0.72),
+        ("2025-06-17", "2025-07-11", 0.72),
+        ("2025-09-16", "2025-10-15", 0.54),
+        ("2025-12-16", "2026-01-13", 0.54),
+        ("2026-03-17", "2026-04-14", 0.78),
+        ("2026-06-16", "2026-07-13", 1.0),
+    ),
+}
+CORPORATE_ACTION_STATIC_VERSION = hashlib.sha256(
+    json.dumps(
+        {
+            "schema": "tw-corporate-actions-v3",
+            "splits": KNOWN_SPLITS,
+            "dividend_snapshot_revision": OFFICIAL_DIVIDEND_FALLBACK_REVISION,
+            "dividends": OFFICIAL_DIVIDEND_FALLBACK,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+).hexdigest()
 
 class _TableParser(HTMLParser):
  def __init__(self):super().__init__();self.rows=[];self._row=None;self._cell=None
@@ -63,7 +160,12 @@ def download_twse_etf_dividends(stock_code,*,start,end):
  try:cached=_download_twse_etf_dividends_cached(stock_code,s.year,e.year)
  except (requests.RequestException,ValueError,TypeError):cached=()
  records=cached or OFFICIAL_DIVIDEND_FALLBACK.get(stock_code,())
- return [{"ex_date":x,"payment_date":p,"amount":a,"source":TWSE_DIVIDEND_URL} for x,p,a in records if s<=pd.Timestamp(x)<=e]
+ source=(
+  TWSE_DIVIDEND_URL
+  if cached
+  else f"{TWSE_DIVIDEND_URL}#snapshot={OFFICIAL_DIVIDEND_FALLBACK_REVISION}"
+ )
+ return [{"ex_date":x,"payment_date":p,"amount":a,"source":source} for x,p,a in records if s<=pd.Timestamp(x)<=e]
 
 def _split_candidate(prev_close,current_open):
  if prev_close<=0 or current_open<=0:return None
@@ -146,11 +248,11 @@ def apply_split_adjustments(frame,stock_code):
  for event in reversed(events):
   boundary=pd.Timestamp(event.get("adjustment_date",event["effective_date"]));ratio=float(event["ratio"]);mask=adjusted.index<boundary;adjusted.loc[mask,["Open","High","Low","Close"]]/=ratio
   if "Volume" in adjusted.columns:adjusted.loc[mask,"Volume"]*=ratio
- adjusted.attrs.update(frame.attrs);adjusted.attrs["split_adjustments"]=events;adjusted.attrs["price_basis"]="latest-unit split-adjusted";adjusted.attrs["split_adjusted"]=True;adjusted.attrs["corporate_action_validated"]=True;return adjusted
+ adjusted.attrs.update(frame.attrs);adjusted.attrs["split_adjustments"]=events;adjusted.attrs["price_basis"]="latest-unit split-adjusted";adjusted.attrs["split_adjusted"]=True;adjusted.attrs["corporate_action_validated"]=True;adjusted.attrs["corporate_action_catalog_revision"]=CORPORATE_ACTION_STATIC_VERSION;return adjusted
 
 def attach_official_dividends(frame,stock_code):
  if frame is None or frame.empty:return frame
- output=frame.copy();dividends=download_twse_etf_dividends(stock_code,start=pd.Timestamp(output.index.min()),end=pd.Timestamp(output.index.max()));splits=list(output.attrs.get("split_adjustments",[]));output.attrs.update(frame.attrs);output.attrs["dividends"]=adjust_dividends_for_splits(dividends,splits);output.attrs["dividend_source"]=TWSE_DIVIDEND_URL;return output
+ output=frame.copy();dividends=download_twse_etf_dividends(stock_code,start=pd.Timestamp(output.index.min()),end=pd.Timestamp(output.index.max()));splits=list(output.attrs.get("split_adjustments",[]));output.attrs.update(frame.attrs);output.attrs["dividends"]=adjust_dividends_for_splits(dividends,splits);output.attrs["dividend_source"]=(dividends[0]["source"] if dividends else TWSE_DIVIDEND_URL);output.attrs["corporate_action_catalog_revision"]=CORPORATE_ACTION_STATIC_VERSION;return output
 
 def dividends_by_ex_date(frame):
  totals={}
@@ -158,3 +260,7 @@ def dividends_by_ex_date(frame):
   ex=str(event.get("ex_date",""));amount=float(event.get("amount",0.0))
   if ex and amount>0:totals[ex]=totals.get(ex,0.0)+amount
  return totals
+
+
+def clear_corporate_action_cache():
+ _download_twse_etf_dividends_cached.cache_clear()

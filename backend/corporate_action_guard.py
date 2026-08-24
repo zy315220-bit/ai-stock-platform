@@ -7,6 +7,10 @@ can all create discontinuities or missing regimes. Known normalized events are
 allowed; unresolved structural breaks block research/ranking.
 """
 from __future__ import annotations
+from dataclasses import asdict, is_dataclass
+from enum import Enum
+import hashlib
+import json
 import math
 import pandas as pd
 
@@ -52,17 +56,78 @@ def validate_research_corporate_actions(frame: pd.DataFrame, stock_code: str) ->
         )
 
 
+def _canonical(value):
+    if is_dataclass(value):
+        return _canonical(asdict(value))
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {
+            str(key): _canonical(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        }
+    if isinstance(value, (list, tuple, set)):
+        return [_canonical(item) for item in value]
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _ohlcv_digest(frame: pd.DataFrame) -> str:
+    columns = [
+        column
+        for column in ("Open", "High", "Low", "Close", "Volume")
+        if column in frame.columns
+    ]
+    normalized = frame.loc[:, columns].copy().sort_index()
+    normalized.index = pd.to_datetime(normalized.index).strftime("%Y-%m-%dT%H:%M:%S")
+    row_hashes = pd.util.hash_pandas_object(
+        normalized,
+        index=True,
+        categorize=False,
+    )
+    return hashlib.sha256(row_hashes.values.tobytes()).hexdigest()
+
+
 def mark_research_dataset_version(frame: pd.DataFrame) -> pd.DataFrame:
-    """Attach a deterministic version key so corrected datasets can invalidate caches."""
+    """Hash prices and every normalized event so any correction invalidates rankings."""
     output = frame.copy()
     attrs = dict(frame.attrs)
-    events = attrs.get("split_adjustments", [])
-    dividends = attrs.get("dividends", [])
-    signature = (
-        str(attrs.get("price_basis", "")),
-        tuple(sorted((str(e.get("effective_date", "")), str(e.get("adjustment_date", "")), float(e.get("ratio", 0))) for e in events)),
-        tuple(sorted((str(e.get("ex_date", "")), float(e.get("amount", 0))) for e in dividends)),
+    start = pd.Timestamp(frame.index.min()).strftime("%Y-%m-%d")
+    end = pd.Timestamp(frame.index.max()).strftime("%Y-%m-%d")
+    manifest = {
+        "schema_version": "research-dataset-v2",
+        "stock_code": attrs.get("stock_code"),
+        "source": attrs.get("source"),
+        "price_basis": attrs.get("price_basis"),
+        "start": start,
+        "end": end,
+        "row_count": int(len(frame)),
+        "ohlcv_sha256": _ohlcv_digest(frame),
+        "split_adjustments": _canonical(attrs.get("split_adjustments", [])),
+        "dividends": _canonical(attrs.get("dividends", [])),
+        "dividend_source": attrs.get("dividend_source"),
+        "corporate_action_events": _canonical(
+            attrs.get("corporate_action_events", [])
+        ),
+        "corporate_action_resolutions": _canonical(
+            attrs.get("corporate_action_resolutions", [])
+        ),
+        "corporate_action_catalog_revision": attrs.get(
+            "corporate_action_catalog_revision"
+        ),
+    }
+    payload = json.dumps(
+        manifest,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
     )
-    attrs["research_dataset_version"] = repr(signature)
+    attrs["research_dataset_manifest"] = manifest
+    attrs["research_dataset_version"] = hashlib.sha256(
+        payload.encode("utf-8")
+    ).hexdigest()
     output.attrs.update(attrs)
     return output

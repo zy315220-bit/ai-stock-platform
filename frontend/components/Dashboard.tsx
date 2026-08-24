@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/refs -- refs are read only inside event handlers attached by render helpers. */
 
 import { track } from "@vercel/analytics";
+import dynamic from "next/dynamic";
 import {
   FormEvent,
   ReactNode,
@@ -42,12 +43,24 @@ import type {
   WatchItem,
 } from "@/types/stock";
 
+const ResearchLabPanel = dynamic(
+  () => import("@/components/ResearchLabPanel"),
+  {
+    loading: () => (
+      <div className="research-running" role="status">
+        正在載入 AI 研究室…
+      </div>
+    ),
+  },
+);
+
 
 type PageKey =
   | "home"
   | "analysis"
   | "watchlist"
   | "scanner"
+  | "research"
   | "competition"
   | "market"
   | "industry";
@@ -100,6 +113,11 @@ const menuItems: MenuItem[] = [
     key: "scanner",
     icon: "◉",
     label: "AI 選股池",
+  },
+  {
+    key: "research",
+    icon: "⚗",
+    label: "AI 研究室",
   },
   {
     key: "competition",
@@ -4033,6 +4051,9 @@ export default function Dashboard() {
 
       case "scanner":
         return renderScannerPage();
+
+      case "research":
+        return <ResearchLabPanel />;
 
       case "competition":
         return renderCompetitionPage();

@@ -231,12 +231,15 @@ def split_events(frame,stock_code):
  changes units on a nearby date, adjustment_date records that boundary instead
  of pretending the provider's mixed history is already normalized.
  """
- known=[dict(e) for e in KNOWN_SPLITS.get(stock_code,[])];inferred=_inferred_splits(frame);events=[]
+ known=[dict(e) for e in KNOWN_SPLITS.get(stock_code,[])];provider=[dict(e) for e in frame.attrs.get("provider_splits",[]) or []];inferred=_inferred_splits(frame);events=[]
  for official in known:
   item=dict(official);matches=[e for e in inferred if _same_split_event(e,official)]
   if matches:item["adjustment_date"]=min(matches,key=lambda e:abs((pd.Timestamp(e["effective_date"])-pd.Timestamp(official["effective_date"])).days))["effective_date"]
   else:item["adjustment_date"]=item["effective_date"]
   events.append(item)
+ for declared in provider:
+  if any(_same_split_event(declared,event) for event in events):continue
+  item=dict(declared);item["adjustment_date"]=item.get("adjustment_date",item["effective_date"]);events.append(item)
  for event in inferred:
   if any(_same_split_event(event,k) for k in known):continue
   item=dict(event);item["adjustment_date"]=item["effective_date"]
@@ -263,7 +266,7 @@ def apply_split_adjustments(frame,stock_code):
 
 def attach_official_dividends(frame,stock_code):
  if frame is None or frame.empty:return frame
- output=frame.copy();dividends=download_twse_etf_dividends(stock_code,start=pd.Timestamp(output.index.min()),end=pd.Timestamp(output.index.max()));splits=list(output.attrs.get("split_adjustments",[]));output.attrs.update(frame.attrs);output.attrs["dividends"]=adjust_dividends_for_splits(dividends,splits);output.attrs["dividend_source"]=(dividends[0]["source"] if dividends else TWSE_DIVIDEND_URL);output.attrs["corporate_action_catalog_revision"]=CORPORATE_ACTION_STATIC_VERSION;return output
+ output=frame.copy();provider=[dict(event) for event in frame.attrs.get("provider_dividends",[]) or []];is_etf=stock_code.startswith("00");official=download_twse_etf_dividends(stock_code,start=pd.Timestamp(output.index.min()),end=pd.Timestamp(output.index.max())) if is_etf else [];dividends=official or provider;splits=list(output.attrs.get("split_adjustments",[]));output.attrs.update(frame.attrs);output.attrs["dividends"]=adjust_dividends_for_splits(dividends,splits);output.attrs["dividend_source"]=(dividends[0]["source"] if dividends else "unavailable");output.attrs["dividend_provenance"]=("official_twse_etf" if official else "yahoo_provider_events" if provider else "unavailable");output.attrs["corporate_action_catalog_revision"]=CORPORATE_ACTION_STATIC_VERSION;return output
 
 def dividends_by_ex_date(frame):
  totals={}

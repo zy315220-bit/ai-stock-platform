@@ -70,6 +70,21 @@ class StockPriceBasisTests(unittest.TestCase):
                 "result": [
                     {
                         "timestamp": [1717376400, 1717462800],
+                        "events": {
+                            "dividends": {
+                                "1717462800": {
+                                    "amount": 1.25,
+                                    "date": 1717462800,
+                                }
+                            },
+                            "splits": {
+                                "1717376400": {
+                                    "date": 1717376400,
+                                    "numerator": 4.0,
+                                    "denominator": 1.0,
+                                }
+                            },
+                        },
                         "indicators": {
                             "quote": [
                                 {
@@ -93,6 +108,8 @@ class StockPriceBasisTests(unittest.TestCase):
         self.assertEqual(frame.attrs["source"], "Yahoo Finance")
         self.assertEqual(frame.attrs["download_transport"], "chart-api-fallback")
         self.assertEqual(float(frame.iloc[-1]["Close"]), 102.0)
+        self.assertEqual(frame.attrs["provider_dividends"][0]["amount"], 1.25)
+        self.assertEqual(frame.attrs["provider_splits"][0]["ratio"], 4.0)
 
     @patch("stock._download_yahoo_chart")
     @patch("stock.yf.download")

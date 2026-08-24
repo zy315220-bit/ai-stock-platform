@@ -14,6 +14,56 @@ YAHOO_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; AI-Stock-Platform/1.0)",
 }
 
+
+def _yahoo_event_date(value: Any) -> str | None:
+    try:
+        timestamp = pd.to_datetime(float(value), unit="s", utc=True)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if pd.isna(timestamp):
+        return None
+    return timestamp.strftime("%Y-%m-%d")
+
+
+def _chart_corporate_actions(result: dict[str, Any], ticker: str) -> dict[str, list[dict[str, Any]]]:
+    """Preserve Yahoo's dated cash distributions and split declarations."""
+    events = result.get("events") or {}
+    source = YAHOO_CHART_URL.format(ticker=ticker)
+    dividends: list[dict[str, Any]] = []
+    for record in (events.get("dividends") or {}).values():
+        event_date = _yahoo_event_date(record.get("date"))
+        try:
+            amount = float(record.get("amount"))
+        except (TypeError, ValueError):
+            continue
+        if event_date and amount > 0:
+            dividends.append({
+                "ex_date": event_date,
+                "payment_date": None,
+                "amount": amount,
+                "source": f"{source}#events=div",
+            })
+
+    splits: list[dict[str, Any]] = []
+    for record in (events.get("splits") or {}).values():
+        event_date = _yahoo_event_date(record.get("date"))
+        try:
+            numerator = float(record.get("numerator"))
+            denominator = float(record.get("denominator"))
+            ratio = numerator / denominator
+        except (TypeError, ValueError, ZeroDivisionError):
+            continue
+        if event_date and 0.05 <= ratio <= 20:
+            splits.append({
+                "effective_date": event_date,
+                "ratio": ratio,
+                "source": f"{source}#events=splits",
+            })
+    return {
+        "provider_dividends": sorted(dividends, key=lambda item: item["ex_date"]),
+        "provider_splits": sorted(splits, key=lambda item: item["effective_date"]),
+    }
+
 def normalize_stock_code(stock_code:Any)->str:
     if stock_code is None:raise ValueError("股票代號不能是 None。")
     code=str(stock_code).strip().upper()
@@ -91,7 +141,7 @@ def _download_yahoo_chart(ticker,period,interval,prepost=False):
         frame=pd.DataFrame(columns,index=pd.to_datetime(timestamps,unit="s",utc=True))
     except (requests.RequestException,ValueError,TypeError,KeyError):
         return pd.DataFrame()
-    frame.attrs["source"]="Yahoo Finance";frame.attrs["price_basis"]="yahoo_raw_close_unverified";frame.attrs["download_transport"]="chart-api-fallback";return frame
+    frame.attrs["source"]="Yahoo Finance";frame.attrs["price_basis"]="yahoo_raw_close_unverified";frame.attrs["download_transport"]="chart-api-fallback";frame.attrs.update(_chart_corporate_actions(result,ticker));return frame
 
 def _download_yfinance(ticker,period,interval,prepost=False):
     # Research/competition history is materially faster and less rate-limit
@@ -101,10 +151,14 @@ def _download_yfinance(ticker,period,interval,prepost=False):
     if prefer_chart:
         chart=_download_yahoo_chart(ticker,period,interval,prepost)
         if not chart.empty:return chart
-    try:df=yf.download(tickers=ticker,period=period,interval=interval,progress=False,auto_adjust=False,threads=False,prepost=prepost,group_by="column")
+    try:df=yf.download(tickers=ticker,period=period,interval=interval,progress=False,auto_adjust=False,actions=True,threads=False,prepost=prepost,group_by="column")
     except Exception:df=pd.DataFrame()
     if df is None or df.empty:return _download_yahoo_chart(ticker,period,interval,prepost)
-    df.attrs["source"]="Yahoo Finance";df.attrs["price_basis"]="yahoo_raw_close_unverified";df.attrs["download_transport"]="yfinance";return df
+    flattened=flatten_columns(df);provider_dividends=[]
+    if "Dividends" in flattened.columns:
+        for event_date,amount in pd.to_numeric(flattened["Dividends"],errors="coerce").dropna().items():
+            if float(amount)>0:provider_dividends.append({"ex_date":pd.Timestamp(event_date).strftime("%Y-%m-%d"),"payment_date":None,"amount":float(amount),"source":f"https://finance.yahoo.com/quote/{ticker}/history#dividends"})
+    df.attrs["source"]="Yahoo Finance";df.attrs["price_basis"]="yahoo_raw_close_unverified";df.attrs["download_transport"]="yfinance";df.attrs["provider_dividends"]=provider_dividends;return df
 
 def _aggregate_latest_intraday(intraday):
     if intraday is None or intraday.empty:return None

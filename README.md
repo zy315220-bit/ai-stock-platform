@@ -109,8 +109,37 @@ USE_DEMO_DATA=true
 - 證交所官方產業類指數強弱排名，明確區分單日價格強弱與長期資金趨勢
 - 證交所官方產業指數 1／5／20 日相對強弱、趨勢分數與相對大盤超額報酬
 - 證交所上市股票 5／20 日市場廣度、20 日成交量確認與產業內個股擴散標記
+- AI 研究室：Train-only 自主候選進化、獨立 Validation、Rolling
+  Walk-forward、牛／熊／盤整稽核，以及鎖定的 Final Holdout
+- 研究可信度 Gate：Wilson 95% 下界、PSR、MinTRL、DSR、
+  Stationary Bootstrap、CSCV／PBO、Hansen SPA、MDD／Calmar
+- 每次研究保留 Run ID、OHLCV／股息／分割／公司行動資料指紋與
+  可重現候選 lineage；資料或公司行動版本改變時會產生新身分
 
-## 7. 下一階段
+## 7. AI 研究室
+
+正式介面位於 `/research-lab`，也可從主 Dashboard 的「AI 研究室」
+進入。研究流程採多層 Gate，而不是把所有指標硬合成一條總分：
+
+1. 自適應搜尋只允許使用 Train。
+2. 決選候選才進入完全獨立的 Validation。
+3. 0050 市況只使用切片開始日前可得資料，以三狀態 Hamilton
+   Markov-switching 模型標記牛市、熊市、盤整。
+4. Walk-forward、PSR／MinTRL／DSR、Stationary Bootstrap、
+   CSCV／PBO 與 Hansen SPA 逐層 fail-closed。
+5. 只有全部 Gate 通過的候選，才可由稽核流程一次性開啟 Final
+   Holdout；互動式 API 永遠不會開啟 Holdout。
+
+可在 `backend` 執行真實資料稽核：
+
+```powershell
+python -m scripts.run_research_lab_audit
+```
+
+稽核結果會寫入本機 `research_artifacts/`。失敗候選也會保留，不能把
+沒有通過統計與市場狀態證據的策略包裝成正式冠軍。
+
+## 8. 下一階段
 
 - 官方或授權的 60 分鐘行情備援
 - 會員同步的 PostgreSQL 自選股與歷史評分
@@ -120,6 +149,6 @@ USE_DEMO_DATA=true
 - 即時更新
 - 財報成長率、新聞可信度與以跨股票資料估計的研究權重
 
-## 8. 重要提醒
+## 9. 重要提醒
 
 平台目前是「量化投資決策支援」，不是保證獲利的預測器，也不會自動下單。回測結果必須與同期持有比較，過去績效不代表未來結果。

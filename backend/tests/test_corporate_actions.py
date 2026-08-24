@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 import pandas as pd
 from app.services.backtest.benchmark import _calculate_buy_and_hold
-from corporate_actions import OFFICIAL_DIVIDEND_FALLBACK_REVISION, adjust_dividends_for_splits, apply_split_adjustments, download_twse_etf_dividends, parse_twse_dividend_html
+from corporate_actions import OFFICIAL_DIVIDEND_FALLBACK_REVISION, adjust_dividends_for_splits, apply_split_adjustments, attach_official_dividends, download_twse_etf_dividends, parse_twse_dividend_html
 
 class CorporateActionTests(unittest.TestCase):
     def test_0050_split_removes_non_economic_price_drop(self):
@@ -40,6 +40,11 @@ class CorporateActionTests(unittest.TestCase):
         frame=pd.DataFrame({"Date":pd.to_datetime(["2025-01-02","2025-12-31"]),"Open":[10.,11.],"High":[11.,12.],"Low":[9.,10.],"Close":[10.,11.],"Volume":[1000,1000]})
         frame.attrs["split_adjustments"]=[]
         with self.assertRaisesRegex(ValueError,"拒絕計算同期持有報酬"): _calculate_buy_and_hold(frame,10_000,0.,0.)
+    def test_non_etf_uses_provider_dividends_without_calling_etf_endpoint(self):
+        frame=pd.DataFrame({"Open":[10.,11.],"High":[11.,12.],"Low":[9.,10.],"Close":[10.,11.],"Volume":[1000,1000]},index=pd.to_datetime(["2025-01-02","2025-12-31"]));frame.attrs.update({"split_adjustments":[],"provider_dividends":[{"ex_date":"2025-07-01","amount":0.5,"source":"Yahoo"}]})
+        with patch("corporate_actions.download_twse_etf_dividends") as official:
+            result=attach_official_dividends(frame,"2330")
+        official.assert_not_called();self.assertEqual(result.attrs["dividends"][0]["amount"],0.5);self.assertEqual(result.attrs["dividend_provenance"],"yahoo_provider_events")
     def test_audited_fallback_survives_twse_page_timeout(self):
         with patch("corporate_actions._download_twse_etf_dividends_cached",side_effect=ValueError("timeout")): events=download_twse_etf_dividends("0050",start=pd.Timestamp("2025-01-01"),end=pd.Timestamp("2025-12-31"))
         self.assertEqual([(e["ex_date"],e["amount"]) for e in events],[("2025-01-17",2.7),("2025-07-21",0.36)])

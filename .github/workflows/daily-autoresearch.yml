@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/daily-autoresearch.yml"
     # This also bootstraps the first run after the workflow is active on main.
+    # Production acceptance rerun after short-slice fail-closed fix.
   schedule:
     # Taiwan has no DST: 10:30 UTC is 18:30 Asia/Taipei.
     - cron: "30 10 * * 1-5"

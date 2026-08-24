@@ -28,10 +28,17 @@ KNOWN_SPLITS={"0050":[{"effective_date":"2025-06-18","ratio":4.0,"source":TWSE_0
 # Audited snapshot of the official TWSE ETF distribution table. The live page
 # remains the preferred source; this snapshot prevents a transient exchange
 # outage from silently deleting dividends from Total Return and competition
-# rankings. Keep all four competition ETFs complete through the snapshot date.
-OFFICIAL_DIVIDEND_FALLBACK_REVISION = "TWSE-ETF-DIVIDENDS-2026-08-25"
+# rankings. Keep all four competition ETFs complete across the full ten-year
+# competition download window through the snapshot date.
+OFFICIAL_DIVIDEND_FALLBACK_REVISION = "TWSE-ETF-DIVIDENDS-10Y-2026-08-25"
 OFFICIAL_DIVIDEND_FALLBACK = {
     "0050": (
+        ("2017-02-08", "2017-03-14", 1.7),
+        ("2017-07-31", "2017-08-31", 0.7),
+        ("2018-01-29", "2018-03-13", 2.2),
+        ("2018-07-23", "2018-08-27", 0.7),
+        ("2019-01-22", "2019-03-08", 2.3),
+        ("2019-07-19", "2019-08-22", 0.7),
         ("2020-01-31", "2020-03-06", 2.9),
         ("2020-07-21", "2020-08-24", 0.7),
         ("2021-01-22", "2021-03-09", 3.05),
@@ -48,6 +55,10 @@ OFFICIAL_DIVIDEND_FALLBACK = {
         ("2026-07-21", "2026-08-10", 0.6),
     ),
     "0056": (
+        ("2016-10-26", "2016-11-28", 1.3),
+        ("2017-10-30", "2017-12-04", 0.95),
+        ("2018-10-23", "2018-11-27", 1.45),
+        ("2019-10-23", "2019-11-26", 1.8),
         ("2020-10-28", "2020-12-01", 1.6),
         ("2021-10-22", "2021-11-25", 1.8),
         ("2022-10-19", "2022-11-22", 2.1),

@@ -46,15 +46,21 @@ class CorporateActionTests(unittest.TestCase):
         self.assertIn(OFFICIAL_DIVIDEND_FALLBACK_REVISION, events[0]["source"])
     def test_audited_fallback_covers_entire_competition_universe(self):
         expected={
-            "0050":(14,"2026-07-21",0.6),
-            "0056":(16,"2026-07-21",1.35),
+            "0050":(20,"2026-07-21",0.6),
+            "0056":(20,"2026-07-21",1.35),
             "00878":(24,"2026-08-18",1.01),
             "00919":(13,"2026-06-16",1.0),
         }
         with patch("corporate_actions._download_twse_etf_dividends_cached",side_effect=ValueError("timeout")):
             for code,(count,last_date,last_amount) in expected.items():
-                events=download_twse_etf_dividends(code,start=pd.Timestamp("2020-01-01"),end=pd.Timestamp("2026-08-25"))
+                events=download_twse_etf_dividends(code,start=pd.Timestamp("2016-01-01"),end=pd.Timestamp("2026-08-25"))
                 self.assertEqual(len(events),count,code)
                 self.assertEqual((events[-1]["ex_date"],events[-1]["amount"]),(last_date,last_amount),code)
                 self.assertIn(OFFICIAL_DIVIDEND_FALLBACK_REVISION,events[-1]["source"])
+    def test_0050_ten_year_fallback_normalizes_to_post_split_units(self):
+        with patch("corporate_actions._download_twse_etf_dividends_cached",side_effect=ValueError("timeout")):
+            events=download_twse_etf_dividends("0050",start=pd.Timestamp("2016-01-01"),end=pd.Timestamp("2026-08-25"))
+        adjusted=adjust_dividends_for_splits(events,[{"effective_date":"2025-06-18","ratio":4.0}])
+        self.assertEqual(adjusted[0]["ex_date"],"2017-02-08")
+        self.assertAlmostEqual(adjusted[0]["amount"],0.425)
 if __name__=="__main__": unittest.main()

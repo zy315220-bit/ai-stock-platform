@@ -13,6 +13,28 @@ MINIMUM_RESEARCH_YEARS = 3
 PREFERRED_RESEARCH_YEARS = 5
 FORWARD_HOLDOUT_MONTHS = 12
 
+# Point-in-time lifecycle metadata for the ETF research universe.  A request
+# that starts before an instrument existed must not treat pre-listing months as
+# missing market data or repeatedly invoke the official-history fallback.
+KNOWN_LISTING_DATES = {
+    "0050": date(2003, 6, 25),
+    "0056": date(2007, 12, 26),
+    "00878": date(2020, 7, 20),
+    "00919": date(2022, 10, 20),
+}
+
+
+def effective_history_start_date(
+    stock_code: str,
+    requested_start: date,
+) -> date:
+    """Clamp a history request to a known point-in-time listing date."""
+    normalized = stock_code.strip().upper().split(".", 1)[0]
+    listing_date = KNOWN_LISTING_DATES.get(normalized)
+    if listing_date is None:
+        return requested_start
+    return max(requested_start, listing_date)
+
 
 def default_research_start_date(as_of: date | None = None) -> date:
     """Return the same calendar date five years earlier when possible."""

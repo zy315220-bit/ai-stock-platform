@@ -2576,6 +2576,31 @@ button, input, select { font: inherit; }
 .daily-research-grid span,
 .daily-research-grid small { color: #718399; font-size: 8px; }
 .daily-research-grid strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; }
+.daily-memory-strip {
+  padding: 15px;
+  display: grid;
+  grid-template-columns: minmax(180px, .8fr) minmax(420px, 1.6fr);
+  gap: 12px 22px;
+  align-items: center;
+  border: 1px solid rgba(94, 234, 212, .2);
+  border-radius: 12px;
+  background: rgba(8, 35, 38, .42);
+}
+.daily-memory-strip > div { display: grid; gap: 5px; }
+.daily-memory-strip span,
+.daily-memory-strip small { color: #79a8a7; font-size: 8px; }
+.daily-memory-strip strong { color: #99f6e4; font-size: 13px; }
+.daily-memory-strip dl { margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.daily-memory-strip dl > div { min-width: 0; display: grid; gap: 4px; }
+.daily-memory-strip dt { color: #6f8f94; font-size: 7px; }
+.daily-memory-strip dd { margin: 0; color: #d9faf5; font-size: 11px; font-weight: 900; }
+.daily-memory-strip p {
+  margin: 0;
+  grid-column: 1 / -1;
+  color: #78939c;
+  font-size: 8px;
+  line-height: 1.6;
+}
 .daily-top-candidate {
   padding: 15px;
   display: grid;
@@ -2846,6 +2871,8 @@ button, input, select { font: inherit; }
 
 @media (max-width: 1180px) {
   .daily-research-grid { grid-template-columns: 1fr 1fr; }
+  .daily-memory-strip { grid-template-columns: 1fr; }
+  .daily-memory-strip p { grid-column: auto; }
   .daily-top-candidate { grid-template-columns: 1fr; }
   .research-run-form { grid-template-columns: 1fr 1fr 1fr 1fr; }
   .research-run-form button { grid-column: 1 / -1; }
@@ -2875,6 +2902,7 @@ button, input, select { font: inherit; }
   .daily-research-card { padding: 16px; }
   .daily-research-heading { align-items: flex-start; flex-direction: column; }
   .daily-research-grid { grid-template-columns: 1fr; }
+  .daily-memory-strip dl { grid-template-columns: 1fr 1fr; }
   .daily-top-candidate dl { grid-template-columns: 1fr 1fr; }
   .research-run-form { grid-template-columns: 1fr; }
   .research-running { grid-template-columns: 64px minmax(0, 1fr); padding: 16px; }

@@ -5,6 +5,10 @@ from datetime import date
 import pytest
 
 from app.api.research_lab import _rotated_parameter_candidates
+from app.services.research_lab.evolution import SEARCH_SPACE_SCHEMA
+from app.services.research_lab.training_memory import (
+    TRAINING_MEMORY_SCHEMA_VERSION,
+)
 from scripts.aggregate_daily_autoresearch import aggregate_payloads
 from scripts.run_daily_autoresearch import (
     campaign_window,
@@ -19,18 +23,24 @@ def _research_result(
     eligible: bool,
     score: float,
 ) -> dict[str, object]:
+    candidate = {
+        "candidate_id": f"candidate-{stock_code}",
+        "parent_id": "parent-1",
+        "strategy_family": "score_engine",
+        "hypothesis": "test hypothesis",
+        "parameters": {
+            "entry_score": 60,
+            "exit_score": 40,
+            "initial_capital": 1_000_000,
+            "entry_mode": "score",
+        },
+    }
     return {
         "research_run_id": f"run-{stock_code}",
         "data_fingerprints": [f"data-{stock_code}"],
         "stock_code": stock_code,
         "experiments_run": 24,
-        "selected_candidate": {
-            "candidate_id": f"candidate-{stock_code}",
-            "parent_id": "parent-1",
-            "strategy_family": "score_engine",
-            "hypothesis": "test hypothesis",
-            "parameters": {"entry_score": 60, "exit_score": 40},
-        },
+        "selected_candidate": candidate,
         "best_result": {
             "decision": "HOLDOUT_READY" if eligible else "KEEP",
             "research_score": score,
@@ -68,15 +78,64 @@ def _research_result(
             "holdout_opened": False,
         },
         "research_audit": {
+            "validation_used_during_adaptive_search": False,
             "holdout_used_during_search": False,
+            "training_memory": {
+                "validation_feedback_used": False,
+                "holdout_feedback_used": False,
+            },
         },
         "holdout_status": "LOCKED_REQUIRES_PROMOTION_GATE",
+        "rounds": [
+            {
+                "generation": 1,
+                "evaluation_phase": "train",
+                "evaluated": [
+                    {
+                        "candidate": candidate,
+                        "validation_metrics": {
+                            "data_fingerprint": f"data-{stock_code}",
+                        },
+                        "decision": "KEEP",
+                        "research_score": score,
+                        "reasons": [],
+                        "evaluation_phase": "train",
+                    }
+                ],
+                "survivors": [],
+            }
+        ],
+    }
+
+
+def _training_memory(stock_code: str) -> dict[str, object]:
+    return {
+        "schema_version": TRAINING_MEMORY_SCHEMA_VERSION,
+        "search_space_schema": SEARCH_SPACE_SCHEMA,
+        "provenance": "TRAIN_ONLY",
+        "stock_code": stock_code,
+        "campaign_id": "2026-Q3",
+        "train_window": ["2020-01-01", "2023-11-04"],
+        "as_of_date": "2026-08-25",
+        "memory_id": f"memory-{stock_code}",
+        "seen_parameter_signatures": [f"signature-{stock_code}"],
+        "elites": [],
+        "frontier": [],
+        "strategy_families": ["score_engine"],
+        "train_trial_period_sharpes": [0.1],
+        "lifetime_experiment_count": 1,
+        "lifetime_run_count": 1,
+        "last_run_new_experiment_count": 1,
+        "last_run_duplicate_skip_count": 0,
+        "memory_reset_reason": "missing",
+        "validation_feedback_used": False,
+        "holdout_feedback_used": False,
     }
 
 
 def _daily_payload(stock_code: str, *, eligible: bool, score: float) -> dict[str, object]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "automation": {"candidate_offset": 3},
         "as_of_date": "2026-08-25",
         "campaign": {
@@ -87,6 +146,7 @@ def _daily_payload(stock_code: str, *, eligible: bool, score: float) -> dict[str
         "generated_at_utc": "2026-08-25T10:30:00+00:00",
         "stock_code": stock_code,
         "result": _research_result(stock_code, eligible=eligible, score=score),
+        "training_memory": _training_memory(stock_code),
     }
 
 
@@ -123,6 +183,8 @@ def test_daily_runner_never_opens_holdout() -> None:
     )
     assert captured["candidate_offset"] == payload["automation"]["candidate_offset"]
     assert captured["end_date"] == date(2026, 6, 30)
+    assert captured["initial_candidates"]
+    assert payload["training_memory"]["provenance"] == "TRAIN_ONLY"
     assert payload["result"]["promotion_eligibility"]["holdout_opened"] is False
 
 
@@ -140,6 +202,43 @@ def test_daily_runner_fails_closed_if_holdout_is_opened() -> None:
         )
 
 
+def test_daily_runner_blocks_promotion_when_train_data_revision_resets_memory() -> None:
+    call_count = 0
+
+    def changing_runner(**_: object) -> dict[str, object]:
+        nonlocal call_count
+        call_count += 1
+        result = _research_result("2330", eligible=True, score=80.0)
+        fingerprint = f"train-data-v{call_count}"
+        result["data_fingerprints"] = [fingerprint]
+        result["rounds"][0]["evaluated"][0]["validation_metrics"][
+            "data_fingerprint"
+        ] = fingerprint
+        return result
+
+    first = execute_daily_stock_research(
+        "2330",
+        date(2026, 8, 25),
+        research_runner=changing_runner,
+    )
+    second = execute_daily_stock_research(
+        "2330",
+        date(2026, 8, 26),
+        prior_training_memory=first["training_memory"],
+        research_runner=changing_runner,
+    )
+    assert second["training_memory"]["memory_reset_reason"] == (
+        "train_data_revision"
+    )
+    assert second["result"]["promotion_eligibility"][
+        "eligible_for_one_shot_holdout"
+    ] is False
+    assert (
+        "train_data_revision_requires_fresh_cumulative_evidence"
+        in second["result"]["promotion_eligibility"]["reasons"]
+    )
+
+
 def test_aggregate_requires_every_symbol_and_versions_candidates() -> None:
     payload = aggregate_payloads(
         [
@@ -153,6 +252,8 @@ def test_aggregate_requires_every_symbol_and_versions_candidates() -> None:
     assert payload["holdout_opened"] is False
     assert payload["eligible_candidate_count"] == 1
     assert payload["top_candidate"]["stock_code"] == "2330"
+    assert payload["training_memory"]["completed_symbol_count"] == 2
+    assert payload["training_memory"]["validation_feedback_used"] is False
     assert len(payload["top_candidate"]["robot_version_id"]) == 24
 
     repeated = aggregate_payloads(

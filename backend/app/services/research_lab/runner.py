@@ -19,6 +19,7 @@ _ALLOWED_PARAMETERS = {
     "require_ema_trend",
     "ema_fast_column",
     "ema_slow_column",
+    "entry_mode",
     "exit_mode",
     "max_holding_days",
 }

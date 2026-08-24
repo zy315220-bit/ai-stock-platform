@@ -53,6 +53,12 @@ BACKTEST_REQUIRED_COLUMNS = [
     "ATR",
 ]
 RESEARCH_EMA_COLUMNS = {"EMA5", "EMA20", "EMA60"}
+ENTRY_MODES = {
+    "score",
+    "score_and_rsi_momentum",
+    "score_and_bollinger_breakout",
+    "score_and_volume_confirmation",
+}
 EXIT_MODES = {
     "score",
     "score_or_time",
@@ -440,6 +446,7 @@ def backtest_stock(
     require_ema_trend: bool = False,
     ema_fast_column: str = "EMA20",
     ema_slow_column: str = "EMA60",
+    entry_mode: str = "score",
     exit_mode: str = "score",
     max_holding_days: int = 60,
     liquidate_at_end: bool = True,
@@ -476,6 +483,8 @@ def backtest_stock(
         )
     if ema_fast_column == ema_slow_column:
         raise ValueError("EMA fast and slow columns must differ.")
+    if entry_mode not in ENTRY_MODES:
+        raise ValueError(f"Unsupported entry_mode: {entry_mode}")
     if exit_mode not in EXIT_MODES:
         raise ValueError(f"Unsupported exit_mode: {exit_mode}")
     if (
@@ -520,6 +529,12 @@ def backtest_stock(
     required_columns = list(BACKTEST_REQUIRED_COLUMNS)
     if require_ema_trend or "ema_reversal" in exit_mode:
         required_columns.extend([ema_fast_column, ema_slow_column])
+    if entry_mode == "score_and_rsi_momentum":
+        required_columns.append("RSI")
+    elif entry_mode == "score_and_bollinger_breakout":
+        required_columns.extend(["Close", "Upper"])
+    elif entry_mode == "score_and_volume_confirmation":
+        required_columns.append("VolumeRatio")
     df = df.dropna(subset=list(dict.fromkeys(required_columns))).reset_index(
         drop=True
     )
@@ -589,7 +604,28 @@ def backtest_stock(
             or float(current_row[ema_fast_column])
             > float(current_row[ema_slow_column])
         )
-        if shares == 0 and score >= entry_score and ema_trend_ok:
+        entry_structure_ok = (
+            entry_mode == "score"
+            or (
+                entry_mode == "score_and_rsi_momentum"
+                and 55.0 <= float(current_row["RSI"]) <= 80.0
+            )
+            or (
+                entry_mode == "score_and_bollinger_breakout"
+                and float(current_row["Close"])
+                >= float(current_row["Upper"])
+            )
+            or (
+                entry_mode == "score_and_volume_confirmation"
+                and float(current_row["VolumeRatio"]) >= 1.2
+            )
+        )
+        if (
+            shares == 0
+            and score >= entry_score
+            and ema_trend_ok
+            and entry_structure_ok
+        ):
             purchasable_shares = _calculate_purchasable_shares(
                 cash=cash,
                 price=next_open,
@@ -872,6 +908,7 @@ def backtest_stock(
         "require_ema_trend": require_ema_trend,
         "ema_fast_column": ema_fast_column,
         "ema_slow_column": ema_slow_column,
+        "entry_mode": entry_mode,
         "exit_mode": exit_mode,
         "max_holding_days": max_holding_days,
         "liquidate_at_end": liquidate_at_end,

@@ -140,20 +140,24 @@ def _serialize_walk_forward(
     }
 
 
-@router.post("/run")
-def run_research(
-    stock_code: str = Query(..., min_length=4, max_length=10),
-    start_date: date = Query(...),
-    end_date: date = Query(...),
-    max_generations: int = Query(3, ge=1, le=10),
-    max_experiments: int = Query(40, ge=1, le=200),
-    min_validation_trades: int = Query(8, ge=1, le=100),
-    validation_finalists: int = Query(5, ge=1, le=5),
-    walk_forward_slices: int = Query(3, ge=2, le=8),
-    regime_candidate_count: int = Query(3, ge=1, le=3),
-    regime_slices: int = Query(6, ge=3, le=8),
-    min_regime_trades: int = Query(2, ge=1, le=50),
-    candidate_offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+def execute_research_pipeline(
+    *,
+    stock_code: str,
+    start_date: date,
+    end_date: date,
+    max_generations: int = 3,
+    max_experiments: int = 40,
+    min_validation_trades: int = 8,
+    validation_finalists: int = 5,
+    walk_forward_slices: int = 3,
+    regime_candidate_count: int = 3,
+    regime_slices: int = 6,
+    min_regime_trades: int = 2,
+    candidate_offset: int = 0,
+    initial_candidates: list[ResearchCandidate] | None = None,
+    excluded_training_signatures: set[str] | frozenset[str] | None = None,
+    training_memory_audit: dict[str, Any] | None = None,
+    prior_train_trial_sharpes: tuple[float, ...] = (),
 ) -> dict[str, object]:
     """Run train search, validation finals and a no-holdout regime tournament."""
     try:
@@ -161,11 +165,18 @@ def run_research(
         session = run_autoresearch(
             stock_code,
             split,
-            _rotated_parameter_candidates(candidate_offset),
+            (
+                initial_candidates
+                if initial_candidates is not None
+                else _rotated_parameter_candidates(candidate_offset)
+            ),
             backtest_fn=backtest_stock,
             max_generations=max_generations,
             max_experiments=max_experiments,
             min_validation_trades=min_validation_trades,
+            excluded_parameter_signatures=(
+                excluded_training_signatures or set()
+            ),
         )
 
         train_ranked = _unique_training_results(session)
@@ -181,7 +192,7 @@ def run_research(
             min_validation_trades=min_validation_trades,
             evaluation_phase="validation",
         )
-        trial_sharpes = [
+        current_trial_sharpes = [
             float(statistics.get("period_sharpe_ratio", 0.0))
             for result in train_ranked
             if (
@@ -191,6 +202,9 @@ def run_research(
                 )
             ).get("available")
         ]
+        trial_sharpes = [
+            float(value) for value in prior_train_trial_sharpes
+        ] + current_trial_sharpes
         validation_results = [
             replace(
                 result,
@@ -375,6 +389,9 @@ def run_research(
             "max_generations": max_generations,
             "max_experiments": max_experiments,
             "candidate_offset": candidate_offset,
+            "training_memory_id": (
+                (training_memory_audit or {}).get("prior_memory_id")
+            ),
             "statistical_gate_schema": "research-integrity-v2",
         },
         ensure_ascii=False,
@@ -390,6 +407,10 @@ def run_research(
         "data_fingerprints": data_fingerprints,
         "stock_code": stock_code.strip().upper(),
         "experiments_run": session.experiments_run,
+        "evaluated_parameter_signatures": list(
+            session.evaluated_parameter_signatures
+        ),
+        "skipped_duplicate_count": session.skipped_duplicate_count,
         "generations_run": len(session.rounds),
         "stopped_reason": session.stopped_reason,
         "training_best_result": (
@@ -411,6 +432,9 @@ def run_research(
             "cscv_pbo": pbo_evidence,
             "hansen_spa": spa_evidence,
             "trial_count_for_deflated_sharpe": len(trial_sharpes),
+            "current_run_trial_count_for_deflated_sharpe": len(
+                current_trial_sharpes
+            ),
         },
         "walk_forward_matrix": _serialize_walk_forward(walk_forward),
         "rounds": rounds,
@@ -459,6 +483,17 @@ def run_research(
                 "regime_candidate_count": regime_candidate_count,
                 "candidate_offset": candidate_offset,
             },
+            "training_memory": {
+                **(training_memory_audit or {}),
+                "current_run_new_signature_count": len(
+                    session.evaluated_parameter_signatures
+                ),
+                "current_run_duplicate_skip_count": (
+                    session.skipped_duplicate_count
+                ),
+                "validation_feedback_used": False,
+                "holdout_feedback_used": False,
+            },
         },
         "holdout_status": "LOCKED_REQUIRES_PROMOTION_GATE",
         "split": {
@@ -470,3 +505,34 @@ def run_research(
             "holdout": [split.holdout_start, split.holdout_end],
         },
     }
+
+
+@router.post("/run")
+def run_research(
+    stock_code: str = Query(..., min_length=4, max_length=10),
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    max_generations: int = Query(3, ge=1, le=10),
+    max_experiments: int = Query(40, ge=1, le=200),
+    min_validation_trades: int = Query(8, ge=1, le=100),
+    validation_finalists: int = Query(5, ge=1, le=5),
+    walk_forward_slices: int = Query(3, ge=2, le=8),
+    regime_candidate_count: int = Query(3, ge=1, le=3),
+    regime_slices: int = Query(6, ge=3, le=8),
+    min_regime_trades: int = Query(2, ge=1, le=50),
+    candidate_offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+) -> dict[str, object]:
+    return execute_research_pipeline(
+        stock_code=stock_code,
+        start_date=start_date,
+        end_date=end_date,
+        max_generations=max_generations,
+        max_experiments=max_experiments,
+        min_validation_trades=min_validation_trades,
+        validation_finalists=validation_finalists,
+        walk_forward_slices=walk_forward_slices,
+        regime_candidate_count=regime_candidate_count,
+        regime_slices=regime_slices,
+        min_regime_trades=min_regime_trades,
+        candidate_offset=candidate_offset,
+    )

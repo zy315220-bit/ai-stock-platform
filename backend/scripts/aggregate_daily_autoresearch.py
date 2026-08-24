@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from app.services.scanner_service import SCANNER_UNIVERSE
+from app.services.research_lab.evolution import SEARCH_SPACE_SCHEMA
+from app.services.research_lab.training_memory import (
+    TRAINING_MEMORY_SCHEMA_VERSION,
+    training_memory_summary,
+)
 from scripts.run_daily_autoresearch import write_json_atomic
 
 
@@ -42,7 +47,9 @@ def _candidate_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
             "campaign_id": (payload.get("campaign") or {}).get("campaign_id"),
             "stock_code": payload.get("stock_code"),
             "candidate_id": selected.get("candidate_id"),
+            "strategy_family": selected.get("strategy_family"),
             "parameters": selected.get("parameters") or {},
+            "search_space_schema": SEARCH_SPACE_SCHEMA,
             "data_fingerprints": result.get("data_fingerprints") or [],
         },
         ensure_ascii=False,
@@ -127,7 +134,10 @@ def aggregate_payloads(
     if len(campaign_ids) != 1 or "" in campaign_ids:
         raise ValueError("Daily research payloads do not share one campaign")
 
+    memories: dict[str, dict[str, Any]] = {}
     for symbol in expected_universe:
+        if by_symbol[symbol].get("schema_version") != 2:
+            raise ValueError(f"{symbol} daily payload schema mismatch")
         result = by_symbol[symbol].get("result") or {}
         promotion = result.get("promotion_eligibility") or {}
         audit = result.get("research_audit") or {}
@@ -135,6 +145,29 @@ def aggregate_payloads(
             raise ValueError(f"{symbol} opened the final holdout")
         if audit.get("holdout_used_during_search") is not False:
             raise ValueError(f"{symbol} leaked final holdout data")
+        memory_audit = audit.get("training_memory") or {}
+        if memory_audit.get("validation_feedback_used") is not False:
+            raise ValueError(f"{symbol} leaked validation into training memory")
+        if memory_audit.get("holdout_feedback_used") is not False:
+            raise ValueError(f"{symbol} leaked holdout into training memory")
+        memory = by_symbol[symbol].get("training_memory")
+        if not isinstance(memory, dict):
+            raise ValueError(f"{symbol} did not publish training memory")
+        if memory.get("provenance") != "TRAIN_ONLY":
+            raise ValueError(f"{symbol} training memory provenance is unsafe")
+        if memory.get("schema_version") != TRAINING_MEMORY_SCHEMA_VERSION:
+            raise ValueError(f"{symbol} training memory schema mismatch")
+        if memory.get("validation_feedback_used") is not False:
+            raise ValueError(f"{symbol} memory contains validation feedback")
+        if memory.get("holdout_feedback_used") is not False:
+            raise ValueError(f"{symbol} memory contains holdout feedback")
+        if str(memory.get("stock_code") or "").upper() != symbol:
+            raise ValueError(f"{symbol} training memory stock mismatch")
+        if memory.get("campaign_id") not in campaign_ids:
+            raise ValueError(f"{symbol} training memory campaign mismatch")
+        if memory.get("search_space_schema") != SEARCH_SPACE_SCHEMA:
+            raise ValueError(f"{symbol} training memory search schema mismatch")
+        memories[symbol] = memory
 
     candidates = [
         summary
@@ -147,8 +180,20 @@ def aggregate_payloads(
         if candidate.get("eligible_for_one_shot_holdout")
     )
     generated_at = datetime.now(timezone.utc).isoformat()
+    memory_summaries = {
+        symbol: training_memory_summary(memories[symbol])
+        for symbol in expected_universe
+    }
+    strategy_families = sorted(
+        {
+            str(family)
+            for summary in memory_summaries.values()
+            for family in summary.get("strategy_families") or []
+            if family
+        }
+    )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "automation": {
             "enabled": True,
             "mode": "daily_unattended",
@@ -169,6 +214,48 @@ def aggregate_payloads(
         "eligible_candidate_count": eligible_count,
         "holdout_opened": False,
         "integrity_status": "PASS",
+        "training_memory": {
+            "enabled": True,
+            "provenance": "TRAIN_ONLY",
+            "search_space_schema": SEARCH_SPACE_SCHEMA,
+            "completed_symbol_count": len(memories),
+            "continued_symbol_count": sum(
+                bool(summary.get("prior_memory_continued"))
+                for summary in memory_summaries.values()
+            ),
+            "unique_experiment_count": sum(
+                int(summary.get("unique_experiment_count", 0) or 0)
+                for summary in memory_summaries.values()
+            ),
+            "lifetime_experiment_count": sum(
+                int(summary.get("lifetime_experiment_count", 0) or 0)
+                for summary in memory_summaries.values()
+            ),
+            "last_run_new_experiment_count": sum(
+                int(summary.get("last_run_new_experiment_count", 0) or 0)
+                for summary in memory_summaries.values()
+            ),
+            "last_run_duplicate_skip_count": sum(
+                int(summary.get("last_run_duplicate_skip_count", 0) or 0)
+                for summary in memory_summaries.values()
+            ),
+            "train_trial_count": sum(
+                int(summary.get("train_trial_count", 0) or 0)
+                for summary in memory_summaries.values()
+            ),
+            "elite_count": sum(
+                int(summary.get("elite_count", 0) or 0)
+                for summary in memory_summaries.values()
+            ),
+            "frontier_count": sum(
+                int(summary.get("frontier_count", 0) or 0)
+                for summary in memory_summaries.values()
+            ),
+            "strategy_family_count": len(strategy_families),
+            "strategy_families": strategy_families,
+            "validation_feedback_used": False,
+            "holdout_feedback_used": False,
+        },
         "ranking_policy": (
             "Exploratory evidence ranking only: promotion gate, regime robustness, "
             "walk-forward stability, Wilson lower bound, DSR, score, drawdown. "
@@ -191,6 +278,7 @@ def aggregate_payloads(
                 "candidate_offset": (
                     by_symbol[symbol].get("automation") or {}
                 ).get("candidate_offset"),
+                "training_memory": memory_summaries[symbol],
             }
             for symbol in expected_universe
         ],
@@ -204,21 +292,37 @@ def load_payloads(input_dir: Path) -> list[dict[str, Any]]:
     ]
 
 
+def write_training_memories(
+    payloads: Iterable[dict[str, Any]],
+    output_dir: Path,
+) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for payload in payloads:
+        symbol = str(payload.get("stock_code") or "").upper()
+        memory = payload.get("training_memory")
+        if not symbol or not isinstance(memory, dict):
+            raise ValueError("Cannot publish incomplete training memory")
+        write_json_atomic(output_dir / f"{symbol}.json", memory)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Aggregate all daily research shards")
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--memory-output-dir", type=Path, required=True)
     parser.add_argument("--as-of-date", type=date.fromisoformat, required=True)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    rows = load_payloads(args.input_dir)
     payload = aggregate_payloads(
-        load_payloads(args.input_dir),
+        rows,
         as_of_date=args.as_of_date,
     )
     write_json_atomic(args.output, payload)
+    write_training_memories(rows, args.memory_output_dir)
     print(
         json.dumps(
             {

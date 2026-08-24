@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-from .evolution import EvolutionRound, evolve_candidates
+from .evolution import (
+    EvolutionRound,
+    candidate_parameter_signature,
+    evolve_candidates,
+)
 from .models import ExperimentDecision, ExperimentResult, ResearchCandidate, ResearchSplit
 from .runner import BacktestFn, run_research_batch
 
@@ -15,6 +19,8 @@ class ResearchSession:
     best_result: ExperimentResult | None
     experiments_run: int
     stopped_reason: str
+    evaluated_parameter_signatures: tuple[str, ...] = ()
+    skipped_duplicate_count: int = 0
 
 
 def run_autoresearch(
@@ -28,6 +34,7 @@ def run_autoresearch(
     top_k: int = 3,
     target_score: float = 75.0,
     min_validation_trades: int = 8,
+    excluded_parameter_signatures: Iterable[str] = (),
 ) -> ResearchSession:
     """Bounded train-only keep/discard/evolve loop with a compute budget.
 
@@ -41,6 +48,11 @@ def run_autoresearch(
     best: ExperimentResult | None = None
     experiments = 0
     stopped_reason = "no_candidates"
+    seen_signatures = {
+        str(signature) for signature in excluded_parameter_signatures
+    }
+    evaluated_signatures: list[str] = []
+    skipped_duplicates = 0
 
     for generation in range(1, max_generations + 1):
         remaining = max_experiments - experiments
@@ -53,9 +65,23 @@ def run_autoresearch(
         # guarantees that, when survivors exist, later generations can actually
         # be evaluated rather than merely generated at the end of the budget.
         generation_budget = max(1, remaining // generations_left)
-        batch = candidates[:generation_budget]
+        batch: list[ResearchCandidate] = []
+        for candidate in candidates:
+            signature = candidate_parameter_signature(candidate)
+            if signature in seen_signatures:
+                skipped_duplicates += 1
+                continue
+            seen_signatures.add(signature)
+            evaluated_signatures.append(signature)
+            batch.append(candidate)
+            if len(batch) >= generation_budget:
+                break
         if not batch:
-            stopped_reason = "no_surviving_candidates"
+            stopped_reason = (
+                "no_novel_candidates"
+                if candidates
+                else "no_surviving_candidates"
+            )
             break
 
         evaluated = tuple(
@@ -88,4 +114,12 @@ def run_autoresearch(
     else:
         stopped_reason = "generation_budget_reached"
 
-    return ResearchSession(stock_code=stock_code, rounds=tuple(rounds), best_result=best, experiments_run=experiments, stopped_reason=stopped_reason)
+    return ResearchSession(
+        stock_code=stock_code,
+        rounds=tuple(rounds),
+        best_result=best,
+        experiments_run=experiments,
+        stopped_reason=stopped_reason,
+        evaluated_parameter_signatures=tuple(evaluated_signatures),
+        skipped_duplicate_count=skipped_duplicates,
+    )

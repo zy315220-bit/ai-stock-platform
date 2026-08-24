@@ -26,6 +26,20 @@ type DailySnapshot = {
   eligible_candidate_count?: number;
   holdout_opened?: boolean;
   integrity_status?: string;
+  training_memory?: {
+    enabled?: boolean;
+    provenance?: string;
+    continued_symbol_count?: number;
+    unique_experiment_count?: number;
+    last_run_new_experiment_count?: number;
+    last_run_duplicate_skip_count?: number;
+    elite_count?: number;
+    frontier_count?: number;
+    strategy_family_count?: number;
+    strategy_families?: string[];
+    validation_feedback_used?: boolean;
+    holdout_feedback_used?: boolean;
+  };
   top_candidate?: Candidate | null;
 };
 
@@ -114,6 +128,7 @@ export default function DailyResearchStatus() {
 
   const snapshot = status?.latest_snapshot ?? null;
   const top = snapshot?.top_candidate ?? null;
+  const memory = snapshot?.training_memory ?? null;
   const running = status?.workflow?.status === "in_progress";
 
   return (
@@ -122,7 +137,7 @@ export default function DailyResearchStatus() {
         <div>
           <p className="panel-kicker">DAILY AUTONOMOUS RESEARCH</p>
           <h2>每日自動研究</h2>
-          <p>不需開著網頁；研究工作會在雲端分批執行並保存候選版本。</p>
+          <p>不需開著網頁；每天會延續前次 Train 研究、避開已測實驗並保存候選版本。</p>
         </div>
         <span className={running ? "daily-status running" : "daily-status enabled"}>
           {running ? "RUNNING" : "AUTOMATIC ON"}
@@ -153,6 +168,27 @@ export default function DailyResearchStatus() {
           <small>Final Holdout：{snapshot?.holdout_opened ? "異常開啟" : "鎖定"}</small>
         </article>
       </div>
+
+      {memory?.enabled ? (
+        <div className="daily-memory-strip">
+          <div>
+            <span>跨日 Train 記憶</span>
+            <strong>{formatMetric(memory.unique_experiment_count)} 組不重複實驗</strong>
+            <small>{formatMetric(memory.continued_symbol_count)} 檔延續前次研究</small>
+          </div>
+          <dl>
+            <div><dt>本輪新實驗</dt><dd>{formatMetric(memory.last_run_new_experiment_count)}</dd></div>
+            <div><dt>略過重複</dt><dd>{formatMetric(memory.last_run_duplicate_skip_count)}</dd></div>
+            <div><dt>Train 菁英</dt><dd>{formatMetric(memory.elite_count)}</dd></div>
+            <div><dt>待探索前沿</dt><dd>{formatMetric(memory.frontier_count)}</dd></div>
+            <div><dt>策略家族</dt><dd>{formatMetric(memory.strategy_family_count)}</dd></div>
+          </dl>
+          <p>
+            自適應回饋僅來自 Train；Validation 與 Final Holdout
+            {memory.validation_feedback_used || memory.holdout_feedback_used ? " 發生異常回饋" : " 保持隔離"}。
+          </p>
+        </div>
+      ) : null}
 
       {top ? (
         <div className="daily-top-candidate">

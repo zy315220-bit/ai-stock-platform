@@ -82,6 +82,59 @@ class BacktestNoLookaheadTests(unittest.TestCase):
         self.assertEqual(result["trades"][0]["entry_date"], frame.index[61].strftime("%Y-%m-%d"))
         self.assertEqual(result["trades"][0]["entry_price"], 175.0)
 
+    @patch("app.services.backtest.engine._download_backtest_history")
+    @patch("app.services.backtest.engine.add_indicators")
+    @patch("app.services.backtest.engine.calculate_score")
+    def test_entry_structures_gate_score_signals_without_future_bars(
+        self, score, add_indicators, download
+    ) -> None:
+        download.return_value = self._frame()
+        score.return_value = {"total_score": 100.0}
+        indicator_values: dict[str, float] = {}
+
+        def indicators(df: pd.DataFrame) -> pd.DataFrame:
+            out = df.copy()
+            out["EMA20"] = 100.0
+            out["EMA60"] = 99.0
+            out["ATR"] = 1.0
+            out["RSI"] = indicator_values.get("RSI", 60.0)
+            out["Upper"] = indicator_values.get("Upper", 99.0)
+            out["VolumeRatio"] = indicator_values.get("VolumeRatio", 1.3)
+            return out
+
+        add_indicators.side_effect = indicators
+        cases = (
+            ("score_and_rsi_momentum", {"RSI": 60.0}, True),
+            ("score_and_rsi_momentum", {"RSI": 50.0}, False),
+            ("score_and_bollinger_breakout", {"Upper": 99.0}, True),
+            ("score_and_bollinger_breakout", {"Upper": 101.0}, False),
+            ("score_and_volume_confirmation", {"VolumeRatio": 1.3}, True),
+            ("score_and_volume_confirmation", {"VolumeRatio": 1.1}, False),
+        )
+        for entry_mode, values, should_trade in cases:
+            with self.subTest(entry_mode=entry_mode, values=values):
+                indicator_values.clear()
+                indicator_values.update(values)
+                result = backtest_stock(
+                    "MODE",
+                    start_date="2024-01-01",
+                    end_date="2024-03-10",
+                    entry_score=75,
+                    exit_score=1,
+                    initial_capital=100000,
+                    entry_mode=entry_mode,
+                )
+                self.assertEqual(bool(result["trades"]), should_trade)
+
+    def test_unknown_entry_structure_fails_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported entry_mode"):
+            backtest_stock(
+                "TEST",
+                entry_score=75,
+                exit_score=55,
+                entry_mode="future_magic",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

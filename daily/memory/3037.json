@@ -9,42 +9,70 @@
     "2023-11-24"
   ],
   "as_of_date": "2026-08-25",
-  "last_research_run_id": "5f5d233f022a2a7052550b92",
+  "last_research_run_id": "1314bb6407bfece24f47992f",
+  "train_data_identity_schema": "canonical-train-score-series-v1",
+  "train_data_identity": "032aab8177104da2a31b8ee8",
+  "train_data_identity_verified": false,
+  "train_data_identity_migrated": true,
   "train_data_fingerprints": [
     "e2cf6ab545732859c11d"
   ],
   "seen_parameter_signatures": [
     "00f979bedf5465cd5b6f8876",
+    "037abb8d2d029e216e985034",
     "0849d828ab56a3172125a6bf",
     "0e480a52bccaa3e486f40285",
     "1ce79b1662e04a7805db3f57",
     "208a8b22705c967cfeca316b",
     "20fd14e77eaff701871078d5",
+    "299350de0249f0cce9ee540c",
     "2d014845163d9160c2d32f1c",
+    "2e237ac92c3bd9d3eea7a9b7",
     "2ea4c80856c1ee1fff2ac8ac",
     "34455eb047b838de18b8e621",
+    "374b333ffcbf3c928cf2d062",
     "3c2ddd6429f3918af40f929f",
+    "4372f7ae6ffece52a1783cba",
     "524ecf5e303221baa68d4922",
     "53c5353ef947291efd13fb40",
     "5575b13b88bcdd8e042ef58d",
     "627f93b8fd88d79be7de7538",
+    "63aef271bbd3e7120d8a533a",
+    "66f22d0adc13c2585e5b40f4",
     "6b3e5e4f1b05aafaed810716",
+    "6bc674f8253d20185e305056",
+    "76431e70503583da8773d9f3",
     "7bf4144503565cfed19f98e3",
+    "7e55d9d88a999ef87026914c",
     "80832f41fec473df6883cea9",
     "8b0b7c07642746e45209e2ae",
     "8dd13511483fbbb41cdb3e3c",
+    "9862c913cf5cc1fe5a7ad9d5",
     "99c541072c8d2340747791dd",
+    "9a198acc7cff63785a1f6b3d",
     "9f2d718ca8bc79a1a00902ee",
+    "a6e6b73975683da96948f524",
     "ac4167a4b8cb94934e3abd3c",
     "ad5f370ef1473a0c3d8ade47",
     "b2347a881cd9655fda798ebc",
     "bdfb21218d16ebe1ba95b834",
+    "c32799d9e7dfa006e5a2c1cf",
+    "c5704b614fd3dd92fb50d444",
+    "c59b654b93b88c172d492a67",
+    "c7d3e466eef3d33af0e04ded",
+    "c8bdf6c6c0a08725bc87d8fc",
+    "cc92af623ff57ebdd82e1e2b",
     "d19fb9a7f71e51d25c0e62ee",
     "d3876c0858cb02209e5fb9b8",
     "d8422a7f11977cb06a06cfef",
+    "d92a1b45819c8add02342132",
+    "e4a2c835deb41f4c884d0465",
     "e77439e396a34c98fa20c2a5",
     "ec7a174a068630daeacadb61",
+    "f26227df01448a14fc3f8fd3",
+    "f73116d3a480412131efc02f",
     "f9c8445537c90c4394bb685e",
+    "fbeab4942b9ba077860afba2",
     "fd144909abff7fd887f1e3b5"
   ],
   "elites": [
@@ -158,6 +186,60 @@
     },
     {
       "candidate": {
+        "candidate_id": "mut-da9236b9671d",
+        "strategy_family": "score_engine_volume_confirmed",
+        "parameters": {
+          "entry_score": 70,
+          "exit_score": 10,
+          "initial_capital": 1000000.0,
+          "require_ema_trend": false,
+          "ema_fast_column": "EMA20",
+          "ema_slow_column": "EMA60",
+          "entry_mode": "score_and_volume_confirmation",
+          "exit_mode": "score_or_time",
+          "max_holding_days": 40
+        },
+        "parent_id": "mut-7d0cdbb6e788",
+        "hypothesis": "Adaptive broad mutation of mut-7d0cdbb6e788: entry +0, exit -10"
+      },
+      "parameter_signature": "e4a2c835deb41f4c884d0465",
+      "research_score": 21.398,
+      "decision": "KEEP",
+      "reasons": [
+        "needs_more_validation"
+      ],
+      "source_generation": 1,
+      "source_research_run_id": "1314bb6407bfece24f47992f"
+    },
+    {
+      "candidate": {
+        "candidate_id": "mut-7f0ad9820eca",
+        "strategy_family": "score_engine_volume_confirmed",
+        "parameters": {
+          "entry_score": 70,
+          "exit_score": 0,
+          "initial_capital": 1000000.0,
+          "require_ema_trend": false,
+          "ema_fast_column": "EMA20",
+          "ema_slow_column": "EMA60",
+          "entry_mode": "score_and_volume_confirmation",
+          "exit_mode": "score_or_time",
+          "max_holding_days": 40
+        },
+        "parent_id": "mut-da9236b9671d",
+        "hypothesis": "Adaptive broad mutation of mut-da9236b9671d: entry +0, exit -10"
+      },
+      "parameter_signature": "c59b654b93b88c172d492a67",
+      "research_score": 21.398,
+      "decision": "KEEP",
+      "reasons": [
+        "needs_more_validation"
+      ],
+      "source_generation": 2,
+      "source_research_run_id": "1314bb6407bfece24f47992f"
+    },
+    {
+      "candidate": {
         "candidate_id": "grid-70-35-score-ema5-ema60-score_or_time_or_ema_reversal-80",
         "strategy_family": "score_engine",
         "parameters": {
@@ -212,57 +294,6 @@
     }
   ],
   "frontier": [
-    {
-      "candidate_id": "mut-118969c399b3",
-      "strategy_family": "score_engine_volume_confirmed",
-      "parameters": {
-        "entry_score": 60,
-        "exit_score": 20,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "entry_mode": "score_and_volume_confirmation",
-        "exit_mode": "score_or_time",
-        "max_holding_days": 40
-      },
-      "parent_id": "mut-7d0cdbb6e788",
-      "hypothesis": "Adaptive broad mutation of mut-7d0cdbb6e788: entry -10, exit +0"
-    },
-    {
-      "candidate_id": "mut-e7122e8b4089",
-      "strategy_family": "score_engine_volume_confirmed",
-      "parameters": {
-        "entry_score": 80,
-        "exit_score": 20,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "entry_mode": "score_and_volume_confirmation",
-        "exit_mode": "score_or_time",
-        "max_holding_days": 40
-      },
-      "parent_id": "mut-7d0cdbb6e788",
-      "hypothesis": "Adaptive broad mutation of mut-7d0cdbb6e788: entry +10, exit +0"
-    },
-    {
-      "candidate_id": "mut-da9236b9671d",
-      "strategy_family": "score_engine_volume_confirmed",
-      "parameters": {
-        "entry_score": 70,
-        "exit_score": 10,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "entry_mode": "score_and_volume_confirmation",
-        "exit_mode": "score_or_time",
-        "max_holding_days": 40
-      },
-      "parent_id": "mut-7d0cdbb6e788",
-      "hypothesis": "Adaptive broad mutation of mut-7d0cdbb6e788: entry +0, exit -10"
-    },
     {
       "candidate_id": "mut-98cc81454f77",
       "strategy_family": "score_engine",
@@ -523,14 +554,38 @@
     0.0,
     0.0,
     0.03792719,
+    0.01249158,
+    0.05635048,
+    0.0263655,
+    0.03656618,
+    0.0,
+    0.01982525,
+    0.01719824,
+    0.01249158,
+    -0.01855835,
+    0.05630381,
+    0.0263655,
+    0.04652115,
+    0.03656618,
+    0.0,
+    0.06664883,
+    0.0,
+    0.01249158,
+    0.05630381,
+    0.04652115,
+    0.03656618,
+    0.0,
+    0.06664883,
+    0.0,
+    0.01982525,
     0.01249158
   ],
-  "lifetime_experiment_count": 32,
-  "lifetime_run_count": 2,
+  "lifetime_experiment_count": 56,
+  "lifetime_run_count": 3,
   "last_run_new_experiment_count": 24,
-  "last_run_duplicate_skip_count": 3,
+  "last_run_duplicate_skip_count": 4,
   "memory_reset_reason": null,
   "validation_feedback_used": false,
   "holdout_feedback_used": false,
-  "memory_id": "3aaa82cc3bb939d565647a17"
+  "memory_id": "e79c539ac50fb7ce412839a6"
 }

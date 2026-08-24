@@ -115,6 +115,8 @@ USE_DEMO_DATA=true
   Stationary Bootstrap、CSCV／PBO、Hansen SPA、MDD／Calmar
 - 每次研究保留 Run ID、OHLCV／股息／分割／公司行動資料指紋與
   可重現候選 lineage；資料或公司行動版本改變時會產生新身分
+- 每個台股交易日 18:30 由 GitHub Actions 對 20 檔研究母體分片執行，
+  自動重試並將完整快照與日期歷史保存至 `research-data` 分支
 
 ## 7. AI 研究室
 
@@ -138,6 +140,12 @@ python -m scripts.run_research_lab_audit
 
 稽核結果會寫入本機 `research_artifacts/`。失敗候選也會保留，不能把
 沒有通過統計與市場狀態證據的策略包裝成正式冠軍。
+
+每日無人值守研究由 `.github/workflows/daily-autoresearch.yml` 啟動。
+每檔股票獨立執行，只有 20 檔全部完成且 Holdout 稽核保持鎖定，聚合
+步驟才會發布新的 `daily/latest.json`；任一分片失敗時沿用上一個完整
+快照，避免把殘缺母體誤當成新排名。每個候選另有不可覆蓋的
+`robot_version_id`，正式站會顯示上次執行、下次排程與最新候選證據。
 
 ## 8. 下一階段
 

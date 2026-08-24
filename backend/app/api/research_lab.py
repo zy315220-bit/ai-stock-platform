@@ -4,7 +4,7 @@ from dataclasses import asdict, replace
 from datetime import date
 import hashlib
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -25,6 +25,7 @@ from app.services.research_lab.market_regimes import (
 from app.services.research_lab.models import (
     ExperimentDecision,
     ExperimentResult,
+    ResearchCandidate,
 )
 from app.services.research_lab.runner import (
     run_research_batch,
@@ -42,6 +43,21 @@ from app.services.research_lab.walk_forward import (
 )
 
 router = APIRouter()
+
+
+def _rotated_parameter_candidates(candidate_offset: int) -> list[ResearchCandidate]:
+    """Rotate the deterministic grid without using validation feedback.
+
+    Daily unattended research uses a date-derived offset so a bounded run can
+    explore a different region of the fixed candidate universe.  The ordering
+    change is train-only and therefore does not leak validation or holdout data
+    back into candidate generation.
+    """
+    candidates = generate_parameter_candidates()
+    if not candidates:
+        return []
+    offset = candidate_offset % len(candidates)
+    return candidates[offset:] + candidates[:offset]
 
 
 def _unique_training_results(
@@ -137,6 +153,7 @@ def run_research(
     regime_candidate_count: int = Query(3, ge=1, le=3),
     regime_slices: int = Query(6, ge=3, le=8),
     min_regime_trades: int = Query(2, ge=1, le=50),
+    candidate_offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
 ) -> dict[str, object]:
     """Run train search, validation finals and a no-holdout regime tournament."""
     try:
@@ -144,7 +161,7 @@ def run_research(
         session = run_autoresearch(
             stock_code,
             split,
-            generate_parameter_candidates(),
+            _rotated_parameter_candidates(candidate_offset),
             backtest_fn=backtest_stock,
             max_generations=max_generations,
             max_experiments=max_experiments,
@@ -357,6 +374,7 @@ def run_research(
             "data_fingerprints": data_fingerprints,
             "max_generations": max_generations,
             "max_experiments": max_experiments,
+            "candidate_offset": candidate_offset,
             "statistical_gate_schema": "research-integrity-v2",
         },
         ensure_ascii=False,
@@ -439,6 +457,7 @@ def run_research(
                 "max_generations": max_generations,
                 "max_experiments": max_experiments,
                 "regime_candidate_count": regime_candidate_count,
+                "candidate_offset": candidate_offset,
             },
         },
         "holdout_status": "LOCKED_REQUIRES_PROMOTION_GATE",

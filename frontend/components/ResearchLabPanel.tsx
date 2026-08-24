@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import DailyResearchStatus from "./DailyResearchStatus";
 
 type Candidate = {
   candidate_id: string;
@@ -307,8 +308,8 @@ export default function ResearchLabPanel() {
           <p className="panel-kicker">AUTONOMOUS RESEARCH / NO LOOK-AHEAD</p>
           <h1>AI 選股機器人研究室</h1>
           <p>
-            讓候選策略先在 Train 自主進化，再進入獨立 Validation、牛熊盤整情境與
-            Walk-forward 審核。Final Holdout 全程鎖定，不拿答案反向調參。
+            每個台股交易日收盤後自動研究，讓候選策略先在 Train 自主進化，再進入
+            獨立 Validation、牛熊盤整情境與 Walk-forward 審核。Final Holdout 全程鎖定。
           </p>
         </div>
         <div className="research-holdout-lock">
@@ -318,12 +319,22 @@ export default function ResearchLabPanel() {
         </div>
       </header>
 
+      <DailyResearchStatus />
+
       <div className="research-pipeline" aria-label="研究資料流程">
         <article><span>01</span><strong>Train</strong><small>進化與淘汰</small></article>
         <article><span>02</span><strong>Validation</strong><small>獨立決選</small></article>
         <article><span>03</span><strong>Regimes</strong><small>牛熊盤整壓測</small></article>
         <article><span>04</span><strong>Walk-forward</strong><small>跨時段穩定性</small></article>
         <article className="locked"><span>05</span><strong>Holdout</strong><small>一次性最終驗收</small></article>
+      </div>
+
+      <div className="research-manual-heading">
+        <div>
+          <p className="panel-kicker">OPTIONAL ON-DEMAND RUN</p>
+          <h2>臨時指定研究</h2>
+        </div>
+        <small>每日研究不依賴此表單；只有想立即加跑某檔股票時才需要使用。</small>
       </div>
 
       <form className="research-run-form" onSubmit={submit}>
@@ -369,7 +380,7 @@ export default function ResearchLabPanel() {
           onClick={running ? cancelResearch : undefined}
           type={running ? "button" : "submit"}
         >
-          {running ? "取消本輪研究" : "開始自主研究"}
+          {running ? "取消本輪研究" : "立即加跑（選用）"}
         </button>
       </form>
 

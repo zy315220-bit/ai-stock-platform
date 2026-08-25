@@ -1,0 +1,173 @@
+from __future__ import annotations
+
+import hashlib
+import re
+from typing import Any
+
+from app.services.competition_service import freeze_robot_spec
+
+from .runner import _ALLOWED_PARAMETERS
+
+
+CHALLENGER_SCHEMA_VERSION = 1
+CERTIFIED_STATUS = "CERTIFIED_FINAL_HOLDOUT_PASS"
+QUEUE_STATUS = "QUEUED_CERTIFIED"
+WAITING_STATUS = "WAITING_FOR_CERTIFIED_ROBOT"
+
+
+def _required_text(row: dict[str, Any], key: str) -> str:
+    value = str(row.get(key) or "").strip()
+    if not value:
+        raise ValueError(f"Certified robot is missing {key}")
+    return value
+
+
+def _validated_parameters(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("Certified robot parameters must be an object")
+    unknown = set(value) - _ALLOWED_PARAMETERS
+    if unknown:
+        raise ValueError(
+            f"Certified robot contains unsupported research parameters: {sorted(unknown)}"
+        )
+    return dict(value)
+
+
+def _robot_id(certification_id: str, stock_code: str) -> str:
+    digest = hashlib.sha256(certification_id.encode("utf-8")).hexdigest()[:12].upper()
+    safe_stock = re.sub(r"[^A-Z0-9]+", "-", stock_code.upper()).strip("-")
+    return f"RESEARCH-{safe_stock or 'UNKNOWN'}-{digest}"
+
+
+def build_competition_challenger(
+    certified_robot: dict[str, Any],
+) -> dict[str, Any]:
+    """Convert one Final-Holdout-certified research result into an immutable queue item.
+
+    This adapter intentionally does *not* run the challenger inside the competition.
+    It creates a durable, auditable rule specification first. The competition layer
+    remains responsible for imposing its own capital, cost, risk and market-universe
+    assumptions before any challenger is allowed to face incumbent robots.
+    """
+
+    if not isinstance(certified_robot, dict):
+        raise ValueError("Certified robot must be an object")
+    if certified_robot.get("status") != CERTIFIED_STATUS:
+        raise ValueError("Only CERTIFIED_FINAL_HOLDOUT_PASS robots may enter the queue")
+
+    certification_id = _required_text(certified_robot, "certification_id")
+    campaign_id = _required_text(certified_robot, "campaign_id")
+    stock_code = _required_text(certified_robot, "stock_code")
+    candidate_id = _required_text(certified_robot, "candidate_id")
+    strategy_family = _required_text(certified_robot, "strategy_family")
+    research_parameters = _validated_parameters(certified_robot.get("parameters"))
+
+    competition_parameters = dict(research_parameters)
+    research_initial_capital = competition_parameters.pop("initial_capital", None)
+    robot_id = _robot_id(certification_id, stock_code)
+
+    spec = {
+        "robot_id": robot_id,
+        "name": f"研究院認證挑戰者 {candidate_id}",
+        "family": f"research::{strategy_family}",
+        "entry": {
+            "entry_score": competition_parameters.get("entry_score"),
+            "entry_mode": competition_parameters.get("entry_mode"),
+            "require_ema_trend": competition_parameters.get("require_ema_trend"),
+            "ema_fast_column": competition_parameters.get("ema_fast_column"),
+            "ema_slow_column": competition_parameters.get("ema_slow_column"),
+        },
+        "exit": {
+            "exit_score": competition_parameters.get("exit_score"),
+            "exit_mode": competition_parameters.get("exit_mode"),
+            "max_holding_days": competition_parameters.get("max_holding_days"),
+        },
+        "parameters": competition_parameters,
+        "certification": {
+            "certification_id": certification_id,
+            "campaign_id": campaign_id,
+            "stock_code": stock_code,
+            "candidate_id": candidate_id,
+            "strategy_family": strategy_family,
+            "holdout_window": certified_robot.get("holdout_window") or [],
+            "pre_holdout_research_run_id": certified_robot.get(
+                "pre_holdout_research_run_id"
+            ),
+        },
+        "competition_contract": {
+            "role": "challenger",
+            "status": QUEUE_STATUS,
+            "fixed_rule": True,
+            "competition_sets_initial_capital": True,
+            "competition_sets_cost_model": True,
+            "competition_sets_risk_model": True,
+            "competition_sets_market_universe": True,
+            "final_holdout_score_used_for_competition_ranking": False,
+            "same_campaign_competition_feedback_to_train": False,
+        },
+    }
+    frozen = freeze_robot_spec(spec)
+
+    return {
+        "schema_version": CHALLENGER_SCHEMA_VERSION,
+        "challenger_id": f"CH-{frozen['rule_fingerprint'][:20]}",
+        "robot_id": robot_id,
+        "status": QUEUE_STATUS,
+        "rule_fingerprint": frozen["rule_fingerprint"],
+        "immutable": True,
+        "spec": spec,
+        "research_provenance": {
+            "certification_id": certification_id,
+            "campaign_id": campaign_id,
+            "stock_code": stock_code,
+            "candidate_id": candidate_id,
+            "strategy_family": strategy_family,
+            "research_initial_capital": research_initial_capital,
+            "pre_holdout_research_run_id": certified_robot.get(
+                "pre_holdout_research_run_id"
+            ),
+        },
+    }
+
+
+def build_competition_challenger_roster(
+    certified_registry: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a fail-closed queue from the certified Final Holdout registry."""
+
+    if not isinstance(certified_registry, dict):
+        raise ValueError("Certified registry must be an object")
+    if certified_registry.get("schema_version") != 2:
+        raise ValueError("Unsupported certified registry schema")
+
+    robots = certified_registry.get("robots")
+    if not isinstance(robots, list):
+        raise ValueError("Certified registry robots must be a list")
+    expected_count = certified_registry.get("certified_robot_count")
+    if not isinstance(expected_count, int) or expected_count != len(robots):
+        raise ValueError("Certified registry count does not match robot entries")
+
+    challengers = [build_competition_challenger(robot) for robot in robots]
+    fingerprints = [item["rule_fingerprint"] for item in challengers]
+    if len(fingerprints) != len(set(fingerprints)):
+        raise ValueError("Duplicate immutable challenger fingerprints detected")
+    challengers.sort(key=lambda item: (item["robot_id"], item["challenger_id"]))
+
+    return {
+        "schema_version": CHALLENGER_SCHEMA_VERSION,
+        "source_registry_schema_version": certified_registry.get("schema_version"),
+        "generated_from_certified_registry_at_utc": certified_registry.get(
+            "generated_at_utc"
+        ),
+        "status": "READY" if challengers else WAITING_STATUS,
+        "challenger_count": len(challengers),
+        "policy": {
+            "certified_final_holdout_required": True,
+            "immutable_rule_fingerprint_required": True,
+            "competition_rebinds_capital_cost_risk_and_universe": True,
+            "holdout_score_used_for_ranking": False,
+            "same_campaign_competition_feedback_to_train": False,
+            "automatic_activation_when_certified": True,
+        },
+        "challengers": challengers,
+    }

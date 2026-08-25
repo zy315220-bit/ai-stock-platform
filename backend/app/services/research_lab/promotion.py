@@ -5,11 +5,17 @@ from typing import Any, Callable
 
 from app.services.backtest.engine import backtest_stock
 
+from .final_holdout import (
+    FINAL_HOLDOUT_MAX_DRAWDOWN_PERCENT,
+    FINAL_HOLDOUT_MIN_COMPLETED_TRADES,
+)
 from .models import ExperimentDecision, ExperimentResult, ResearchSplit
 from .scoring import evaluate_candidate
 from .runner import _ALLOWED_PARAMETERS, _validation_metrics
 
 BacktestFn = Callable[..., dict[str, Any]]
+
+
 @dataclass(frozen=True)
 class PromotionResult:
     candidate_id: str
@@ -29,9 +35,18 @@ def run_holdout_gate(
     regime_robustness: dict[str, Any] | None,
     model_selection_evidence: dict[str, Any] | None,
     backtest_fn: BacktestFn = backtest_stock,
-    max_score_degradation: float = 20.0,
+    min_completed_trades: int = FINAL_HOLDOUT_MIN_COMPLETED_TRADES,
+    max_drawdown_percent: float = FINAL_HOLDOUT_MAX_DRAWDOWN_PERCENT,
 ) -> PromotionResult:
-    """Touch holdout once, after validation and market-regime qualification."""
+    """Evaluate untouched holdout with the same pre-registered quality rubric.
+
+    Production automation uses the durable one-shot ledger in final_holdout.py.
+    This lower-level helper remains for deterministic evaluation and tests. It
+    deliberately avoids an extra post-hoc "score degradation" threshold because
+    adding a new threshold only after model selection would create another
+    discretionary degree of freedom. Final holdout therefore reuses the fixed
+    completed-trade, return, Sharpe, drawdown and research-score rubric.
+    """
     if validation_result.decision is not ExperimentDecision.HOLDOUT_READY:
         raise ValueError("Candidate must be HOLDOUT_READY before final holdout evaluation")
     if not regime_robustness or not regime_robustness.get(
@@ -83,14 +98,16 @@ def run_holdout_gate(
         **candidate.parameters,
     )
     metrics = _validation_metrics(report)
-    holdout_result = evaluate_candidate(candidate, metrics)
+    holdout_result = evaluate_candidate(
+        candidate,
+        metrics,
+        min_trades=max(1, int(min_completed_trades)),
+        max_drawdown_percent=float(max_drawdown_percent),
+    )
 
     reasons: list[str] = []
     if holdout_result.decision is not ExperimentDecision.HOLDOUT_READY:
         reasons.append("holdout_quality_gate_failed")
-    degradation = validation_result.research_score - holdout_result.research_score
-    if degradation > max_score_degradation:
-        reasons.append("holdout_score_degraded")
 
     return PromotionResult(
         candidate_id=candidate.candidate_id,

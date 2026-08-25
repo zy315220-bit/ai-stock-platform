@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import hashlib
 import re
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.services.competition_service import freeze_robot_spec
 
 from .runner import _ALLOWED_PARAMETERS
 
 
-CHALLENGER_SCHEMA_VERSION = 1
+CHALLENGER_SCHEMA_VERSION = 2
 CERTIFIED_STATUS = "CERTIFIED_FINAL_HOLDOUT_PASS"
 QUEUE_STATUS = "QUEUED_CERTIFIED"
 WAITING_STATUS = "WAITING_FOR_CERTIFIED_ROBOT"
+TAIPEI_TIMEZONE = ZoneInfo("Asia/Taipei")
 
 
 def _required_text(row: dict[str, Any], key: str) -> str:
@@ -39,15 +42,48 @@ def _robot_id(certification_id: str, stock_code: str) -> str:
     return f"RESEARCH-{safe_stock or 'UNKNOWN'}-{digest}"
 
 
+def _challenge_not_before(certified_robot: dict[str, Any]) -> dict[str, str]:
+    """Return the first calendar date that may contribute to competition evidence.
+
+    Competition evidence must be strictly newer than both the Final Holdout and the
+    certification event. This prevents a certified strategy from immediately winning
+    a title by being ranked again on data that was already used for its final exam.
+    """
+
+    holdout_window = certified_robot.get("holdout_window")
+    if not isinstance(holdout_window, (list, tuple)) or len(holdout_window) != 2:
+        raise ValueError("Certified robot holdout_window must contain start and end")
+    try:
+        holdout_end = datetime.fromisoformat(str(holdout_window[1])).date()
+    except ValueError as error:
+        raise ValueError("Certified robot holdout end date is invalid") from error
+
+    opened_at = _required_text(certified_robot, "opened_at_utc")
+    try:
+        opened = datetime.fromisoformat(opened_at.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("Certified robot opened_at_utc is invalid") from error
+    if opened.tzinfo is None:
+        raise ValueError("Certified robot opened_at_utc must include a timezone")
+    certification_date = opened.astimezone(TAIPEI_TIMEZONE).date()
+    last_tainted_date = max(holdout_end, certification_date)
+    challenge_not_before = last_tainted_date + timedelta(days=1)
+    return {
+        "holdout_end_date": holdout_end.isoformat(),
+        "certification_date_taipei": certification_date.isoformat(),
+        "challenge_not_before": challenge_not_before.isoformat(),
+    }
+
+
 def build_competition_challenger(
     certified_robot: dict[str, Any],
 ) -> dict[str, Any]:
     """Convert one Final-Holdout-certified research result into an immutable queue item.
 
-    This adapter intentionally does *not* run the challenger inside the competition.
-    It creates a durable, auditable rule specification first. The competition layer
-    remains responsible for imposing its own capital, cost, risk and market-universe
-    assumptions before any challenger is allowed to face incumbent robots.
+    The adapter freezes an auditable rule specification but deliberately quarantines
+    it from title evidence until a market session strictly after certification and
+    Final Holdout. The competition layer still imposes its own capital, cost, risk,
+    market universe and common comparison window.
     """
 
     if not isinstance(certified_robot, dict):
@@ -61,6 +97,7 @@ def build_competition_challenger(
     candidate_id = _required_text(certified_robot, "candidate_id")
     strategy_family = _required_text(certified_robot, "strategy_family")
     research_parameters = _validated_parameters(certified_robot.get("parameters"))
+    challenge_dates = _challenge_not_before(certified_robot)
 
     competition_parameters = dict(research_parameters)
     research_initial_capital = competition_parameters.pop("initial_capital", None)
@@ -90,6 +127,7 @@ def build_competition_challenger(
             "candidate_id": candidate_id,
             "strategy_family": strategy_family,
             "holdout_window": certified_robot.get("holdout_window") or [],
+            "opened_at_utc": certified_robot.get("opened_at_utc"),
             "pre_holdout_research_run_id": certified_robot.get(
                 "pre_holdout_research_run_id"
             ),
@@ -104,6 +142,8 @@ def build_competition_challenger(
             "competition_sets_market_universe": True,
             "final_holdout_score_used_for_competition_ranking": False,
             "same_campaign_competition_feedback_to_train": False,
+            "post_certification_evidence_only": True,
+            **challenge_dates,
         },
     }
     frozen = freeze_robot_spec(spec)
@@ -116,6 +156,10 @@ def build_competition_challenger(
         "rule_fingerprint": frozen["rule_fingerprint"],
         "immutable": True,
         "spec": spec,
+        "challenge_contract": {
+            "post_certification_evidence_only": True,
+            **challenge_dates,
+        },
         "research_provenance": {
             "certification_id": certification_id,
             "campaign_id": campaign_id,
@@ -123,6 +167,7 @@ def build_competition_challenger(
             "candidate_id": candidate_id,
             "strategy_family": strategy_family,
             "research_initial_capital": research_initial_capital,
+            "opened_at_utc": certified_robot.get("opened_at_utc"),
             "pre_holdout_research_run_id": certified_robot.get(
                 "pre_holdout_research_run_id"
             ),
@@ -167,6 +212,8 @@ def build_competition_challenger_roster(
             "competition_rebinds_capital_cost_risk_and_universe": True,
             "holdout_score_used_for_ranking": False,
             "same_campaign_competition_feedback_to_train": False,
+            "post_certification_evidence_only": True,
+            "common_fresh_comparison_window": True,
             "automatic_activation_when_certified": True,
         },
         "challengers": challengers,

@@ -85,8 +85,6 @@ jobs:
           name: daily-research-${{ matrix.stock }}
           path: backend/research_artifacts/daily/${{ matrix.stock }}.json
           if-no-files-found: error
-          # Two 64-experiment runs/day at 21-day retention stay roughly within
-          # the former one 32-experiment run/day at 90-day artifact footprint.
           retention-days: 21
 
   publish-snapshot:
@@ -141,6 +139,14 @@ jobs:
           --input-dir research_artifacts/daily
           --ledger-root ../research-data/holdout-ledger
           --summary-output research_artifacts/published/daily/final-holdout-evaluations.json
+      - name: Audit complete autonomous research lifecycle
+        run: >-
+          cd backend && python -m scripts.audit_research_system
+          --snapshot research_artifacts/published/daily/latest.json
+          --model-selection research_artifacts/published/daily/model-selection-evidence.json
+          --bottlenecks research_artifacts/published/daily/gate-bottlenecks.json
+          --final-holdout research_artifacts/published/daily/final-holdout-evaluations.json
+          --output research_artifacts/published/daily/research-system-audit.json
       - name: Upload immutable daily snapshot
         uses: actions/upload-artifact@v4
         with:
@@ -150,6 +156,7 @@ jobs:
             backend/research_artifacts/published/daily/model-selection-evidence.json
             backend/research_artifacts/published/daily/gate-bottlenecks.json
             backend/research_artifacts/published/daily/final-holdout-evaluations.json
+            backend/research_artifacts/published/daily/research-system-audit.json
             backend/research_artifacts/published/daily/memory/*.json
           if-no-files-found: error
           retention-days: 21
@@ -167,11 +174,13 @@ jobs:
           cp backend/research_artifacts/published/daily/model-selection-evidence.json research-data/daily/diagnostics/model-selection-evidence.json
           cp backend/research_artifacts/published/daily/gate-bottlenecks.json research-data/daily/diagnostics/gate-bottlenecks.json
           cp backend/research_artifacts/published/daily/final-holdout-evaluations.json research-data/daily/diagnostics/final-holdout-evaluations.json
+          cp backend/research_artifacts/published/daily/research-system-audit.json research-data/daily/diagnostics/research-system-audit.json
           cp backend/research_artifacts/published/daily/memory/*.json research-data/daily/memory/
           cp backend/research_artifacts/published/daily/latest.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/latest.json"
           cp backend/research_artifacts/published/daily/model-selection-evidence.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/model-selection-evidence.json"
           cp backend/research_artifacts/published/daily/gate-bottlenecks.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/gate-bottlenecks.json"
           cp backend/research_artifacts/published/daily/final-holdout-evaluations.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/final-holdout-evaluations.json"
+          cp backend/research_artifacts/published/daily/research-system-audit.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/research-system-audit.json"
           git -C research-data config user.name "ai-stock-research-bot"
           git -C research-data config user.email "actions@users.noreply.github.com"
           git -C research-data add daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics daily/memory "daily/runs/${RESEARCH_DATE}/${RUN_ID}"

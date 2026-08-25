@@ -23,8 +23,6 @@ jobs:
     timeout-minutes: 35
     strategy:
       fail-fast: false
-      # Bound concurrency to avoid upstream market-data bursts and keep the
-      # public website completely separate from research compute.
       max-parallel: 4
       matrix:
         stock:
@@ -139,6 +137,7 @@ jobs:
           --input-dir research_artifacts/daily
           --ledger-root ../research-data/holdout-ledger
           --summary-output research_artifacts/published/daily/final-holdout-evaluations.json
+          --certified-output research_artifacts/published/daily/certified-robots.json
       - name: Audit complete autonomous research lifecycle
         run: >-
           cd backend && python -m scripts.audit_research_system
@@ -156,11 +155,12 @@ jobs:
             backend/research_artifacts/published/daily/model-selection-evidence.json
             backend/research_artifacts/published/daily/gate-bottlenecks.json
             backend/research_artifacts/published/daily/final-holdout-evaluations.json
+            backend/research_artifacts/published/daily/certified-robots.json
             backend/research_artifacts/published/daily/research-system-audit.json
             backend/research_artifacts/published/daily/memory/*.json
           if-no-files-found: error
           retention-days: 21
-      - name: Publish latest, diagnostics, per-run audit, and durable memory
+      - name: Publish latest, diagnostics, certified robots, per-run audit, and durable memory
         env:
           RESEARCH_DATE: ${{ steps.research-date.outputs.value }}
           RUN_ID: ${{ github.run_id }}
@@ -175,15 +175,17 @@ jobs:
           cp backend/research_artifacts/published/daily/gate-bottlenecks.json research-data/daily/diagnostics/gate-bottlenecks.json
           cp backend/research_artifacts/published/daily/final-holdout-evaluations.json research-data/daily/diagnostics/final-holdout-evaluations.json
           cp backend/research_artifacts/published/daily/research-system-audit.json research-data/daily/diagnostics/research-system-audit.json
+          cp backend/research_artifacts/published/daily/certified-robots.json research-data/certified-robots.json
           cp backend/research_artifacts/published/daily/memory/*.json research-data/daily/memory/
           cp backend/research_artifacts/published/daily/latest.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/latest.json"
           cp backend/research_artifacts/published/daily/model-selection-evidence.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/model-selection-evidence.json"
           cp backend/research_artifacts/published/daily/gate-bottlenecks.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/gate-bottlenecks.json"
           cp backend/research_artifacts/published/daily/final-holdout-evaluations.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/final-holdout-evaluations.json"
+          cp backend/research_artifacts/published/daily/certified-robots.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/certified-robots.json"
           cp backend/research_artifacts/published/daily/research-system-audit.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/research-system-audit.json"
           git -C research-data config user.name "ai-stock-research-bot"
           git -C research-data config user.email "actions@users.noreply.github.com"
-          git -C research-data add daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics daily/memory "daily/runs/${RESEARCH_DATE}/${RUN_ID}"
+          git -C research-data add certified-robots.json daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics daily/memory "daily/runs/${RESEARCH_DATE}/${RUN_ID}"
           if [ -d research-data/holdout-ledger ]; then
             git -C research-data add holdout-ledger
           fi

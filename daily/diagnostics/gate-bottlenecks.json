@@ -1,0 +1,532 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-08-25T15:31:38.301728+00:00",
+  "symbol_count": 20,
+  "eligible_symbol_count": 0,
+  "blocked_symbol_count": 20,
+  "top_bottlenecks": [
+    {
+      "reason": "hansen_spa_failed",
+      "symbol_count": 19
+    },
+    {
+      "reason": "cscv_pbo_failed",
+      "symbol_count": 17
+    },
+    {
+      "reason": "bull_bear_robustness_failed",
+      "symbol_count": 12
+    },
+    {
+      "reason": "deflated_sharpe_failed",
+      "symbol_count": 12
+    },
+    {
+      "reason": "walk_forward_sample_insufficient",
+      "symbol_count": 12
+    },
+    {
+      "reason": "psr_mintrl_bootstrap_failed",
+      "symbol_count": 10
+    },
+    {
+      "reason": "validation_gate_not_ready",
+      "symbol_count": 9
+    },
+    {
+      "reason": "no_validation_survivor",
+      "symbol_count": 8
+    },
+    {
+      "reason": "walk_forward_stability_failed",
+      "symbol_count": 8
+    },
+    {
+      "reason": "cscv_pbo_unavailable",
+      "symbol_count": 1
+    },
+    {
+      "reason": "hansen_spa_unavailable",
+      "symbol_count": 1
+    }
+  ],
+  "model_selection_state_counts": {
+    "cscv_pbo": {
+      "failed": 17,
+      "pass": 2,
+      "unavailable": 1
+    },
+    "hansen_spa": {
+      "failed": 19,
+      "unavailable": 1
+    }
+  },
+  "research_priority_observer": [
+    "hansen_spa_failed",
+    "cscv_pbo_failed",
+    "bull_bear_robustness_failed",
+    "deflated_sharpe_failed",
+    "walk_forward_sample_insufficient"
+  ],
+  "feedback_policy": "OBSERVATION_ONLY: validation/holdout diagnostics must not feed candidate generation or train-memory adaptation",
+  "rows": [
+    {
+      "stock_code": "0050",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "0056",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "00878",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "00919",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2303",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2308",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2317",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2330",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2345",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_unavailable",
+        "hansen_spa_unavailable"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "unavailable",
+        "hansen_spa": "unavailable"
+      }
+    },
+    {
+      "stock_code": "2379",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2382",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2454",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2603",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2615",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "no_validation_survivor",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "no_validation_survivor",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "pass",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2881",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2882",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "2891",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "no_validation_survivor",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "no_validation_survivor",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "pass",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "3037",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "3231",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "no_validation_survivor",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    },
+    {
+      "stock_code": "3711",
+      "eligible_for_one_shot_holdout": false,
+      "raw_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable",
+        "hansen_spa_failed_or_unavailable"
+      ],
+      "normalized_reasons": [
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_sample_insufficient",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed",
+        "hansen_spa_failed"
+      ],
+      "model_selection_state": {
+        "cscv_pbo": "failed",
+        "hansen_spa": "failed"
+      }
+    }
+  ]
+}

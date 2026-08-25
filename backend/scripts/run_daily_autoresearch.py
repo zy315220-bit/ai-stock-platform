@@ -160,9 +160,6 @@ def execute_daily_stock_research(
         max_generations=3,
         max_experiments=max_experiments,
         min_validation_trades=4,
-        # Keep more behaviorally distinct validation finalists so CSCV/PBO and
-        # Hansen SPA have enough unique return paths to become available. This
-        # strengthens evidence coverage; it does not relax any promotion gate.
         validation_finalists=8,
         walk_forward_slices=3,
         regime_candidate_count=3,
@@ -213,8 +210,9 @@ def execute_daily_stock_research(
         "schema_version": AUTOMATION_SCHEMA_VERSION,
         "automation": {
             "mode": "daily_unattended",
-            "schedule": "30 10 * * 1-5",
+            "schedule": "30 22,10 * * *",
             "schedule_timezone": "Asia/Taipei",
+            "sessions_per_day": 2,
             "candidate_offset": candidate_offset,
             "max_experiments": max_experiments,
             "training_memory": training_memory_summary(memory),
@@ -246,7 +244,7 @@ def run_with_retry(
                 max_experiments=max_experiments,
                 prior_training_memory=prior_training_memory,
             )
-        except Exception as exc:  # GitHub Actions records the final traceback.
+        except Exception as exc:
             last_error = exc
             if attempt >= attempts:
                 break

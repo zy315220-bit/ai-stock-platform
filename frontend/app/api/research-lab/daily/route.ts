@@ -4,6 +4,10 @@ export const dynamic = "force-dynamic";
 
 const RESULT_URL =
   "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/daily/latest.json";
+const SYSTEM_AUDIT_URL =
+  "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/daily/diagnostics/research-system-audit.json";
+const CERTIFIED_ROBOTS_URL =
+  "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/certified-robots.json";
 const WORKFLOW_RUNS_URL =
   "https://api.github.com/repos/zy315220-bit/ai-stock-platform/actions/workflows/daily-autoresearch.yml/runs?per_page=1";
 
@@ -47,12 +51,19 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 export async function GET() {
-  const [snapshotResult, workflowResult] = await Promise.allSettled([
-    fetchJson(RESULT_URL),
-    fetchJson(WORKFLOW_RUNS_URL),
-  ]);
+  const [snapshotResult, workflowResult, auditResult, certifiedResult] =
+    await Promise.allSettled([
+      fetchJson(RESULT_URL),
+      fetchJson(WORKFLOW_RUNS_URL),
+      fetchJson(SYSTEM_AUDIT_URL),
+      fetchJson(CERTIFIED_ROBOTS_URL),
+    ]);
   const snapshot =
     snapshotResult.status === "fulfilled" ? snapshotResult.value : null;
+  const systemAudit =
+    auditResult.status === "fulfilled" ? auditResult.value : null;
+  const certifiedRobots =
+    certifiedResult.status === "fulfilled" ? certifiedResult.value : null;
   const workflowPayload =
     workflowResult.status === "fulfilled" &&
     workflowResult.value &&
@@ -84,10 +95,14 @@ export async function GET() {
         }
       : null,
     latest_snapshot: snapshot,
+    system_audit: systemAudit,
+    certified_robots: certifiedRobots,
     snapshot_available: snapshot !== null,
     status_sources: {
       snapshot: snapshotResult.status,
       workflow: workflowResult.status,
+      system_audit: auditResult.status,
+      certified_robots: certifiedResult.status,
     },
   });
 }

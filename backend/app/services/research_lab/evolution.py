@@ -150,6 +150,9 @@ RESEARCH_STRUCTURES = (
 )
 
 
+SHORTER_RISK_EXIT_DAYS = (20, 30)
+
+
 def candidate_parameter_signature(candidate: ResearchCandidate) -> str:
     """Return a stable identity for one executable strategy configuration."""
     payload = json.dumps(
@@ -256,6 +259,7 @@ def mutate_survivor(
     exit_delta: int,
     hypothesis_suffix: str = "local",
     strategy_structure: tuple[str, bool, str, str, str, int, str] | None = None,
+    max_holding_days_override: int | None = None,
 ) -> ResearchCandidate:
     params = dict(parent.parameters)
     params["entry_score"] = max(1, min(99, int(params["entry_score"]) + entry_delta))
@@ -278,6 +282,9 @@ def mutate_survivor(
         )
         strategy_family = _strategy_family(entry_mode)
         structure_note = f"; structure={label}"
+    if max_holding_days_override is not None:
+        params["max_holding_days"] = max(5, int(max_holding_days_override))
+        structure_note += f"; max_hold={params['max_holding_days']} sessions"
     identity_payload = json.dumps(
         {
             "parent_id": parent.candidate_id,
@@ -309,27 +316,46 @@ def _mutation_neighborhood(result: ExperimentResult) -> tuple[tuple[int, int, st
     return ((-10, 0, "broad"), (10, 0, "broad"), (0, -10, "broad"), (0, 10, "broad"))
 
 
+def _supports_time_exit(candidate: ResearchCandidate) -> bool:
+    return "time" in str(candidate.parameters.get("exit_mode", ""))
+
+
 def evolve_candidates(results: Iterable[ExperimentResult], *, top_k: int = 3) -> list[ResearchCandidate]:
-    """Evolve thresholds and executable entry/exit/risk structure."""
+    """Evolve thresholds, structure, and trade-duration risk without relaxing gates."""
     ranked = sorted((r for r in results if r.decision is not ExperimentDecision.DISCARD), key=lambda r: r.research_score, reverse=True)[:top_k]
     children: list[ResearchCandidate] = []
     seen: set[tuple[int, int, bool, str, str, str, str, int]] = set()
     for result in ranked:
         parent = result.candidate
-        mutations = [(entry_delta, exit_delta, label, None) for entry_delta, exit_delta, label in _mutation_neighborhood(result)]
+        mutations = [
+            (entry_delta, exit_delta, label, None, None)
+            for entry_delta, exit_delta, label in _mutation_neighborhood(result)
+        ]
         # Structural mutations keep the parent's numeric thresholds fixed so the
-        # validation comparison isolates the effect of changing the EMA rule.
+        # validation comparison isolates the effect of changing the entry/exit rule.
         mutations.extend(
-            (0, 0, "structure", structure)
+            (0, 0, "structure", structure, None)
             for structure in RESEARCH_STRUCTURES
         )
-        for entry_delta, exit_delta, label, structure in mutations:
+        # Strong survivors often fail promotion because long holding periods leave
+        # too few completed validation trades. Explore shorter *risk exits* as new
+        # executable hypotheses instead of lowering the minimum-trade evidence gate.
+        # This remains train-only adaptive search; validation/holdout never choose
+        # the duration values.
+        if _supports_time_exit(parent):
+            mutations.extend(
+                (0, 0, "duration", None, holding_days)
+                for holding_days in SHORTER_RISK_EXIT_DAYS
+                if holding_days != int(parent.parameters.get("max_holding_days", 60))
+            )
+        for entry_delta, exit_delta, label, structure, holding_override in mutations:
             child = mutate_survivor(
                 parent,
                 entry_delta=entry_delta,
                 exit_delta=exit_delta,
                 hypothesis_suffix=label,
                 strategy_structure=structure,
+                max_holding_days_override=holding_override,
             )
             key = (
                 int(child.parameters["entry_score"]), int(child.parameters["exit_score"]),

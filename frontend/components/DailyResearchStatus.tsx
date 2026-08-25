@@ -6,13 +6,25 @@ type Candidate = {
   stock_code?: string;
   candidate_id?: string;
   strategy_family?: string;
+  decision?: "DISCARD" | "KEEP" | "HOLDOUT_READY";
   research_score?: number;
+  confirmation_gate_pass_count?: number;
+  confirmation_gate_total?: number;
   eligible_for_one_shot_holdout?: boolean;
   regime_robust?: boolean;
+  walk_forward_sample_sufficient?: boolean;
+  walk_forward_positive_slice_ratio?: number;
   validation?: {
     wilson_lower_percent?: number;
     total_return_percent?: number;
+    alpha_percent?: number;
     max_drawdown_percent?: number;
+    deflated_sharpe_probability_percent?: number;
+    deflated_sharpe_pass?: boolean;
+  };
+  model_selection?: {
+    cscv_pbo_pass?: boolean;
+    hansen_spa_pass?: boolean;
   };
 };
 
@@ -26,6 +38,11 @@ type DailySnapshot = {
   eligible_candidate_count?: number;
   holdout_opened?: boolean;
   integrity_status?: string;
+  ranking_methodology?: {
+    schema?: string;
+    production_champion_rule?: string;
+    small_sample_win_rate_role?: string;
+  };
   training_memory?: {
     enabled?: boolean;
     provenance?: string;
@@ -52,6 +69,7 @@ type DailyStatus = {
   schedule: {
     label: string;
     timezone: string;
+    sessions_per_day?: number;
     next_scheduled_at: string;
   };
   workflow: null | {
@@ -90,6 +108,13 @@ function workflowLabel(status: DailyStatus): string {
   if (status.workflow?.conclusion === "failure") return "上次研究失敗，等待重試";
   if (status.workflow?.conclusion === "success") return "上次研究已完成";
   return status.snapshot_available ? "自動研究正常" : "等待首次自動研究";
+}
+
+function decisionLabel(value?: Candidate["decision"]): string {
+  if (value === "HOLDOUT_READY") return "HOLDOUT_READY";
+  if (value === "KEEP") return "KEEP";
+  if (value === "DISCARD") return "DISCARD";
+  return "—";
 }
 
 export default function DailyResearchStatus() {
@@ -140,7 +165,7 @@ export default function DailyResearchStatus() {
         <div>
           <p className="panel-kicker">DAILY AUTONOMOUS RESEARCH</p>
           <h2>每日自動研究</h2>
-          <p>不需開著網頁；每天會延續前次 Train 研究、避開已測實驗並保存候選版本。</p>
+          <p>不需開著網頁；每天兩輪延續 Train 研究、避開已測實驗並保存候選版本。</p>
         </div>
         <span className={running ? "daily-status running" : "daily-status enabled"}>
           {running ? "RUNNING" : "AUTOMATIC ON"}
@@ -153,12 +178,12 @@ export default function DailyResearchStatus() {
         <article>
           <span>執行狀態</span>
           <strong>{status ? workflowLabel(status) : "讀取中…"}</strong>
-          <small>{status?.schedule.label ?? "每個台股交易日 18:30"}</small>
+          <small>{status?.schedule.label ?? "每日 06:30 與 18:30"}</small>
         </article>
         <article>
           <span>下次自動研究</span>
           <strong>{formatTaipeiTime(status?.schedule.next_scheduled_at)}</strong>
-          <small>Asia/Taipei・無需手動</small>
+          <small>Asia/Taipei・每天 {status?.schedule.sessions_per_day ?? 2} 輪</small>
         </article>
         <article>
           <span>最近完整快照</span>
@@ -202,13 +227,21 @@ export default function DailyResearchStatus() {
           <div>
             <span>最新最高證據候選・尚非正式冠軍</span>
             <strong>{top.stock_code}・{top.candidate_id}</strong>
-            <small>{top.strategy_family}・Research Score {formatMetric(top.research_score)}</small>
+            <small>
+              {top.strategy_family}・{decisionLabel(top.decision)}・Research Score {formatMetric(top.research_score)}
+            </small>
           </div>
           <dl>
-            <div><dt>Wilson 下界</dt><dd>{formatMetric(top.validation?.wilson_lower_percent)}%</dd></div>
+            <div><dt>確認 Gate</dt><dd>{formatMetric(top.confirmation_gate_pass_count)}/{formatMetric(top.confirmation_gate_total)}</dd></div>
+            <div><dt>DSR</dt><dd>{formatMetric(top.validation?.deflated_sharpe_probability_percent)}%</dd></div>
             <div><dt>Validation 報酬</dt><dd>{formatMetric(top.validation?.total_return_percent)}%</dd></div>
+            <div><dt>Alpha</dt><dd>{formatMetric(top.validation?.alpha_percent)}%</dd></div>
+            <div><dt>Wilson 下界</dt><dd>{formatMetric(top.validation?.wilson_lower_percent)}%</dd></div>
             <div><dt>最大回撤</dt><dd>{formatMetric(top.validation?.max_drawdown_percent)}%</dd></div>
           </dl>
+          <p>
+            排名採論文導向證據階層；Wilson 只作輔助 tie-breaker，Final Holdout 通過前不稱正式冠軍。
+          </p>
         </div>
       ) : null}
 

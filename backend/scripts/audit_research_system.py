@@ -12,6 +12,7 @@ from scripts.run_daily_autoresearch import write_json_atomic
 
 RESEARCH_SYSTEM_AUDIT_SCHEMA = 2
 REQUIRED_RANKING_SCHEMA = "paper-guided-evidence-ranking-v1"
+REQUIRED_DAILY_SCHEDULE = "30 22,10 * * *"
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -36,6 +37,7 @@ def audit_research_system(
         checks.append({"name": name, "passed": bool(passed), "detail": detail})
 
     universe = tuple(str(value) for value in snapshot.get("universe") or [])
+    automation = snapshot.get("automation") or {}
     training_memory = snapshot.get("training_memory") or {}
     ranking_methodology = snapshot.get("ranking_methodology") or {}
 
@@ -44,6 +46,20 @@ def audit_research_system(
         universe == expected_universe
         and int(snapshot.get("completed_symbol_count", 0) or 0) == len(expected_universe),
         f"expected={len(expected_universe)} completed={snapshot.get('completed_symbol_count')}",
+    )
+    check(
+        "autonomous_scheduler_registered",
+        automation.get("enabled") is True
+        and automation.get("mode") == "daily_unattended"
+        and automation.get("schedule") == REQUIRED_DAILY_SCHEDULE
+        and automation.get("schedule_timezone") == "Asia/Taipei"
+        and int(automation.get("sessions_per_day", 0) or 0) == 2
+        and automation.get("manual_action_required") is False,
+        (
+            f"schedule={automation.get('schedule')} "
+            f"tz={automation.get('schedule_timezone')} "
+            f"sessions={automation.get('sessions_per_day')}"
+        ),
     )
     check(
         "aggregate_integrity_pass",

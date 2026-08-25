@@ -2,13 +2,6 @@ name: Daily Autonomous Research
 run-name: "Daily Autonomous Research · ${{ github.event_name }} · #${{ github.run_number }}"
 
 on:
-  # One controlled push trigger is retained only for this workflow file so a
-  # research-lifecycle change can be end-to-end verified. Normal research code
-  # pushes do not launch the expensive 20-symbol matrix.
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/daily-autoresearch.yml"
   schedule:
     # 06:30 and 18:30 Asia/Taipei every day.
     - cron: "30 22,10 * * *"

@@ -2,6 +2,10 @@ name: Daily Autonomous Research
 run-name: "Daily Autonomous Research · ${{ github.event_name }} · #${{ github.run_number }}"
 
 on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/daily-autoresearch.yml"
   schedule:
     # 06:30 and 18:30 Asia/Taipei every day.
     - cron: "30 22,10 * * *"
@@ -11,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: daily-autonomous-research-v3
+  group: daily-autonomous-research-v4
   cancel-in-progress: false
 
 jobs:

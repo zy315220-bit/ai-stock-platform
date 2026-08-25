@@ -6,11 +6,19 @@ from pathlib import Path
 import pytest
 
 from app.services.research_lab.final_holdout import (
+    FINAL_HOLDOUT_STATE_EVALUATED,
+    FINAL_HOLDOUT_STATE_RESERVED,
     evaluate_final_holdout_once,
+    evaluate_reserved_final_holdout,
     ledger_path_for,
     load_existing_ledger,
+    reserve_final_holdout,
 )
-from scripts.run_final_holdout_gate import build_certified_registry
+from scripts.run_final_holdout_gate import (
+    build_certified_registry,
+    evaluate_reserved_final_holdouts,
+    reserve_final_holdouts,
+)
 
 
 def _eligible_payload() -> dict:
@@ -91,7 +99,9 @@ def test_final_holdout_uses_only_declared_holdout_window_and_fixed_rubric() -> N
     assert calls[0]["end_date"] == "2026-06-30"
     assert calls[0]["liquidate_at_end"] is False
     assert calls[0]["include_research_series"] is True
+    assert record["state"] == FINAL_HOLDOUT_STATE_EVALUATED
     assert record["opened_once"] is True
+    assert record["policy"]["durable_reservation_before_open"] is True
     assert record["policy"]["holdout_feedback_to_train"] is False
     assert record["policy"]["candidate_generation_after_open"] is False
     assert record["result"]["status"] == "FINAL_HOLDOUT_PASS"
@@ -139,6 +149,57 @@ def test_ledger_identity_collision_is_fail_closed(tmp_path: Path) -> None:
         load_existing_ledger(path, payload)
 
 
+def test_reservation_phase_never_opens_holdout_and_evaluation_requires_same_claim(
+    tmp_path: Path,
+) -> None:
+    payload = _eligible_payload()
+    reservation_summary = reserve_final_holdouts(
+        [payload],
+        ledger_root=tmp_path,
+        claim_run_id="run-A",
+    )
+    path = ledger_path_for(payload, tmp_path)
+    reservation = load_existing_ledger(path, payload)
+
+    assert reservation_summary["new_reservation_count"] == 1
+    assert reservation_summary["holdout_opened_in_this_phase"] == 0
+    assert reservation is not None
+    assert reservation["state"] == FINAL_HOLDOUT_STATE_RESERVED
+    assert reservation["opened_once"] is False
+    assert reservation["result"] is None
+
+    with pytest.raises(ValueError, match="another workflow run"):
+        evaluate_reserved_final_holdout(
+            payload,
+            reservation,
+            claim_run_id="run-B",
+            backtest_fn=lambda **_: _passing_report(),
+        )
+
+
+def test_foreign_crash_reservation_fails_closed_without_reopening_holdout(
+    tmp_path: Path,
+) -> None:
+    payload = _eligible_payload()
+    reservation = reserve_final_holdout(payload, claim_run_id="crashed-run")
+    path = ledger_path_for(payload, tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(reservation), encoding="utf-8")
+
+    summary = evaluate_reserved_final_holdouts(
+        [payload],
+        ledger_root=tmp_path,
+        claim_run_id="new-run",
+    )
+
+    assert summary["blocked_reservation_count"] == 1
+    assert summary["newly_opened_count"] == 0
+    still_reserved = load_existing_ledger(path, payload)
+    assert still_reserved is not None
+    assert still_reserved["state"] == FINAL_HOLDOUT_STATE_RESERVED
+    assert still_reserved["opened_once"] is False
+
+
 def test_certified_registry_contains_only_final_holdout_passes(tmp_path: Path) -> None:
     passing_payload = _eligible_payload()
     passing_record = evaluate_final_holdout_once(
@@ -171,6 +232,7 @@ def test_certified_registry_contains_only_final_holdout_passes(tmp_path: Path) -
     registry = build_certified_registry(tmp_path)
 
     assert registry["certified_robot_count"] == 1
+    assert registry["unresolved_reservation_count"] == 0
     assert registry["robots"][0]["stock_code"] == "2882"
     assert registry["robots"][0]["status"] == "CERTIFIED_FINAL_HOLDOUT_PASS"
     assert "Holdout scores are not used to rank" in registry["selection_policy"]

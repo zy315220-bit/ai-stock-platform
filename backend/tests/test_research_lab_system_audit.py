@@ -12,6 +12,14 @@ UNIVERSE = (
 
 def _snapshot() -> dict:
     return {
+        "automation": {
+            "enabled": True,
+            "mode": "daily_unattended",
+            "schedule": "30 22,10 * * *",
+            "schedule_timezone": "Asia/Taipei",
+            "sessions_per_day": 2,
+            "manual_action_required": False,
+        },
         "universe": list(UNIVERSE),
         "completed_symbol_count": 20,
         "integrity_status": "PASS",
@@ -69,15 +77,19 @@ def _certified() -> dict:
     }
 
 
-def test_full_research_lifecycle_can_be_operational_without_forcing_a_champion() -> None:
-    audit = audit_research_system(
-        snapshot=_snapshot(),
+def _audit(snapshot: dict | None = None, final_holdout: dict | None = None, certified: dict | None = None):
+    return audit_research_system(
+        snapshot=snapshot or _snapshot(),
         model_selection=_model_selection(),
         bottlenecks=_bottlenecks(),
-        final_holdout=_final_holdout(),
-        certified_robots=_certified(),
+        final_holdout=final_holdout or _final_holdout(),
+        certified_robots=certified or _certified(),
         expected_universe=UNIVERSE,
     )
+
+
+def test_full_research_lifecycle_can_be_operational_without_forcing_a_champion() -> None:
+    audit = _audit()
 
     assert audit["system_ready"] is True
     assert audit["research_engine_complete"] is True
@@ -91,14 +103,7 @@ def test_audit_fails_closed_if_validation_feedback_enters_train_memory() -> None
     snapshot = _snapshot()
     snapshot["training_memory"]["validation_feedback_used"] = True
 
-    audit = audit_research_system(
-        snapshot=snapshot,
-        model_selection=_model_selection(),
-        bottlenecks=_bottlenecks(),
-        final_holdout=_final_holdout(),
-        certified_robots=_certified(),
-        expected_universe=UNIVERSE,
-    )
+    audit = _audit(snapshot=snapshot)
 
     assert audit["system_ready"] is False
     assert audit["system_status"] == "FAIL_CLOSED"
@@ -106,18 +111,23 @@ def test_audit_fails_closed_if_validation_feedback_enters_train_memory() -> None
     assert "train_only_memory" in failed_names
 
 
+def test_audit_fails_closed_if_scheduler_drops_weekend_or_second_session() -> None:
+    snapshot = _snapshot()
+    snapshot["automation"]["schedule"] = "30 10 * * 1-5"
+    snapshot["automation"]["sessions_per_day"] = 1
+
+    audit = _audit(snapshot=snapshot)
+
+    assert audit["system_ready"] is False
+    failed_names = {row["name"] for row in audit["checks"] if not row["passed"]}
+    assert "autonomous_scheduler_registered" in failed_names
+
+
 def test_audit_fails_closed_if_eligible_holdout_is_not_accounted_for() -> None:
     holdout = _final_holdout()
     holdout["eligible_candidate_count"] = 1
 
-    audit = audit_research_system(
-        snapshot=_snapshot(),
-        model_selection=_model_selection(),
-        bottlenecks=_bottlenecks(),
-        final_holdout=holdout,
-        certified_robots=_certified(),
-        expected_universe=UNIVERSE,
-    )
+    audit = _audit(final_holdout=holdout)
 
     assert audit["system_ready"] is False
     failed_names = {row["name"] for row in audit["checks"] if not row["passed"]}
@@ -128,14 +138,7 @@ def test_audit_fails_closed_on_unresolved_durable_reservation() -> None:
     certified = _certified()
     certified["unresolved_reservation_count"] = 1
 
-    audit = audit_research_system(
-        snapshot=_snapshot(),
-        model_selection=_model_selection(),
-        bottlenecks=_bottlenecks(),
-        final_holdout=_final_holdout(),
-        certified_robots=certified,
-        expected_universe=UNIVERSE,
-    )
+    audit = _audit(certified=certified)
 
     assert audit["system_ready"] is False
     failed_names = {row["name"] for row in audit["checks"] if not row["passed"]}

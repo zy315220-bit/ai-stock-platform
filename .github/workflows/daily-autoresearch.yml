@@ -14,7 +14,7 @@ on:
       - "backend/scripts/summarize_model_selection_evidence.py"
       - "backend/scripts/summarize_gate_bottlenecks.py"
   schedule:
-    - cron: "30 10 * * 1-5"
+    - cron: "30 10 * * *"
   workflow_dispatch:
 
 permissions:

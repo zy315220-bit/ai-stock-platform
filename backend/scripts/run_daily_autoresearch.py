@@ -33,8 +33,8 @@ def resolve_train_data_identity(
     """Fingerprint one fixed Train-only frame before adaptive search.
 
     Candidate strategies can require different indicator columns and therefore
-    trim different leading rows.  Their execution fingerprints remain useful
-    audit evidence, but they are not a stable cross-day dataset identity.  This
+    trim different leading rows. Their execution fingerprints remain useful
+    audit evidence, but they are not a stable cross-day dataset identity. This
     fixed score-only probe makes the compatibility decision independent of the
     strategy family selected on a particular day.
     """
@@ -80,7 +80,7 @@ def campaign_window(as_of_date: date) -> dict[str, str]:
 
     Keeping the split fixed for the whole campaign prevents a daily scheduler
     from slowly leaking yesterday's holdout observations back into adaptive
-    search.  A new campaign starts only at a quarter boundary and receives a
+    search. A new campaign starts only at a quarter boundary and receives a
     new versioned identity.
     """
     quarter = (as_of_date.month - 1) // 3 + 1
@@ -160,9 +160,12 @@ def execute_daily_stock_research(
         max_generations=3,
         max_experiments=max_experiments,
         min_validation_trades=4,
-        validation_finalists=5,
+        # Keep more behaviorally distinct validation finalists so CSCV/PBO and
+        # Hansen SPA have enough unique return paths to become available. This
+        # strengthens evidence coverage; it does not relax any promotion gate.
+        validation_finalists=8,
         walk_forward_slices=3,
-        regime_candidate_count=2,
+        regime_candidate_count=3,
         regime_slices=6,
         min_regime_trades=1,
         candidate_offset=candidate_offset,

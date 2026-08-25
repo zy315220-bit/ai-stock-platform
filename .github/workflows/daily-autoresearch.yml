@@ -14,7 +14,8 @@ on:
       - "backend/scripts/summarize_model_selection_evidence.py"
       - "backend/scripts/summarize_gate_bottlenecks.py"
   schedule:
-    - cron: "30 10 * * *"
+    # 06:30 and 18:30 Asia/Taipei every day.
+    - cron: "30 22,10 * * *"
   workflow_dispatch:
 
 permissions:
@@ -33,8 +34,8 @@ jobs:
     timeout-minutes: 35
     strategy:
       fail-fast: false
-      # Keep bounded parallelism even though public-repo standard runners are
-      # free. Four concurrent shards avoids unnecessary upstream data bursts.
+      # Bound concurrency to avoid upstream market-data bursts and keep the
+      # public website completely separate from research compute.
       max-parallel: 4
       matrix:
         stock:
@@ -95,9 +96,9 @@ jobs:
           name: daily-research-${{ matrix.stock }}
           path: backend/research_artifacts/daily/${{ matrix.stock }}.json
           if-no-files-found: error
-          # 64 experiments roughly doubles shard size; 45 days keeps the
-          # rolling artifact footprint near the former 32 x 90-day budget.
-          retention-days: 45
+          # Two 64-experiment runs/day at 21-day retention stay roughly within
+          # the former one 32-experiment run/day at 90-day artifact footprint.
+          retention-days: 21
 
   publish-snapshot:
     name: Publish fail-closed snapshot
@@ -149,7 +150,7 @@ jobs:
             backend/research_artifacts/published/daily/gate-bottlenecks.json
             backend/research_artifacts/published/daily/memory/*.json
           if-no-files-found: error
-          retention-days: 45
+          retention-days: 21
       - name: Check out durable research-data branch
         uses: actions/checkout@v4
         with:

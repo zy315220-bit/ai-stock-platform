@@ -196,6 +196,8 @@ jobs:
           --bottlenecks research_artifacts/published/daily/gate-bottlenecks.json
           --final-holdout research_artifacts/published/daily/final-holdout-evaluations.json
           --certified-robots research_artifacts/published/daily/certified-robots.json
+          --challenger-roster research_artifacts/published/daily/competition-challengers.json
+          --competition-tournament research_artifacts/published/daily/competition-tournament.json
           --output research_artifacts/published/daily/research-system-audit.json
       - name: Upload immutable daily snapshot
         uses: actions/upload-artifact@v4

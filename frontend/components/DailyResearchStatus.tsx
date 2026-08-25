@@ -67,6 +67,8 @@ type SystemAudit = {
   system_status?: "OPERATIONAL" | "FAIL_CLOSED";
   system_ready?: boolean;
   research_engine_complete?: boolean;
+  competition_research_loop_complete?: boolean;
+  competition_challenger_count?: number;
   passed_check_count?: number;
   failed_check_count?: number;
   champion_discovery_status?: string;
@@ -74,6 +76,35 @@ type SystemAudit = {
 
 type CertifiedRobots = {
   certified_robot_count?: number;
+};
+
+type CompetitionChallengers = {
+  status?: string;
+  challenger_count?: number;
+};
+
+type CompetitionTournament = {
+  status?: string;
+  challenger_count?: number;
+  incumbent_leader?: {
+    robot_id?: string;
+    name?: string;
+  };
+  overall_leader?: {
+    robot_id?: string;
+    rank?: number;
+    trade_count?: number;
+    wilson_lower_percent?: number;
+    qualified?: boolean;
+    origin?: string;
+  };
+  promotion?: {
+    challenger_replaced_incumbent?: boolean;
+    promoted_robot_id?: string | null;
+    defeated_incumbent_robot_id?: string | null;
+    reason?: string;
+    competition_feedback_to_same_campaign_train?: boolean;
+  };
 };
 
 type DailyStatus = {
@@ -94,6 +125,8 @@ type DailyStatus = {
   latest_snapshot: DailySnapshot | null;
   system_audit?: SystemAudit | null;
   certified_robots?: CertifiedRobots | null;
+  competition_challengers?: CompetitionChallengers | null;
+  competition_tournament?: CompetitionTournament | null;
   snapshot_available: boolean;
 };
 
@@ -174,6 +207,9 @@ export default function DailyResearchStatus() {
   const memory = snapshot?.training_memory ?? null;
   const audit = status?.system_audit ?? null;
   const certifiedCount = status?.certified_robots?.certified_robot_count ?? 0;
+  const challengerCount = status?.competition_challengers?.challenger_count ?? 0;
+  const tournament = status?.competition_tournament ?? null;
+  const promoted = tournament?.promotion?.challenger_replaced_incumbent === true;
   const running = status?.workflow?.status === "in_progress";
 
   return (
@@ -222,6 +258,16 @@ export default function DailyResearchStatus() {
           <strong>{certifiedCount} 名正式認證</strong>
           <small>{certifiedCount > 0 ? "僅收錄一次性 Final Holdout 通過者" : "尚無通過者，研究會繼續"}</small>
         </article>
+        <article>
+          <span>研究所 → 競賽橋接</span>
+          <strong>{challengerCount} 名認證挑戰者</strong>
+          <small>{audit?.competition_research_loop_complete ? "閉環已接通・只讓認證版本參賽" : "等待閉環稽核"}</small>
+        </article>
+        <article>
+          <span>冠軍挑戰結果</span>
+          <strong>{promoted ? `新冠軍 ${tournament?.promotion?.promoted_robot_id ?? ""}` : tournament?.status === "completed" ? "舊冠軍守擂" : "等待認證挑戰者"}</strong>
+          <small>{promoted ? `擊敗 ${tournament?.promotion?.defeated_incumbent_robot_id ?? "原冠軍"}` : tournament?.overall_leader?.robot_id ? `目前第一：${tournament.overall_leader.robot_id}` : "無認證者時不會硬產生新冠軍"}</small>
+        </article>
       </div>
 
       {memory?.enabled ? (
@@ -245,6 +291,29 @@ export default function DailyResearchStatus() {
           <p>
             自適應回饋僅來自 Train；Validation 與 Final Holdout
             {memory.validation_feedback_used || memory.holdout_feedback_used ? " 發生異常回饋" : " 保持隔離"}。
+          </p>
+        </div>
+      ) : null}
+
+      {tournament?.status === "completed" && tournament.overall_leader ? (
+        <div className="daily-top-candidate">
+          <div>
+            <span>研究所 × 機器人競賽・正式擂台</span>
+            <strong>{tournament.overall_leader.robot_id}</strong>
+            <small>
+              {tournament.overall_leader.origin === "research_lab_certified" ? "Final Holdout 認證研究機器人" : "原競賽固定規則機器人"}・
+              {tournament.overall_leader.qualified ? "正式冠軍資格" : "暫定第一"}
+            </small>
+          </div>
+          <dl>
+            <div><dt>排名</dt><dd>#{formatMetric(tournament.overall_leader.rank)}</dd></div>
+            <div><dt>Forward 交易</dt><dd>{formatMetric(tournament.overall_leader.trade_count)}</dd></div>
+            <div><dt>Wilson 下界</dt><dd>{formatMetric(tournament.overall_leader.wilson_lower_percent)}%</dd></div>
+            <div><dt>認證挑戰者</dt><dd>{formatMetric(tournament.challenger_count)}</dd></div>
+          </dl>
+          <p>
+            {tournament.promotion?.reason ?? "所有參賽者使用相同資金、成本、風控與 forward 排名規則。"}
+            競賽結果不回灌同一研究 campaign 的 Train，避免二次過擬合。
           </p>
         </div>
       ) : null}

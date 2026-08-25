@@ -13,6 +13,9 @@ from app.services.research_lab.autoresearch import (
     ResearchSession,
     run_autoresearch,
 )
+from app.services.research_lab.evidence import (
+    assess_validation_evidence,
+)
 from app.services.research_lab.evolution import (
     generate_parameter_candidates,
 )
@@ -513,7 +516,11 @@ def run_research(
     start_date: date = Query(...),
     end_date: date = Query(...),
     max_generations: int = Query(3, ge=1, le=10),
-    max_experiments: int = Query(40, ge=1, le=200),
+    # The public/Vercel on-demand endpoint is deliberately capped at the same
+    # 60-experiment maximum exposed by the UI. Deep 64-experiment autonomous
+    # research runs directly on isolated GitHub Actions runners instead, so a
+    # web request cannot consume the production function for a 200-run batch.
+    max_experiments: int = Query(40, ge=1, le=60),
     min_validation_trades: int = Query(8, ge=1, le=100),
     validation_finalists: int = Query(5, ge=1, le=5),
     walk_forward_slices: int = Query(3, ge=2, le=8),

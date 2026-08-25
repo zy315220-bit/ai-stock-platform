@@ -8,6 +8,10 @@ const SYSTEM_AUDIT_URL =
   "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/daily/diagnostics/research-system-audit.json";
 const CERTIFIED_ROBOTS_URL =
   "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/certified-robots.json";
+const COMPETITION_CHALLENGERS_URL =
+  "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/competition/challengers.json";
+const COMPETITION_TOURNAMENT_URL =
+  "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/competition/latest-tournament.json";
 const WORKFLOW_RUNS_URL =
   "https://api.github.com/repos/zy315220-bit/ai-stock-platform/actions/workflows/daily-autoresearch.yml/runs?per_page=1";
 
@@ -51,19 +55,31 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 export async function GET() {
-  const [snapshotResult, workflowResult, auditResult, certifiedResult] =
-    await Promise.allSettled([
-      fetchJson(RESULT_URL),
-      fetchJson(WORKFLOW_RUNS_URL),
-      fetchJson(SYSTEM_AUDIT_URL),
-      fetchJson(CERTIFIED_ROBOTS_URL),
-    ]);
+  const [
+    snapshotResult,
+    workflowResult,
+    auditResult,
+    certifiedResult,
+    challengersResult,
+    tournamentResult,
+  ] = await Promise.allSettled([
+    fetchJson(RESULT_URL),
+    fetchJson(WORKFLOW_RUNS_URL),
+    fetchJson(SYSTEM_AUDIT_URL),
+    fetchJson(CERTIFIED_ROBOTS_URL),
+    fetchJson(COMPETITION_CHALLENGERS_URL),
+    fetchJson(COMPETITION_TOURNAMENT_URL),
+  ]);
   const snapshot =
     snapshotResult.status === "fulfilled" ? snapshotResult.value : null;
   const systemAudit =
     auditResult.status === "fulfilled" ? auditResult.value : null;
   const certifiedRobots =
     certifiedResult.status === "fulfilled" ? certifiedResult.value : null;
+  const competitionChallengers =
+    challengersResult.status === "fulfilled" ? challengersResult.value : null;
+  const competitionTournament =
+    tournamentResult.status === "fulfilled" ? tournamentResult.value : null;
   const workflowPayload =
     workflowResult.status === "fulfilled" &&
     workflowResult.value &&
@@ -97,12 +113,16 @@ export async function GET() {
     latest_snapshot: snapshot,
     system_audit: systemAudit,
     certified_robots: certifiedRobots,
+    competition_challengers: competitionChallengers,
+    competition_tournament: competitionTournament,
     snapshot_available: snapshot !== null,
     status_sources: {
       snapshot: snapshotResult.status,
       workflow: workflowResult.status,
       system_audit: auditResult.status,
       certified_robots: certifiedResult.status,
+      competition_challengers: challengersResult.status,
+      competition_tournament: tournamentResult.status,
     },
   });
 }

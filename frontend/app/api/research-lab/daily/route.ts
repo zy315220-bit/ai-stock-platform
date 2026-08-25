@@ -7,6 +7,8 @@ const RESULT_URL =
 const WORKFLOW_RUNS_URL =
   "https://api.github.com/repos/zy315220-bit/ai-stock-platform/actions/workflows/daily-autoresearch.yml/runs?per_page=1";
 
+const DAILY_RESEARCH_UTC_HOURS = [10, 22] as const;
+
 type WorkflowRun = {
   id?: number;
   status?: string;
@@ -18,14 +20,18 @@ type WorkflowRun = {
   html_url?: string;
 };
 
-function nextTaipeiWeekdayRun(now = new Date()): string {
-  const candidate = new Date(now);
-  candidate.setUTCHours(10, 30, 0, 0);
-  if (candidate <= now) candidate.setUTCDate(candidate.getUTCDate() + 1);
-  while (candidate.getUTCDay() === 0 || candidate.getUTCDay() === 6) {
-    candidate.setUTCDate(candidate.getUTCDate() + 1);
-  }
-  return candidate.toISOString();
+function nextTaipeiDailyRun(now = new Date()): string {
+  const candidates = DAILY_RESEARCH_UTC_HOURS.map((hour) => {
+    const candidate = new Date(now);
+    candidate.setUTCHours(hour, 30, 0, 0);
+    if (candidate <= now) candidate.setUTCDate(candidate.getUTCDate() + 1);
+    return candidate;
+  });
+
+  const next = candidates.reduce((earliest, candidate) =>
+    candidate < earliest ? candidate : earliest,
+  );
+  return next.toISOString();
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -59,10 +65,11 @@ export async function GET() {
     enabled: true,
     manual_action_required: false,
     schedule: {
-      cron: "30 10 * * 1-5",
+      cron: "30 22,10 * * *",
       timezone: "Asia/Taipei",
-      label: "每個台股交易日 18:30",
-      next_scheduled_at: nextTaipeiWeekdayRun(),
+      label: "每日 06:30 與 18:30",
+      sessions_per_day: 2,
+      next_scheduled_at: nextTaipeiDailyRun(),
     },
     workflow: latestRun
       ? {

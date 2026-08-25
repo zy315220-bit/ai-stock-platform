@@ -14,9 +14,11 @@ from .runner import _validation_metrics
 from .scoring import evaluate_candidate
 
 
-FINAL_HOLDOUT_SCHEMA_VERSION = 1
+FINAL_HOLDOUT_SCHEMA_VERSION = 2
 FINAL_HOLDOUT_MIN_COMPLETED_TRADES = 4
 FINAL_HOLDOUT_MAX_DRAWDOWN_PERCENT = 30.0
+FINAL_HOLDOUT_STATE_RESERVED = "RESERVED_BEFORE_OPEN"
+FINAL_HOLDOUT_STATE_EVALUATED = "EVALUATED_ONCE"
 
 BacktestFn = Callable[..., dict[str, Any]]
 
@@ -93,33 +95,116 @@ def _assert_pre_holdout_eligibility(payload: dict[str, Any]) -> None:
         raise ValueError("Eligible payload is not HOLDOUT_READY before final holdout")
 
 
-def _public_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+def _pre_holdout_evidence_digest(payload: dict[str, Any]) -> str:
+    result = payload.get("result") or {}
+    selected = result.get("selected_candidate") or {}
+    digest_payload = json.dumps(
+        {
+            "research_run_id": result.get("research_run_id"),
+            "data_fingerprints": result.get("data_fingerprints") or [],
+            "promotion_eligibility": result.get("promotion_eligibility") or {},
+            "selected_candidate": selected,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(digest_payload.encode("utf-8")).hexdigest()
+
+
+def _policy(
+    *,
+    minimum_completed_trades: int,
+    max_drawdown_percent: float,
+) -> dict[str, Any]:
     return {
-        key: value
-        for key, value in metrics.items()
-        if not key.startswith("_")
+        "rubric": "same_fixed_validation_rubric_no_post_holdout_retuning",
+        "minimum_completed_trades": max(1, int(minimum_completed_trades)),
+        "max_drawdown_percent": float(max_drawdown_percent),
+        "pass_requires": "HOLDOUT_READY_under_fixed_rubric",
+        "durable_reservation_before_open": True,
+        "holdout_feedback_to_train": False,
+        "candidate_generation_after_open": False,
     }
 
 
-def evaluate_final_holdout_once(
+def reserve_final_holdout(
     payload: dict[str, Any],
     *,
-    backtest_fn: BacktestFn = backtest_stock,
+    claim_run_id: str,
     minimum_completed_trades: int = FINAL_HOLDOUT_MIN_COMPLETED_TRADES,
     max_drawdown_percent: float = FINAL_HOLDOUT_MAX_DRAWDOWN_PERCENT,
 ) -> dict[str, Any]:
-    """Open the untouched final holdout exactly once for one promoted candidate.
+    """Create a no-data reservation that must be persisted before Holdout opens.
 
-    This function performs no candidate generation and returns no information to
-    TRAIN_ONLY memory. The final decision reuses the already-fixed validation
-    scoring rubric rather than retuning thresholds after seeing holdout results.
-    A durable ledger outside adaptive memory is responsible for preventing a
-    second evaluation of the same campaign/candidate identity.
+    The reservation is deliberately written before any holdout backtest. If the
+    workflow crashes after the reservation is durably pushed, a future run must
+    fail closed rather than silently opening the same final exam a second time.
     """
     _assert_pre_holdout_eligibility(payload)
+    claim = str(claim_run_id or "").strip()
+    if not claim:
+        raise ValueError("Final holdout reservation requires a claim_run_id")
     evaluation_id, identity = _canonical_candidate_identity(payload)
+    result = payload.get("result") or {}
+    return {
+        "schema_version": FINAL_HOLDOUT_SCHEMA_VERSION,
+        "evaluation_id": evaluation_id,
+        "identity": identity,
+        "state": FINAL_HOLDOUT_STATE_RESERVED,
+        "reserved_at_utc": datetime.now(timezone.utc).isoformat(),
+        "reservation_claim_run_id": claim,
+        "opened_once": False,
+        "opened_at_utc": None,
+        "pre_holdout_research_run_id": result.get("research_run_id"),
+        "pre_holdout_evidence_digest": _pre_holdout_evidence_digest(payload),
+        "policy": _policy(
+            minimum_completed_trades=minimum_completed_trades,
+            max_drawdown_percent=max_drawdown_percent,
+        ),
+        "result": None,
+    }
+
+
+def _assert_matching_ledger_identity(
+    ledger: dict[str, Any],
+    payload: dict[str, Any],
+) -> None:
+    evaluation_id, identity = _canonical_candidate_identity(payload)
+    if ledger.get("evaluation_id") != evaluation_id or ledger.get("identity") != identity:
+        raise ValueError(
+            "Final holdout ledger identity collision; refusing to overwrite prior evidence"
+        )
+    if ledger.get("schema_version") != FINAL_HOLDOUT_SCHEMA_VERSION:
+        raise ValueError("Unsupported final holdout ledger schema")
+
+
+def evaluate_reserved_final_holdout(
+    payload: dict[str, Any],
+    reservation: dict[str, Any],
+    *,
+    claim_run_id: str,
+    backtest_fn: BacktestFn = backtest_stock,
+) -> dict[str, Any]:
+    """Open Holdout only after the matching reservation has been persisted.
+
+    The caller must persist the reservation to durable storage before invoking
+    this function. A reservation from another run is never automatically taken
+    over: that ambiguous crash-recovery case intentionally fails closed.
+    """
+    _assert_pre_holdout_eligibility(payload)
+    _assert_matching_ledger_identity(reservation, payload)
+    claim = str(claim_run_id or "").strip()
+    if reservation.get("state") != FINAL_HOLDOUT_STATE_RESERVED:
+        raise ValueError("Final holdout is not in the reserved-before-open state")
+    if reservation.get("opened_once") is not False:
+        raise ValueError("Reserved final holdout is unexpectedly already marked opened")
+    if reservation.get("reservation_claim_run_id") != claim:
+        raise ValueError("Final holdout reservation belongs to another workflow run")
+
     result = payload["result"]
     selected = result["selected_candidate"]
+    identity = reservation["identity"]
     holdout_start, holdout_end = identity["holdout_window"]
     candidate = ResearchCandidate(
         candidate_id=str(selected["candidate_id"]),
@@ -138,54 +223,63 @@ def evaluate_final_holdout_once(
         **candidate.parameters,
     )
     metrics = _validation_metrics(report)
+    policy = reservation.get("policy") or {}
     holdout_result = evaluate_candidate(
         candidate,
         metrics,
-        min_trades=max(1, int(minimum_completed_trades)),
-        max_drawdown_percent=float(max_drawdown_percent),
+        min_trades=max(1, int(policy.get("minimum_completed_trades", 1) or 1)),
+        max_drawdown_percent=float(
+            policy.get("max_drawdown_percent", FINAL_HOLDOUT_MAX_DRAWDOWN_PERCENT)
+        ),
     )
     passed = holdout_result.decision is ExperimentDecision.HOLDOUT_READY
 
-    pre_holdout_digest_payload = json.dumps(
-        {
-            "research_run_id": result.get("research_run_id"),
-            "data_fingerprints": result.get("data_fingerprints") or [],
-            "promotion_eligibility": result.get("promotion_eligibility") or {},
-            "selected_candidate": selected,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-
     return {
-        "schema_version": FINAL_HOLDOUT_SCHEMA_VERSION,
-        "evaluation_id": evaluation_id,
-        "identity": identity,
-        "opened_at_utc": datetime.now(timezone.utc).isoformat(),
+        **reservation,
+        "state": FINAL_HOLDOUT_STATE_EVALUATED,
         "opened_once": True,
-        "pre_holdout_research_run_id": result.get("research_run_id"),
-        "pre_holdout_evidence_digest": hashlib.sha256(
-            pre_holdout_digest_payload.encode("utf-8")
-        ).hexdigest(),
-        "policy": {
-            "rubric": "same_fixed_validation_rubric_no_post_holdout_retuning",
-            "minimum_completed_trades": max(1, int(minimum_completed_trades)),
-            "max_drawdown_percent": float(max_drawdown_percent),
-            "pass_requires": "HOLDOUT_READY_under_fixed_rubric",
-            "holdout_feedback_to_train": False,
-            "candidate_generation_after_open": False,
-        },
+        "opened_at_utc": datetime.now(timezone.utc).isoformat(),
         "result": {
             "status": "FINAL_HOLDOUT_PASS" if passed else "FINAL_HOLDOUT_FAIL",
             "passed": passed,
             "decision": holdout_result.decision.value,
             "research_score": holdout_result.research_score,
             "reasons": list(holdout_result.reasons),
-            "metrics": _public_metrics(holdout_result.validation_metrics),
+            "metrics": {
+                key: value
+                for key, value in holdout_result.validation_metrics.items()
+                if not key.startswith("_")
+            },
             "candidate": asdict(candidate),
         },
     }
+
+
+def evaluate_final_holdout_once(
+    payload: dict[str, Any],
+    *,
+    backtest_fn: BacktestFn = backtest_stock,
+    minimum_completed_trades: int = FINAL_HOLDOUT_MIN_COMPLETED_TRADES,
+    max_drawdown_percent: float = FINAL_HOLDOUT_MAX_DRAWDOWN_PERCENT,
+) -> dict[str, Any]:
+    """Deterministic test helper; production uses durable reserve then evaluate.
+
+    This wrapper preserves a convenient unit-test API. It does not provide the
+    crash-safe durability guarantee by itself and therefore must not be called
+    by the production daily workflow.
+    """
+    reservation = reserve_final_holdout(
+        payload,
+        claim_run_id="unit-test-inline-reservation",
+        minimum_completed_trades=minimum_completed_trades,
+        max_drawdown_percent=max_drawdown_percent,
+    )
+    return evaluate_reserved_final_holdout(
+        payload,
+        reservation,
+        claim_run_id="unit-test-inline-reservation",
+        backtest_fn=backtest_fn,
+    )
 
 
 def load_existing_ledger(path: Path, payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -194,11 +288,14 @@ def load_existing_ledger(path: Path, payload: dict[str, Any]) -> dict[str, Any] 
     existing = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(existing, dict):
         raise ValueError(f"Malformed final holdout ledger: {path}")
-    evaluation_id, identity = _canonical_candidate_identity(payload)
-    if existing.get("evaluation_id") != evaluation_id or existing.get("identity") != identity:
-        raise ValueError(
-            "Final holdout ledger identity collision; refusing to overwrite prior evidence"
-        )
-    if existing.get("opened_once") is not True:
-        raise ValueError("Existing final holdout ledger is not marked one-shot")
+    _assert_matching_ledger_identity(existing, payload)
+    state = existing.get("state")
+    if state == FINAL_HOLDOUT_STATE_RESERVED:
+        if existing.get("opened_once") is not False:
+            raise ValueError("Reserved final holdout ledger is incorrectly marked opened")
+    elif state == FINAL_HOLDOUT_STATE_EVALUATED:
+        if existing.get("opened_once") is not True:
+            raise ValueError("Evaluated final holdout ledger is not marked one-shot")
+    else:
+        raise ValueError("Final holdout ledger has an unsupported state")
     return existing

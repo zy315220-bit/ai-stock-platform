@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-08-25T16:28:13.576255+00:00",
+  "system_status": "OPERATIONAL",
+  "system_ready": true,
+  "research_engine_complete": true,
+  "certified_robot_count": 0,
+  "champion_discovery_status": "SEARCH_CONTINUES",
+  "completion_semantics": "research_engine_complete means the autonomous research lifecycle is wired and integrity checks pass; it does not assert that a strategy has passed the one-shot Final Holdout.",
+  "passed_check_count": 10,
+  "failed_check_count": 0,
+  "checks": [
+    {
+      "name": "complete_universe",
+      "passed": true,
+      "detail": "expected=20 completed=20"
+    },
+    {
+      "name": "aggregate_integrity_pass",
+      "passed": true,
+      "detail": "integrity_status=PASS"
+    },
+    {
+      "name": "train_only_memory",
+      "passed": true,
+      "detail": "adaptive memory must be TRAIN_ONLY with validation/holdout feedback disabled"
+    },
+    {
+      "name": "canonical_train_identity_verified",
+      "passed": true,
+      "detail": "verified=20/20"
+    },
+    {
+      "name": "final_holdout_not_leaked",
+      "passed": true,
+      "detail": "daily adaptive snapshot must never open Final Holdout itself"
+    },
+    {
+      "name": "paper_guided_ranking_registered",
+      "passed": true,
+      "detail": "ranking_schema=paper-guided-evidence-ranking-v1"
+    },
+    {
+      "name": "model_selection_diagnostics_complete",
+      "passed": true,
+      "detail": "model_selection_symbols=20"
+    },
+    {
+      "name": "bottleneck_observer_complete",
+      "passed": true,
+      "detail": "bottleneck_symbols=20 policy=OBSERVATION_ONLY: validation/holdout diagnostics must not feed candidate generation or train-memory adaptation"
+    },
+    {
+      "name": "one_shot_final_holdout_registered",
+      "passed": true,
+      "detail": "final holdout must be one-shot, promotion-gated, immutable, and feedback-isolated"
+    },
+    {
+      "name": "all_eligible_candidates_accounted_for",
+      "passed": true,
+      "detail": "eligible=0 accounted_for=0"
+    }
+  ]
+}

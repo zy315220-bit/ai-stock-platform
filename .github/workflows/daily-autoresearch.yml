@@ -12,6 +12,7 @@ on:
       - "backend/scripts/run_daily_autoresearch.py"
       - "backend/scripts/aggregate_daily_autoresearch.py"
       - "backend/scripts/summarize_model_selection_evidence.py"
+      - "backend/scripts/summarize_gate_bottlenecks.py"
   schedule:
     - cron: "30 10 * * 1-5"
   workflow_dispatch:
@@ -127,6 +128,11 @@ jobs:
           cd backend && python -m scripts.summarize_model_selection_evidence
           --input-dir research_artifacts/daily
           --output research_artifacts/published/daily/model-selection-evidence.json
+      - name: Summarize promotion gate bottlenecks
+        run: >-
+          cd backend && python -m scripts.summarize_gate_bottlenecks
+          --input-dir research_artifacts/daily
+          --output research_artifacts/published/daily/gate-bottlenecks.json
       - name: Upload immutable daily snapshot
         uses: actions/upload-artifact@v4
         with:
@@ -134,6 +140,7 @@ jobs:
           path: |
             backend/research_artifacts/published/daily/latest.json
             backend/research_artifacts/published/daily/model-selection-evidence.json
+            backend/research_artifacts/published/daily/gate-bottlenecks.json
             backend/research_artifacts/published/daily/memory/*.json
           if-no-files-found: error
           retention-days: 90
@@ -153,10 +160,11 @@ jobs:
           cp backend/research_artifacts/published/daily/latest.json research-data/daily/latest.json
           cp backend/research_artifacts/published/daily/latest.json "research-data/daily/history/${RESEARCH_DATE}.json"
           cp backend/research_artifacts/published/daily/model-selection-evidence.json research-data/daily/diagnostics/model-selection-evidence.json
+          cp backend/research_artifacts/published/daily/gate-bottlenecks.json research-data/daily/diagnostics/gate-bottlenecks.json
           cp backend/research_artifacts/published/daily/memory/*.json research-data/daily/memory/
           git -C research-data config user.name "ai-stock-research-bot"
           git -C research-data config user.email "actions@users.noreply.github.com"
-          git -C research-data add daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics/model-selection-evidence.json daily/memory
+          git -C research-data add daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics/model-selection-evidence.json daily/diagnostics/gate-bottlenecks.json daily/memory
           if git -C research-data diff --cached --quiet; then
             echo "Data fingerprints are unchanged; no duplicate snapshot commit needed."
             exit 0

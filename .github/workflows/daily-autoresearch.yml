@@ -82,7 +82,7 @@ jobs:
           python -m scripts.run_daily_autoresearch
           --stock-code "${{ matrix.stock }}"
           --as-of-date "${{ steps.research-date.outputs.value }}"
-          --max-experiments 24
+          --max-experiments 32
           --attempts 2
           --retry-delay-seconds 20
           --prior-memory "../research-data/daily/memory/${{ matrix.stock }}.json"

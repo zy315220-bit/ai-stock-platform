@@ -10,7 +10,7 @@ from app.services.scanner_service import SCANNER_UNIVERSE
 from scripts.run_daily_autoresearch import write_json_atomic
 
 
-RESEARCH_SYSTEM_AUDIT_SCHEMA = 2
+RESEARCH_SYSTEM_AUDIT_SCHEMA = 3
 REQUIRED_RANKING_SCHEMA = "paper-guided-evidence-ranking-v1"
 REQUIRED_DAILY_SCHEDULE = "30 22,10 * * *"
 
@@ -29,6 +29,8 @@ def audit_research_system(
     bottlenecks: dict[str, Any],
     final_holdout: dict[str, Any],
     certified_robots: dict[str, Any],
+    challenger_roster: dict[str, Any],
+    competition_tournament: dict[str, Any],
     expected_universe: tuple[str, ...] = SCANNER_UNIVERSE,
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
@@ -158,6 +160,48 @@ def audit_research_system(
         f"certified_count={certified_count} registry_rows={len(robots) if isinstance(robots, list) else 'invalid'}",
     )
 
+    challenger_policy = challenger_roster.get("policy") or {}
+    challengers = challenger_roster.get("challengers") or []
+    challenger_count = int(challenger_roster.get("challenger_count", -1) or 0)
+    check(
+        "certified_competition_bridge_registered",
+        challenger_roster.get("schema_version") == 1
+        and isinstance(challengers, list)
+        and challenger_count == certified_count == len(challengers)
+        and challenger_policy.get("certified_final_holdout_required") is True
+        and challenger_policy.get("immutable_rule_fingerprint_required") is True
+        and challenger_policy.get("competition_rebinds_capital_cost_risk_and_universe") is True
+        and challenger_policy.get("holdout_score_used_for_ranking") is False
+        and challenger_policy.get("same_campaign_competition_feedback_to_train") is False,
+        f"certified={certified_count} challengers={challenger_count}",
+    )
+
+    tournament_status = competition_tournament.get("status")
+    tournament_challenger_count = int(
+        competition_tournament.get("challenger_count", -1) or 0
+    )
+    promotion = competition_tournament.get("promotion") or {}
+    tournament_valid = (
+        tournament_challenger_count == challenger_count
+        and promotion.get("competition_feedback_to_same_campaign_train") is False
+        if challenger_count > 0
+        else (
+            tournament_status == "WAITING_FOR_CERTIFIED_ROBOT"
+            and tournament_challenger_count == 0
+            and promotion.get("challenger_replaced_incumbent") is False
+        )
+    )
+    if challenger_count > 0:
+        tournament_valid = tournament_valid and tournament_status == "completed"
+    check(
+        "certified_challenger_tournament_closed_loop",
+        tournament_valid,
+        (
+            f"status={tournament_status} challengers={tournament_challenger_count} "
+            f"feedback_to_train={promotion.get('competition_feedback_to_same_campaign_train')}"
+        ),
+    )
+
     failed = [row for row in checks if not row["passed"]]
     system_ready = not failed
     return {
@@ -166,14 +210,16 @@ def audit_research_system(
         "system_status": "OPERATIONAL" if system_ready else "FAIL_CLOSED",
         "system_ready": system_ready,
         "research_engine_complete": system_ready,
+        "competition_research_loop_complete": system_ready,
         "certified_robot_count": certified_count,
+        "competition_challenger_count": challenger_count,
         "champion_discovery_status": (
             "CERTIFIED_ROBOT_AVAILABLE" if certified_count else "SEARCH_CONTINUES"
         ),
         "completion_semantics": (
-            "research_engine_complete means the autonomous research lifecycle is wired "
-            "and integrity checks pass; it does not assert that a strategy has passed "
-            "the one-shot Final Holdout."
+            "research_engine_complete means the autonomous Train-to-Final-Holdout lifecycle, "
+            "certified challenger bridge, and competition feedback isolation are wired and "
+            "integrity checks pass; it does not assert that a strategy has passed Final Holdout."
         ),
         "passed_check_count": len(checks) - len(failed),
         "failed_check_count": len(failed),
@@ -190,6 +236,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bottlenecks", type=Path, required=True)
     parser.add_argument("--final-holdout", type=Path, required=True)
     parser.add_argument("--certified-robots", type=Path, required=True)
+    parser.add_argument("--challenger-roster", type=Path, required=True)
+    parser.add_argument("--competition-tournament", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -202,6 +250,8 @@ def main() -> None:
         bottlenecks=_load(args.bottlenecks),
         final_holdout=_load(args.final_holdout),
         certified_robots=_load(args.certified_robots),
+        challenger_roster=_load(args.challenger_roster),
+        competition_tournament=_load(args.competition_tournament),
     )
     write_json_atomic(args.output, audit)
     print(json.dumps(audit, ensure_ascii=False))

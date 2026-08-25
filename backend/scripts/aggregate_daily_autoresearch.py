@@ -18,12 +18,47 @@ from app.services.research_lab.training_memory import (
 from scripts.run_daily_autoresearch import write_json_atomic
 
 
+_DECISION_RANK = {
+    "DISCARD": 0,
+    "KEEP": 1,
+    "HOLDOUT_READY": 2,
+}
+_CONFIRMATION_GATE_TOTAL = 7
+
+
 def _number(value: Any) -> float:
     try:
         parsed = float(value)
     except (TypeError, ValueError):
         return 0.0
     return parsed if math.isfinite(parsed) else 0.0
+
+
+def _decision_rank(value: Any) -> int:
+    return _DECISION_RANK.get(str(value or "").upper(), -1)
+
+
+def _confirmation_gate_pass_count(candidate: dict[str, Any]) -> int:
+    """Count independent confirmation layers after the validation decision.
+
+    This is intentionally a confirmation count, not a train-search objective.
+    Validation/model-selection evidence must never feed candidate generation or
+    TRAIN_ONLY memory. The count prevents one noisy small-sample statistic from
+    dominating the cross-universe exploratory ranking.
+    """
+    validation = candidate.get("validation") or {}
+    model_selection = candidate.get("model_selection") or {}
+    return sum(
+        (
+            bool(candidate.get("regime_robust")),
+            bool(candidate.get("walk_forward_sample_sufficient")),
+            _number(candidate.get("walk_forward_positive_slice_ratio")) >= 0.5,
+            bool(validation.get("statistical_quality_pass")),
+            bool(validation.get("deflated_sharpe_pass")),
+            bool(model_selection.get("cscv_pbo_pass")),
+            bool(model_selection.get("hansen_spa_pass")),
+        )
+    )
 
 
 def _candidate_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -35,6 +70,9 @@ def _candidate_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
     metrics = best.get("validation_metrics") or {}
     statistics = metrics.get("statistical_evidence") or {}
     deflated = metrics.get("deflated_sharpe") or {}
+    model_selection = result.get("model_selection_evidence") or {}
+    pbo = model_selection.get("cscv_pbo") or {}
+    spa = model_selection.get("hansen_spa") or {}
     tournament = result.get("market_regime_tournament") or []
     robustness: dict[str, Any] = {}
     if tournament and isinstance(tournament[0], dict):
@@ -42,6 +80,7 @@ def _candidate_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
         robustness = matrix.get("robustness") or {}
     walk_forward = result.get("walk_forward_matrix") or {}
     walk_forward_aggregate = walk_forward.get("aggregate") or {}
+    walk_forward_quality = walk_forward_aggregate.get("evidence_quality") or {}
     eligibility = result.get("promotion_eligibility") or {}
     version_payload = json.dumps(
         {
@@ -60,7 +99,7 @@ def _candidate_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
     robot_version_id = hashlib.sha256(
         version_payload.encode("utf-8")
     ).hexdigest()[:24]
-    return {
+    summary = {
         "stock_code": payload.get("stock_code"),
         "research_run_id": result.get("research_run_id"),
         "data_fingerprints": result.get("data_fingerprints") or [],
@@ -71,6 +110,7 @@ def _candidate_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
         "hypothesis": selected.get("hypothesis"),
         "parameters": selected.get("parameters") or {},
         "decision": best.get("decision"),
+        "decision_rank": _decision_rank(best.get("decision")),
         "research_score": _number(best.get("research_score")),
         "eligible_for_one_shot_holdout": bool(
             eligibility.get("eligible_for_one_shot_holdout")
@@ -88,29 +128,70 @@ def _candidate_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
             "probabilistic_sharpe_ratio_percent": _number(
                 statistics.get("probabilistic_sharpe_ratio_percent")
             ),
+            "statistical_quality_pass": bool(
+                statistics.get("statistical_quality_pass")
+            ),
             "deflated_sharpe_probability_percent": _number(
                 deflated.get("deflated_sharpe_probability_percent")
+            ),
+            "deflated_sharpe_pass": bool(
+                deflated.get("multiple_testing_pass")
+            ),
+        },
+        "model_selection": {
+            "cscv_pbo_available": bool(pbo.get("available")),
+            "cscv_pbo_probability_percent": _number(
+                pbo.get("pbo_probability_percent")
+            ),
+            "cscv_pbo_pass": bool(pbo.get("overfitting_risk_pass")),
+            "hansen_spa_available": bool(spa.get("available")),
+            "hansen_spa_p_value": _number(spa.get("spa_p_value")),
+            "hansen_spa_pass": bool(
+                spa.get("superior_predictive_ability_pass")
             ),
         },
         "regime_robust": bool(
             robustness.get("robust_across_required_regimes")
         ),
         "regime_score": _number(robustness.get("robustness_score")),
+        "walk_forward_sample_sufficient": bool(
+            walk_forward_quality.get("sample_sufficient")
+        ),
         "walk_forward_positive_slice_ratio": _number(
             walk_forward_aggregate.get("positive_slice_ratio")
         ),
     }
+    summary["confirmation_gate_pass_count"] = (
+        _confirmation_gate_pass_count(summary)
+    )
+    summary["confirmation_gate_total"] = _CONFIRMATION_GATE_TOTAL
+    return summary
 
 
 def _ranking_key(candidate: dict[str, Any]) -> tuple[Any, ...]:
+    """Paper-guided exploratory ranking; never a production champion rule.
+
+    The exact lexicographic order is an engineering policy, not a claim that a
+    paper prescribes these fields verbatim. The literature-backed principles are:
+    gate before rank, correct for multiple testing/overfitting, demand temporal
+    and regime robustness, and keep small-sample win-rate bounds as supporting
+    evidence rather than the primary selector.
+    """
     validation = candidate.get("validation") or {}
+    model_selection = candidate.get("model_selection") or {}
     return (
         bool(candidate.get("eligible_for_one_shot_holdout")),
+        _decision_rank(candidate.get("decision")),
+        int(candidate.get("confirmation_gate_pass_count", 0) or 0),
         bool(candidate.get("regime_robust")),
+        bool(candidate.get("walk_forward_sample_sufficient")),
         _number(candidate.get("walk_forward_positive_slice_ratio")),
-        _number(validation.get("wilson_lower_percent")),
+        bool(model_selection.get("hansen_spa_pass")),
+        bool(model_selection.get("cscv_pbo_pass")),
+        bool(validation.get("deflated_sharpe_pass")),
         _number(validation.get("deflated_sharpe_probability_percent")),
         _number(candidate.get("research_score")),
+        _number(validation.get("wilson_lower_percent")),
         -abs(_number(validation.get("max_drawdown_percent"))),
         str(candidate.get("stock_code") or ""),
     )
@@ -186,7 +267,8 @@ def aggregate_payloads(
     ]
     candidates.sort(key=_ranking_key, reverse=True)
     eligible_count = sum(
-        1 for candidate in candidates
+        1
+        for candidate in candidates
         if candidate.get("eligible_for_one_shot_holdout")
     )
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -208,9 +290,10 @@ def aggregate_payloads(
             "enabled": True,
             "mode": "daily_unattended",
             "status": "COMPLETED",
-            "schedule": "30 10 * * 1-5",
+            "schedule": "30 22,10 * * *",
             "schedule_timezone": "Asia/Taipei",
-            "schedule_label": "每個台股交易日 18:30",
+            "schedule_label": "每日 06:30 與 18:30",
+            "sessions_per_day": 2,
             "runner": "github_actions_durable_matrix",
             "manual_action_required": False,
         },
@@ -275,10 +358,49 @@ def aggregate_payloads(
             "holdout_feedback_used": False,
         },
         "ranking_policy": (
-            "Exploratory evidence ranking only: promotion gate, regime robustness, "
-            "walk-forward stability, Wilson lower bound, DSR, score, drawdown. "
-            "No candidate is called a production champion before one-shot holdout."
+            "Paper-guided exploratory evidence hierarchy: promotion eligibility, "
+            "validation decision stage, independent confirmation-gate count, regime "
+            "and walk-forward robustness, SPA/PBO/DSR evidence, research score, "
+            "Wilson lower bound, then drawdown. Validation ranking is observation-only "
+            "and never feeds TRAIN_ONLY search memory."
         ),
+        "ranking_methodology": {
+            "schema": "paper-guided-evidence-ranking-v1",
+            "production_champion_rule": "one_shot_holdout_required",
+            "small_sample_win_rate_role": "supporting_tiebreaker_only",
+            "references": [
+                {
+                    "method": "PSR / MinTRL",
+                    "citation": "Bailey & Lopez de Prado (2012), The Sharpe Ratio Efficient Frontier",
+                    "doi": "10.2139/ssrn.1821643",
+                },
+                {
+                    "method": "Deflated Sharpe Ratio",
+                    "citation": "Bailey & Lopez de Prado (2014), The Deflated Sharpe Ratio",
+                    "doi": "10.3905/jpm.2014.40.5.094",
+                },
+                {
+                    "method": "CSCV / PBO",
+                    "citation": "Bailey et al. (2017), The Probability of Backtest Overfitting",
+                    "doi": "10.21314/JCF.2016.322",
+                },
+                {
+                    "method": "Hansen SPA",
+                    "citation": "Hansen (2005), A Test for Superior Predictive Ability",
+                    "doi": "10.1198/073500105000000063",
+                },
+                {
+                    "method": "Model Confidence Set",
+                    "citation": "Hansen, Lunde & Nason (2011), The Model Confidence Set",
+                    "doi": "10.3982/ECTA5771",
+                },
+                {
+                    "method": "Reality Check",
+                    "citation": "White (2000), A Reality Check for Data Snooping",
+                    "doi": "10.1111/1468-0262.00152",
+                },
+            ],
+        },
         "top_candidate": candidates[0] if candidates else None,
         "candidates": candidates,
         "runs": [

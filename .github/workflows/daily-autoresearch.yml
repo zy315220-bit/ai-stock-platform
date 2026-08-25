@@ -53,14 +53,14 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check out prior train-only memory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: research-data
           path: research-data
           fetch-depth: 1
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -81,7 +81,7 @@ jobs:
           --prior-memory "../research-data/daily/memory/${{ matrix.stock }}.json"
           --output "research_artifacts/daily/${{ matrix.stock }}.json"
       - name: Upload auditable shard
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: daily-research-${{ matrix.stock }}
           path: backend/research_artifacts/daily/${{ matrix.stock }}.json
@@ -94,8 +94,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -103,7 +103,7 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
       - name: Download all completed shards
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: daily-research-*
           path: backend/research_artifacts/daily
@@ -129,7 +129,7 @@ jobs:
           --input-dir research_artifacts/daily
           --output research_artifacts/published/daily/gate-bottlenecks.json
       - name: Check out durable research-data branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: research-data
           path: research-data
@@ -205,7 +205,7 @@ jobs:
           --competition-tournament research_artifacts/published/daily/competition-tournament.json
           --output research_artifacts/published/daily/research-system-audit.json
       - name: Upload immutable daily snapshot
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: daily-autoresearch-${{ steps.research-date.outputs.value }}
           path: |

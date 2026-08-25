@@ -10,7 +10,7 @@ from app.services.scanner_service import SCANNER_UNIVERSE
 from scripts.run_daily_autoresearch import write_json_atomic
 
 
-RESEARCH_SYSTEM_AUDIT_SCHEMA = 1
+RESEARCH_SYSTEM_AUDIT_SCHEMA = 2
 REQUIRED_RANKING_SCHEMA = "paper-guided-evidence-ranking-v1"
 
 
@@ -27,6 +27,7 @@ def audit_research_system(
     model_selection: dict[str, Any],
     bottlenecks: dict[str, Any],
     final_holdout: dict[str, Any],
+    certified_robots: dict[str, Any],
     expected_universe: tuple[str, ...] = SCANNER_UNIVERSE,
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
@@ -91,14 +92,25 @@ def audit_research_system(
             f"policy={bottlenecks.get('feedback_policy')}"
         ),
     )
+
     final_policy = final_holdout.get("policy") or {}
     check(
         "one_shot_final_holdout_registered",
         final_policy.get("one_shot") is True
+        and final_policy.get("durable_reservation_before_open") is True
         and final_policy.get("open_only_after_all_promotion_gates_pass") is True
         and final_policy.get("holdout_feedback_to_train") is False
         and final_policy.get("overwrite_existing_ledger") is False,
-        "final holdout must be one-shot, promotion-gated, immutable, and feedback-isolated",
+        (
+            "final holdout must be durably reserved before read, one-shot, "
+            "promotion-gated, immutable, and feedback-isolated"
+        ),
+    )
+    blocked = int(final_holdout.get("blocked_reservation_count", 0) or 0)
+    check(
+        "no_ambiguous_holdout_reservations_in_run",
+        blocked == 0,
+        f"blocked_reservations={blocked}",
     )
     evaluated = int(final_holdout.get("newly_opened_count", 0) or 0) + int(
         final_holdout.get("already_evaluated_count", 0) or 0
@@ -110,8 +122,27 @@ def audit_research_system(
         f"eligible={eligible} accounted_for={evaluated}",
     )
 
+    unresolved = int(certified_robots.get("unresolved_reservation_count", 0) or 0)
+    check(
+        "no_unresolved_global_holdout_reservations",
+        unresolved == 0,
+        f"unresolved_reservations={unresolved}",
+    )
+    robots = certified_robots.get("robots") or []
+    certified_count = int(certified_robots.get("certified_robot_count", 0) or 0)
+    check(
+        "certified_registry_consistent",
+        isinstance(robots, list)
+        and certified_count == len(robots)
+        and all(
+            isinstance(robot, dict)
+            and robot.get("status") == "CERTIFIED_FINAL_HOLDOUT_PASS"
+            for robot in robots
+        ),
+        f"certified_count={certified_count} registry_rows={len(robots) if isinstance(robots, list) else 'invalid'}",
+    )
+
     failed = [row for row in checks if not row["passed"]]
-    certified_count = int(final_holdout.get("final_pass_count", 0) or 0)
     system_ready = not failed
     return {
         "schema_version": RESEARCH_SYSTEM_AUDIT_SCHEMA,
@@ -142,6 +173,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-selection", type=Path, required=True)
     parser.add_argument("--bottlenecks", type=Path, required=True)
     parser.add_argument("--final-holdout", type=Path, required=True)
+    parser.add_argument("--certified-robots", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -153,6 +185,7 @@ def main() -> None:
         model_selection=_load(args.model_selection),
         bottlenecks=_load(args.bottlenecks),
         final_holdout=_load(args.final_holdout),
+        certified_robots=_load(args.certified_robots),
     )
     write_json_atomic(args.output, audit)
     print(json.dumps(audit, ensure_ascii=False))

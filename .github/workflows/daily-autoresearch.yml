@@ -165,6 +165,11 @@ jobs:
           --ledger-root ../research-data/holdout-ledger
           --summary-output research_artifacts/published/daily/final-holdout-evaluations.json
           --certified-output research_artifacts/published/daily/certified-robots.json
+      - name: Build certified competition challenger queue
+        run: >-
+          cd backend && python -m scripts.build_competition_challengers
+          --certified-registry research_artifacts/published/daily/certified-robots.json
+          --output research_artifacts/published/daily/competition-challengers.json
       - name: Persist evaluated Final Holdout ledger immediately
         env:
           RUN_ID: ${{ github.run_id }}
@@ -198,11 +203,12 @@ jobs:
             backend/research_artifacts/published/daily/final-holdout-reservations.json
             backend/research_artifacts/published/daily/final-holdout-evaluations.json
             backend/research_artifacts/published/daily/certified-robots.json
+            backend/research_artifacts/published/daily/competition-challengers.json
             backend/research_artifacts/published/daily/research-system-audit.json
             backend/research_artifacts/published/daily/memory/*.json
           if-no-files-found: error
           retention-days: 21
-      - name: Publish latest, diagnostics, certified robots, per-run audit, and durable memory
+      - name: Publish latest, diagnostics, certified robots, challengers, per-run audit, and durable memory
         env:
           RESEARCH_DATE: ${{ steps.research-date.outputs.value }}
           RUN_ID: ${{ github.run_id }}
@@ -210,6 +216,7 @@ jobs:
           mkdir -p research-data/daily/history
           mkdir -p research-data/daily/memory
           mkdir -p research-data/daily/diagnostics
+          mkdir -p research-data/competition
           mkdir -p "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}"
           cp backend/research_artifacts/published/daily/latest.json research-data/daily/latest.json
           cp backend/research_artifacts/published/daily/latest.json "research-data/daily/history/${RESEARCH_DATE}.json"
@@ -219,6 +226,7 @@ jobs:
           cp backend/research_artifacts/published/daily/final-holdout-evaluations.json research-data/daily/diagnostics/final-holdout-evaluations.json
           cp backend/research_artifacts/published/daily/research-system-audit.json research-data/daily/diagnostics/research-system-audit.json
           cp backend/research_artifacts/published/daily/certified-robots.json research-data/certified-robots.json
+          cp backend/research_artifacts/published/daily/competition-challengers.json research-data/competition/challengers.json
           cp backend/research_artifacts/published/daily/memory/*.json research-data/daily/memory/
           cp backend/research_artifacts/published/daily/latest.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/latest.json"
           cp backend/research_artifacts/published/daily/model-selection-evidence.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/model-selection-evidence.json"
@@ -226,8 +234,9 @@ jobs:
           cp backend/research_artifacts/published/daily/final-holdout-reservations.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/final-holdout-reservations.json"
           cp backend/research_artifacts/published/daily/final-holdout-evaluations.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/final-holdout-evaluations.json"
           cp backend/research_artifacts/published/daily/certified-robots.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/certified-robots.json"
+          cp backend/research_artifacts/published/daily/competition-challengers.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/competition-challengers.json"
           cp backend/research_artifacts/published/daily/research-system-audit.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/research-system-audit.json"
-          git -C research-data add certified-robots.json daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics daily/memory "daily/runs/${RESEARCH_DATE}/${RUN_ID}"
+          git -C research-data add certified-robots.json competition/challengers.json daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics daily/memory "daily/runs/${RESEARCH_DATE}/${RUN_ID}"
           if [ -d research-data/holdout-ledger ]; then
             git -C research-data add holdout-ledger
           fi

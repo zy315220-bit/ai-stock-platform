@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "phase": "EVALUATE_RESERVED_ONCE",
+  "phase": "RESERVE_BEFORE_OPEN",
   "policy": {
     "one_shot": true,
     "durable_reservation_before_open": true,
@@ -11,10 +11,10 @@
   },
   "claim_run_id": "32872414281",
   "eligible_candidate_count": 0,
-  "newly_opened_count": 0,
+  "new_reservation_count": 0,
+  "owned_existing_reservation_count": 0,
   "already_evaluated_count": 0,
   "blocked_reservation_count": 0,
-  "final_pass_count": 0,
-  "final_fail_count": 0,
+  "holdout_opened_in_this_phase": 0,
   "rows": []
 }

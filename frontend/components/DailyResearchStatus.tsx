@@ -63,6 +63,19 @@ type DailySnapshot = {
   top_candidate?: Candidate | null;
 };
 
+type SystemAudit = {
+  system_status?: "OPERATIONAL" | "FAIL_CLOSED";
+  system_ready?: boolean;
+  research_engine_complete?: boolean;
+  passed_check_count?: number;
+  failed_check_count?: number;
+  champion_discovery_status?: string;
+};
+
+type CertifiedRobots = {
+  certified_robot_count?: number;
+};
+
 type DailyStatus = {
   enabled: boolean;
   manual_action_required: boolean;
@@ -79,6 +92,8 @@ type DailyStatus = {
     url?: string;
   };
   latest_snapshot: DailySnapshot | null;
+  system_audit?: SystemAudit | null;
+  certified_robots?: CertifiedRobots | null;
   snapshot_available: boolean;
 };
 
@@ -157,6 +172,8 @@ export default function DailyResearchStatus() {
   const snapshot = status?.latest_snapshot ?? null;
   const top = snapshot?.top_candidate ?? null;
   const memory = snapshot?.training_memory ?? null;
+  const audit = status?.system_audit ?? null;
+  const certifiedCount = status?.certified_robots?.certified_robot_count ?? 0;
   const running = status?.workflow?.status === "in_progress";
 
   return (
@@ -181,6 +198,11 @@ export default function DailyResearchStatus() {
           <small>{status?.schedule.label ?? "每日 06:30 與 18:30"}</small>
         </article>
         <article>
+          <span>Research Engine</span>
+          <strong>{audit?.system_ready ? "OPERATIONAL" : audit ? "FAIL CLOSED" : "等待全系統稽核"}</strong>
+          <small>{audit ? `${audit.passed_check_count ?? 0} 項通過・${audit.failed_check_count ?? 0} 項失敗` : "每輪結束自動驗證完整生命週期"}</small>
+        </article>
+        <article>
           <span>下次自動研究</span>
           <strong>{formatTaipeiTime(status?.schedule.next_scheduled_at)}</strong>
           <small>Asia/Taipei・每天 {status?.schedule.sessions_per_day ?? 2} 輪</small>
@@ -193,7 +215,12 @@ export default function DailyResearchStatus() {
         <article>
           <span>Promotion Gate</span>
           <strong>{snapshot ? `${snapshot.eligible_candidate_count ?? 0} 名具驗收資格` : "尚無候選"}</strong>
-          <small>Final Holdout：{snapshot?.holdout_opened ? "異常開啟" : "鎖定"}</small>
+          <small>Final Holdout：{snapshot?.holdout_opened ? "異常開啟" : "搜尋階段保持鎖定"}</small>
+        </article>
+        <article>
+          <span>Final Holdout 認證</span>
+          <strong>{certifiedCount} 名正式認證</strong>
+          <small>{certifiedCount > 0 ? "僅收錄一次性 Final Holdout 通過者" : "尚無通過者，研究會繼續"}</small>
         </article>
       </div>
 

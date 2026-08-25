@@ -13,6 +13,7 @@ on:
       - "backend/scripts/aggregate_daily_autoresearch.py"
       - "backend/scripts/summarize_model_selection_evidence.py"
       - "backend/scripts/summarize_gate_bottlenecks.py"
+      - "backend/scripts/run_final_holdout_gate.py"
   schedule:
     # 06:30 and 18:30 Asia/Taipei every day.
     - cron: "30 22,10 * * *"
@@ -104,7 +105,7 @@ jobs:
     name: Publish fail-closed snapshot
     needs: research-shards
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -140,6 +141,18 @@ jobs:
           cd backend && python -m scripts.summarize_gate_bottlenecks
           --input-dir research_artifacts/daily
           --output research_artifacts/published/daily/gate-bottlenecks.json
+      - name: Check out durable research-data branch
+        uses: actions/checkout@v4
+        with:
+          ref: research-data
+          path: research-data
+          fetch-depth: 1
+      - name: Open final holdout only for fully promoted candidates
+        run: >-
+          cd backend && python -m scripts.run_final_holdout_gate
+          --input-dir research_artifacts/daily
+          --ledger-root ../research-data/holdout-ledger
+          --summary-output research_artifacts/published/daily/final-holdout-evaluations.json
       - name: Upload immutable daily snapshot
         uses: actions/upload-artifact@v4
         with:
@@ -148,33 +161,38 @@ jobs:
             backend/research_artifacts/published/daily/latest.json
             backend/research_artifacts/published/daily/model-selection-evidence.json
             backend/research_artifacts/published/daily/gate-bottlenecks.json
+            backend/research_artifacts/published/daily/final-holdout-evaluations.json
             backend/research_artifacts/published/daily/memory/*.json
           if-no-files-found: error
           retention-days: 21
-      - name: Check out durable research-data branch
-        uses: actions/checkout@v4
-        with:
-          ref: research-data
-          path: research-data
-          fetch-depth: 1
-      - name: Publish latest, diagnostics, and dated history
+      - name: Publish latest, diagnostics, per-run audit, and durable memory
         env:
           RESEARCH_DATE: ${{ steps.research-date.outputs.value }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           mkdir -p research-data/daily/history
           mkdir -p research-data/daily/memory
           mkdir -p research-data/daily/diagnostics
+          mkdir -p "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}"
           cp backend/research_artifacts/published/daily/latest.json research-data/daily/latest.json
           cp backend/research_artifacts/published/daily/latest.json "research-data/daily/history/${RESEARCH_DATE}.json"
           cp backend/research_artifacts/published/daily/model-selection-evidence.json research-data/daily/diagnostics/model-selection-evidence.json
           cp backend/research_artifacts/published/daily/gate-bottlenecks.json research-data/daily/diagnostics/gate-bottlenecks.json
+          cp backend/research_artifacts/published/daily/final-holdout-evaluations.json research-data/daily/diagnostics/final-holdout-evaluations.json
           cp backend/research_artifacts/published/daily/memory/*.json research-data/daily/memory/
+          cp backend/research_artifacts/published/daily/latest.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/latest.json"
+          cp backend/research_artifacts/published/daily/model-selection-evidence.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/model-selection-evidence.json"
+          cp backend/research_artifacts/published/daily/gate-bottlenecks.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/gate-bottlenecks.json"
+          cp backend/research_artifacts/published/daily/final-holdout-evaluations.json "research-data/daily/runs/${RESEARCH_DATE}/${RUN_ID}/final-holdout-evaluations.json"
           git -C research-data config user.name "ai-stock-research-bot"
           git -C research-data config user.email "actions@users.noreply.github.com"
-          git -C research-data add daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics/model-selection-evidence.json daily/diagnostics/gate-bottlenecks.json daily/memory
+          git -C research-data add daily/latest.json "daily/history/${RESEARCH_DATE}.json" daily/diagnostics daily/memory "daily/runs/${RESEARCH_DATE}/${RUN_ID}"
+          if [ -d research-data/holdout-ledger ]; then
+            git -C research-data add holdout-ledger
+          fi
           if git -C research-data diff --cached --quiet; then
             echo "Data fingerprints are unchanged; no duplicate snapshot commit needed."
             exit 0
           fi
-          git -C research-data commit -m "research: publish ${RESEARCH_DATE} autonomous results"
+          git -C research-data commit -m "research: publish ${RESEARCH_DATE} autonomous results run ${RUN_ID}"
           git -C research-data push origin HEAD:research-data

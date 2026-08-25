@@ -9,26 +9,46 @@
     "2023-11-24"
   ],
   "as_of_date": "2026-08-25",
-  "last_research_run_id": "126c3da90503c7ffe6f234ab",
+  "last_research_run_id": "e8d72693bdb33718890e7d9c",
   "train_data_identity_schema": "canonical-train-score-series-v1",
-  "train_data_identity": "4329c3beae2fdc06d8dc5606",
+  "train_data_identity": "445fcb309926030505dc3121",
   "train_data_identity_verified": false,
   "train_data_identity_migrated": false,
   "train_data_fingerprints": [
-    "fea73355a72dd1d29cc5"
+    "bf415651030ab11454b8"
   ],
   "seen_parameter_signatures": [
+    "0afad522795ccdfe3c267c90",
+    "10fc17d8cbfeb0b5918d7078",
+    "288570f05e90c5299566e946",
+    "2ab536a011e8ca3f6a4a9721",
+    "2afe00e95875ac5f6ee0d319",
+    "2d07e98910cf87eccedb8744",
     "2f836c89d6aa76789829557a",
     "30b7191b97e5580027069611",
+    "381a32d48216cd571f2ebc2e",
+    "3c3a422473fd8980c416a2d3",
     "3d973bf94d0b0e78ce580752",
     "44eebc61f2a7604e4e36d37c",
     "4bba3958e99d5a5536ef6a85",
+    "561e8da29ea5d1366659db59",
     "5ecfe2cf3f1886848c0ea382",
     "608a4673bc3d2f73a8615397",
+    "646fc1890af1514627582b76",
+    "64e474718736ce7063cde2ad",
     "697758cd8208435486ff65c9",
+    "742b0b2792bf3db0336d4f64",
+    "748d2dd9d781ff093aab2929",
     "7b3d82e7ad5837f776d87cbc",
+    "7bf4144503565cfed19f98e3",
     "901731977bbcec3e428f0824",
+    "95299c17dc5e01dd9cdf335d",
+    "9aff3bcabe182d8d7da8784f",
     "9d6c9f625cae9275a07b9ff8",
+    "9e13cdae2bbf343956fdc157",
+    "af8b9ee3c9702fcc5017994f",
+    "b019c5ee26bae816db302259",
+    "b04b079f87b964a8adfee885",
     "b33efafeb970deca8fec0bc4",
     "bc4a44360e1017950420006d",
     "c5704b614fd3dd92fb50d444",
@@ -38,7 +58,8 @@
     "d90d919e2287fd8de6db4a4c",
     "ee6273e7eefb40002181fa5b",
     "f5c3ee52bee7877d66d9763a",
-    "f797941faf0a2573cf615e79"
+    "f797941faf0a2573cf615e79",
+    "ff7995a837670b6645a3fcce"
   ],
   "elites": [
     {
@@ -64,7 +85,7 @@
       "decision": "HOLDOUT_READY",
       "reasons": [],
       "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
@@ -89,7 +110,7 @@
       "decision": "HOLDOUT_READY",
       "reasons": [],
       "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
@@ -114,7 +135,7 @@
       "decision": "HOLDOUT_READY",
       "reasons": [],
       "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
@@ -139,7 +160,7 @@
       "decision": "HOLDOUT_READY",
       "reasons": [],
       "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
@@ -164,7 +185,7 @@
       "decision": "HOLDOUT_READY",
       "reasons": [],
       "source_generation": 1,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
@@ -189,7 +210,7 @@
       "decision": "HOLDOUT_READY",
       "reasons": [],
       "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
@@ -214,7 +235,7 @@
       "decision": "HOLDOUT_READY",
       "reasons": [],
       "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
@@ -239,11 +260,11 @@
       "decision": "HOLDOUT_READY",
       "reasons": [],
       "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
-        "candidate_id": "mut-a7b12ddcf6ba",
+        "candidate_id": "grid-60-35-score-base-score_or_time-40",
         "strategy_family": "score_engine",
         "parameters": {
           "entry_score": 60,
@@ -256,15 +277,69 @@
           "exit_mode": "score_or_time",
           "max_holding_days": 40
         },
-        "parent_id": "grid-60-35-score_and_rsi_momentum-base-score_or_time-40",
-        "hypothesis": "Adaptive structure mutation of grid-60-35-score_and_rsi_momentum-base-score_or_time-40: entry +0, exit +0; structure=score with 40-session risk exit"
+        "parent_id": null,
+        "hypothesis": "Systematic score-threshold search with score with 40-session risk exit"
       },
       "parameter_signature": "cb08e78e5dd7b4d6b9b8925c",
       "research_score": 49.073,
       "decision": "HOLDOUT_READY",
       "reasons": [],
+      "source_generation": 1,
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
+    },
+    {
+      "candidate": {
+        "candidate_id": "mut-a67c2232a976",
+        "strategy_family": "score_engine_rsi_confirmed",
+        "parameters": {
+          "entry_score": 60,
+          "exit_score": 35,
+          "initial_capital": 1000000.0,
+          "require_ema_trend": false,
+          "ema_fast_column": "EMA20",
+          "ema_slow_column": "EMA60",
+          "entry_mode": "score_and_rsi_momentum",
+          "exit_mode": "score_or_time",
+          "max_holding_days": 20
+        },
+        "parent_id": "grid-60-35-score_and_rsi_momentum-base-score_or_time-40",
+        "hypothesis": "Adaptive duration mutation of grid-60-35-score_and_rsi_momentum-base-score_or_time-40: entry +0, exit +0; max_hold=20 sessions"
+      },
+      "parameter_signature": "742b0b2792bf3db0336d4f64",
+      "research_score": 43.14,
+      "decision": "KEEP",
+      "reasons": [
+        "needs_more_validation"
+      ],
       "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
+    },
+    {
+      "candidate": {
+        "candidate_id": "grid-55-40-score_and_bollinger_breakout-ema5-ema60-score_or_time_or_ema_reversal-80",
+        "strategy_family": "score_engine_bollinger_breakout",
+        "parameters": {
+          "entry_score": 55,
+          "exit_score": 40,
+          "initial_capital": 1000000.0,
+          "require_ema_trend": true,
+          "ema_fast_column": "EMA5",
+          "ema_slow_column": "EMA60",
+          "entry_mode": "score_and_bollinger_breakout",
+          "exit_mode": "score_or_time_or_ema_reversal",
+          "max_holding_days": 80
+        },
+        "parent_id": null,
+        "hypothesis": "Systematic score-threshold search with Bollinger-confirmed wide EMA trend with time and reversal exits"
+      },
+      "parameter_signature": "381a32d48216cd571f2ebc2e",
+      "research_score": 40.866,
+      "decision": "KEEP",
+      "reasons": [
+        "needs_more_validation"
+      ],
+      "source_generation": 1,
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     },
     {
       "candidate": {
@@ -291,61 +366,7 @@
         "needs_more_validation"
       ],
       "source_generation": 1,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
-    },
-    {
-      "candidate": {
-        "candidate_id": "mut-9a265996dbb9",
-        "strategy_family": "score_engine_bollinger_breakout",
-        "parameters": {
-          "entry_score": 60,
-          "exit_score": 35,
-          "initial_capital": 1000000.0,
-          "require_ema_trend": false,
-          "ema_fast_column": "EMA20",
-          "ema_slow_column": "EMA60",
-          "entry_mode": "score_and_bollinger_breakout",
-          "exit_mode": "score_or_time",
-          "max_holding_days": 40
-        },
-        "parent_id": "grid-60-35-score_and_rsi_momentum-base-score_or_time-40",
-        "hypothesis": "Adaptive structure mutation of grid-60-35-score_and_rsi_momentum-base-score_or_time-40: entry +0, exit +0; structure=Bollinger-breakout score with 40-session risk exit"
-      },
-      "parameter_signature": "ceb2ab39bc6191c459f62242",
-      "research_score": 39.892,
-      "decision": "KEEP",
-      "reasons": [
-        "needs_more_validation"
-      ],
-      "source_generation": 2,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
-    },
-    {
-      "candidate": {
-        "candidate_id": "grid-65-35-score_and_volume_confirmation-base-score_or_time-40",
-        "strategy_family": "score_engine_volume_confirmed",
-        "parameters": {
-          "entry_score": 65,
-          "exit_score": 35,
-          "initial_capital": 1000000.0,
-          "require_ema_trend": false,
-          "ema_fast_column": "EMA20",
-          "ema_slow_column": "EMA60",
-          "entry_mode": "score_and_volume_confirmation",
-          "exit_mode": "score_or_time",
-          "max_holding_days": 40
-        },
-        "parent_id": null,
-        "hypothesis": "Systematic score-threshold search with volume-confirmed score with 40-session risk exit"
-      },
-      "parameter_signature": "ee6273e7eefb40002181fa5b",
-      "research_score": 34.475,
-      "decision": "KEEP",
-      "reasons": [
-        "needs_more_validation"
-      ],
-      "source_generation": 1,
-      "source_research_run_id": "126c3da90503c7ffe6f234ab"
+      "source_research_run_id": "e8d72693bdb33718890e7d9c"
     }
   ],
   "frontier": [
@@ -1013,23 +1034,6 @@
       "hypothesis": "Adaptive structure mutation of mut-15b11abf1024: entry +0, exit +0; structure=score-only baseline"
     },
     {
-      "candidate_id": "mut-7c84c62e3d92",
-      "strategy_family": "score_engine",
-      "parameters": {
-        "entry_score": 58,
-        "exit_score": 35,
-        "initial_capital": 1000000.0,
-        "require_ema_trend": false,
-        "ema_fast_column": "EMA20",
-        "ema_slow_column": "EMA60",
-        "entry_mode": "score",
-        "exit_mode": "score_or_time",
-        "max_holding_days": 40
-      },
-      "parent_id": "mut-15b11abf1024",
-      "hypothesis": "Adaptive structure mutation of mut-15b11abf1024: entry +0, exit +0; structure=score with 40-session risk exit"
-    },
-    {
       "candidate_id": "mut-0f73de9321c4",
       "strategy_family": "score_engine_volume_confirmed",
       "parameters": {
@@ -1259,15 +1263,26 @@
   ],
   "train_trial_period_sharpes": [
     0.11153022,
+    0.0877123,
+    0.07536578,
     0.08415285,
     0.0498963,
+    0.07275329,
     0.05251063,
+    0.05196044,
+    0.06457856,
     0.04645782,
     0.05318389,
+    0.05165848,
+    0.0655906,
     0.046256,
+    0.05491757,
+    0.05450566,
     0.04602582,
+    0.0502282,
     0.04785336,
     0.0,
+    0.02025294,
     0.11847797,
     0.11847797,
     0.11028593,
@@ -1275,17 +1290,27 @@
     0.11153022,
     0.11153022,
     0.09003039,
-    0.0877123,
     0.09187065,
+    0.07126504,
     0.07393357,
-    0.05229094
+    0.07973215,
+    0.06448036,
+    0.07639769,
+    0.0648009,
+    0.06948435,
+    0.07224486,
+    0.07526516,
+    0.05016632,
+    0.05491757,
+    0.05229094,
+    0.03281614
   ],
-  "lifetime_experiment_count": 21,
+  "lifetime_experiment_count": 42,
   "lifetime_run_count": 1,
-  "last_run_new_experiment_count": 21,
-  "last_run_duplicate_skip_count": 1,
+  "last_run_new_experiment_count": 42,
+  "last_run_duplicate_skip_count": 2,
   "memory_reset_reason": "train_data_revision",
   "validation_feedback_used": false,
   "holdout_feedback_used": false,
-  "memory_id": "cb5e77a6536a338a3b425c78"
+  "memory_id": "585e23c8c9fd1e3a78c01b5e"
 }

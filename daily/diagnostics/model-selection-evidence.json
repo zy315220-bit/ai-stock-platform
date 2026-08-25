@@ -1,63 +1,84 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-08-25T15:48:49.961148+00:00",
+  "generated_at_utc": "2026-08-25T16:01:16.892347+00:00",
   "symbol_count": 20,
   "pbo": {
-    "available_symbol_count": 17,
-    "pass_symbol_count": 2,
-    "unavailable_symbol_count": 3,
+    "available_symbol_count": 19,
+    "pass_symbol_count": 3,
+    "unavailable_symbol_count": 1,
     "unavailable_reasons": {
-      "CSCV_requires_three_candidates_and_even_slices": 3
+      "CSCV_requires_three_candidates_and_even_slices": 1
     },
     "best_by_lowest_pbo_probability": [
       {
-        "stock_code": "2303",
+        "stock_code": "0056",
         "pbo": {
           "available": true,
           "pass": true,
-          "probability_percent": 7.1429,
-          "candidate_count": 5,
+          "probability_percent": 0.0,
+          "candidate_count": 4,
           "original_candidate_count": 8,
           "reason": null
         },
         "spa": {
           "available": true,
           "pass": false,
-          "p_value": 0.450915,
-          "candidate_count": 5,
-          "active_candidate_count": 5,
+          "p_value": 0.663894,
+          "candidate_count": 4,
+          "active_candidate_count": 3,
           "observations": 246,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 352
+        "deflated_sharpe_trial_count": 64
       },
       {
-        "stock_code": "00919",
+        "stock_code": "3037",
         "pbo": {
           "available": true,
           "pass": true,
           "probability_percent": 14.2857,
-          "candidate_count": 7,
-          "original_candidate_count": 7,
+          "candidate_count": 3,
+          "original_candidate_count": 5,
           "reason": null
         },
         "spa": {
           "available": true,
           "pass": false,
-          "p_value": 0.698835,
-          "candidate_count": 7,
+          "p_value": 0.274542,
+          "candidate_count": 3,
+          "active_candidate_count": 3,
+          "observations": 246,
+          "reason": null
+        },
+        "deflated_sharpe_trial_count": 392
+      },
+      {
+        "stock_code": "2454",
+        "pbo": {
+          "available": true,
+          "pass": true,
+          "probability_percent": 18.5714,
+          "candidate_count": 6,
+          "original_candidate_count": 8,
+          "reason": null
+        },
+        "spa": {
+          "available": true,
+          "pass": false,
+          "p_value": 0.748752,
+          "candidate_count": 6,
           "active_candidate_count": 6,
           "observations": 246,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 256
+        "deflated_sharpe_trial_count": 403
       },
       {
         "stock_code": "2379",
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 30.0,
+          "probability_percent": 21.4286,
           "candidate_count": 6,
           "original_candidate_count": 8,
           "reason": null
@@ -65,20 +86,20 @@
         "spa": {
           "available": true,
           "pass": false,
-          "p_value": 0.732113,
+          "p_value": 0.720466,
           "candidate_count": 6,
           "active_candidate_count": 6,
           "observations": 246,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 352
+        "deflated_sharpe_trial_count": 416
       },
       {
-        "stock_code": "2317",
+        "stock_code": "3711",
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 37.1429,
+          "probability_percent": 44.2857,
           "candidate_count": 7,
           "original_candidate_count": 8,
           "reason": null
@@ -86,34 +107,13 @@
         "spa": {
           "available": true,
           "pass": false,
-          "p_value": 0.574043,
+          "p_value": 0.658902,
           "candidate_count": 7,
           "active_candidate_count": 7,
           "observations": 246,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 308
-      },
-      {
-        "stock_code": "2891",
-        "pbo": {
-          "available": true,
-          "pass": false,
-          "probability_percent": 37.1429,
-          "candidate_count": 6,
-          "original_candidate_count": 8,
-          "reason": null
-        },
-        "spa": {
-          "available": true,
-          "pass": false,
-          "p_value": 0.757072,
-          "candidate_count": 6,
-          "active_candidate_count": 5,
-          "observations": 246,
-          "reason": null
-        },
-        "deflated_sharpe_trial_count": 352
+        "deflated_sharpe_trial_count": 416
       }
     ]
   },
@@ -128,107 +128,107 @@
       {
         "stock_code": "3037",
         "pbo": {
-          "available": false,
-          "pass": false,
-          "probability_percent": null,
-          "candidate_count": 2,
-          "original_candidate_count": 8,
-          "reason": "CSCV_requires_three_candidates_and_even_slices"
+          "available": true,
+          "pass": true,
+          "probability_percent": 14.2857,
+          "candidate_count": 3,
+          "original_candidate_count": 5,
+          "reason": null
         },
         "spa": {
           "available": true,
           "pass": false,
-          "p_value": 0.234609,
-          "candidate_count": 2,
-          "active_candidate_count": 2,
+          "p_value": 0.274542,
+          "candidate_count": 3,
+          "active_candidate_count": 3,
           "observations": 246,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 336
+        "deflated_sharpe_trial_count": 392
       },
       {
         "stock_code": "2303",
         "pbo": {
           "available": true,
-          "pass": true,
-          "probability_percent": 7.1429,
-          "candidate_count": 5,
+          "pass": false,
+          "probability_percent": 78.5714,
+          "candidate_count": 6,
           "original_candidate_count": 8,
           "reason": null
         },
         "spa": {
           "available": true,
           "pass": false,
-          "p_value": 0.450915,
-          "candidate_count": 5,
-          "active_candidate_count": 5,
+          "p_value": 0.557404,
+          "candidate_count": 6,
+          "active_candidate_count": 6,
           "observations": 246,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 352
-      },
-      {
-        "stock_code": "3231",
-        "pbo": {
-          "available": false,
-          "pass": false,
-          "probability_percent": null,
-          "candidate_count": 2,
-          "original_candidate_count": 2,
-          "reason": "CSCV_requires_three_candidates_and_even_slices"
-        },
-        "spa": {
-          "available": true,
-          "pass": false,
-          "p_value": 0.554077,
-          "candidate_count": 2,
-          "active_candidate_count": 2,
-          "observations": 246,
-          "reason": null
-        },
-        "deflated_sharpe_trial_count": 227
+        "deflated_sharpe_trial_count": 416
       },
       {
         "stock_code": "2317",
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 37.1429,
-          "candidate_count": 7,
+          "probability_percent": 85.7143,
+          "candidate_count": 3,
           "original_candidate_count": 8,
           "reason": null
         },
         "spa": {
           "available": true,
           "pass": false,
-          "p_value": 0.574043,
-          "candidate_count": 7,
-          "active_candidate_count": 7,
-          "observations": 246,
-          "reason": null
-        },
-        "deflated_sharpe_trial_count": 308
-      },
-      {
-        "stock_code": "2603",
-        "pbo": {
-          "available": true,
-          "pass": false,
-          "probability_percent": 54.2857,
-          "candidate_count": 3,
-          "original_candidate_count": 3,
-          "reason": null
-        },
-        "spa": {
-          "available": true,
-          "pass": false,
-          "p_value": 0.584027,
+          "p_value": 0.599002,
           "candidate_count": 3,
           "active_candidate_count": 3,
           "observations": 246,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 317
+        "deflated_sharpe_trial_count": 372
+      },
+      {
+        "stock_code": "2345",
+        "pbo": {
+          "available": true,
+          "pass": false,
+          "probability_percent": 85.7143,
+          "candidate_count": 5,
+          "original_candidate_count": 5,
+          "reason": null
+        },
+        "spa": {
+          "available": true,
+          "pass": false,
+          "p_value": 0.602329,
+          "candidate_count": 5,
+          "active_candidate_count": 5,
+          "observations": 246,
+          "reason": null
+        },
+        "deflated_sharpe_trial_count": 311
+      },
+      {
+        "stock_code": "3231",
+        "pbo": {
+          "available": true,
+          "pass": false,
+          "probability_percent": 94.2857,
+          "candidate_count": 6,
+          "original_candidate_count": 8,
+          "reason": null
+        },
+        "spa": {
+          "available": true,
+          "pass": false,
+          "p_value": 0.617304,
+          "candidate_count": 6,
+          "active_candidate_count": 6,
+          "observations": 246,
+          "reason": null
+        },
+        "deflated_sharpe_trial_count": 291
       }
     ]
   },
@@ -238,28 +238,133 @@
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 64.2857,
-        "candidate_count": 5,
+        "probability_percent": 52.8571,
+        "candidate_count": 8,
         "original_candidate_count": 8,
         "reason": null
       },
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.818636,
-        "candidate_count": 5,
-        "active_candidate_count": 4,
+        "p_value": 0.738769,
+        "candidate_count": 8,
+        "active_candidate_count": 8,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 223
+      "deflated_sharpe_trial_count": 287
     },
     {
       "stock_code": "0056",
       "pbo": {
         "available": true,
+        "pass": true,
+        "probability_percent": 0.0,
+        "candidate_count": 4,
+        "original_candidate_count": 8,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.663894,
+        "candidate_count": 4,
+        "active_candidate_count": 3,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 64
+    },
+    {
+      "stock_code": "00878",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 70.0,
+        "candidate_count": 7,
+        "original_candidate_count": 8,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.838602,
+        "candidate_count": 7,
+        "active_candidate_count": 6,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 42
+    },
+    {
+      "stock_code": "00919",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 52.8571,
+        "candidate_count": 8,
+        "original_candidate_count": 8,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.757072,
+        "candidate_count": 8,
+        "active_candidate_count": 8,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 320
+    },
+    {
+      "stock_code": "2303",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 78.5714,
+        "candidate_count": 6,
+        "original_candidate_count": 8,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.557404,
+        "candidate_count": 6,
+        "active_candidate_count": 6,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 416
+    },
+    {
+      "stock_code": "2308",
+      "pbo": {
+        "available": true,
         "pass": false,
         "probability_percent": 51.4286,
+        "candidate_count": 7,
+        "original_candidate_count": 7,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.863561,
+        "candidate_count": 7,
+        "active_candidate_count": 4,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 318
+    },
+    {
+      "stock_code": "2317",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 85.7143,
         "candidate_count": 3,
         "original_candidate_count": 8,
         "reason": null
@@ -267,16 +372,79 @@
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.612313,
+        "p_value": 0.599002,
         "candidate_count": 3,
         "active_candidate_count": 3,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 32
+      "deflated_sharpe_trial_count": 372
     },
     {
-      "stock_code": "00878",
+      "stock_code": "2330",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 77.1429,
+        "candidate_count": 6,
+        "original_candidate_count": 8,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.943428,
+        "candidate_count": 6,
+        "active_candidate_count": 6,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 416
+    },
+    {
+      "stock_code": "2345",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 85.7143,
+        "candidate_count": 5,
+        "original_candidate_count": 5,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.602329,
+        "candidate_count": 5,
+        "active_candidate_count": 5,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 311
+    },
+    {
+      "stock_code": "2379",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 21.4286,
+        "candidate_count": 6,
+        "original_candidate_count": 8,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.720466,
+        "candidate_count": 6,
+        "active_candidate_count": 6,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 416
+    },
+    {
+      "stock_code": "2382",
       "pbo": {
         "available": true,
         "pass": false,
@@ -288,121 +456,58 @@
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.826955,
-        "candidate_count": 7,
-        "active_candidate_count": 6,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 21
-    },
-    {
-      "stock_code": "00919",
-      "pbo": {
-        "available": true,
-        "pass": true,
-        "probability_percent": 14.2857,
-        "candidate_count": 7,
-        "original_candidate_count": 7,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.698835,
-        "candidate_count": 7,
-        "active_candidate_count": 6,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 256
-    },
-    {
-      "stock_code": "2303",
-      "pbo": {
-        "available": true,
-        "pass": true,
-        "probability_percent": 7.1429,
-        "candidate_count": 5,
-        "original_candidate_count": 8,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.450915,
-        "candidate_count": 5,
-        "active_candidate_count": 5,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 352
-    },
-    {
-      "stock_code": "2308",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 67.1429,
-        "candidate_count": 5,
-        "original_candidate_count": 5,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.84193,
-        "candidate_count": 5,
-        "active_candidate_count": 3,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 297
-    },
-    {
-      "stock_code": "2317",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 37.1429,
-        "candidate_count": 7,
-        "original_candidate_count": 8,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.574043,
+        "p_value": 0.685524,
         "candidate_count": 7,
         "active_candidate_count": 7,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 308
+      "deflated_sharpe_trial_count": 231
     },
     {
-      "stock_code": "2330",
+      "stock_code": "2454",
       "pbo": {
         "available": true,
-        "pass": false,
-        "probability_percent": 45.7143,
-        "candidate_count": 8,
+        "pass": true,
+        "probability_percent": 18.5714,
+        "candidate_count": 6,
         "original_candidate_count": 8,
         "reason": null
       },
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.881864,
-        "candidate_count": 8,
-        "active_candidate_count": 8,
+        "p_value": 0.748752,
+        "candidate_count": 6,
+        "active_candidate_count": 6,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 352
+      "deflated_sharpe_trial_count": 403
     },
     {
-      "stock_code": "2345",
+      "stock_code": "2603",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 45.7143,
+        "candidate_count": 5,
+        "original_candidate_count": 8,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "p_value": 0.65391,
+        "candidate_count": 5,
+        "active_candidate_count": 5,
+        "observations": 246,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 376
+    },
+    {
+      "stock_code": "2615",
       "pbo": {
         "available": false,
         "pass": false,
@@ -420,238 +525,133 @@
         "observations": 0,
         "reason": "SPA_requires_at_least_two_candidate_models"
       },
-      "deflated_sharpe_trial_count": 247
-    },
-    {
-      "stock_code": "2379",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 30.0,
-        "candidate_count": 6,
-        "original_candidate_count": 8,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.732113,
-        "candidate_count": 6,
-        "active_candidate_count": 6,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 352
-    },
-    {
-      "stock_code": "2382",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 77.1429,
-        "candidate_count": 8,
-        "original_candidate_count": 8,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.75208,
-        "candidate_count": 8,
-        "active_candidate_count": 8,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 210
-    },
-    {
-      "stock_code": "2454",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 78.5714,
-        "candidate_count": 8,
-        "original_candidate_count": 8,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.732113,
-        "candidate_count": 8,
-        "active_candidate_count": 8,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 339
-    },
-    {
-      "stock_code": "2603",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 54.2857,
-        "candidate_count": 3,
-        "original_candidate_count": 3,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.584027,
-        "candidate_count": 3,
-        "active_candidate_count": 3,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 317
-    },
-    {
-      "stock_code": "2615",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 55.7143,
-        "candidate_count": 4,
-        "original_candidate_count": 4,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "p_value": 0.625624,
-        "candidate_count": 4,
-        "active_candidate_count": 4,
-        "observations": 246,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 175
+      "deflated_sharpe_trial_count": 196
     },
     {
       "stock_code": "2881",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 87.1429,
-        "candidate_count": 5,
+        "probability_percent": 45.7143,
+        "candidate_count": 8,
         "original_candidate_count": 8,
         "reason": null
       },
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.920133,
-        "candidate_count": 5,
-        "active_candidate_count": 5,
+        "p_value": 0.778702,
+        "candidate_count": 8,
+        "active_candidate_count": 6,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 123
+      "deflated_sharpe_trial_count": 144
     },
     {
       "stock_code": "2882",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 52.8571,
-        "candidate_count": 8,
+        "probability_percent": 72.8571,
+        "candidate_count": 6,
         "original_candidate_count": 8,
         "reason": null
       },
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.858569,
-        "candidate_count": 8,
-        "active_candidate_count": 6,
+        "p_value": 0.800333,
+        "candidate_count": 6,
+        "active_candidate_count": 5,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 319
+      "deflated_sharpe_trial_count": 340
     },
     {
       "stock_code": "2891",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 37.1429,
-        "candidate_count": 6,
+        "probability_percent": 54.2857,
+        "candidate_count": 8,
         "original_candidate_count": 8,
         "reason": null
       },
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.757072,
-        "candidate_count": 6,
-        "active_candidate_count": 5,
+        "p_value": 0.780366,
+        "candidate_count": 8,
+        "active_candidate_count": 8,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 352
+      "deflated_sharpe_trial_count": 416
     },
     {
       "stock_code": "3037",
       "pbo": {
-        "available": false,
-        "pass": false,
-        "probability_percent": null,
-        "candidate_count": 2,
-        "original_candidate_count": 8,
-        "reason": "CSCV_requires_three_candidates_and_even_slices"
+        "available": true,
+        "pass": true,
+        "probability_percent": 14.2857,
+        "candidate_count": 3,
+        "original_candidate_count": 5,
+        "reason": null
       },
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.234609,
-        "candidate_count": 2,
-        "active_candidate_count": 2,
+        "p_value": 0.274542,
+        "candidate_count": 3,
+        "active_candidate_count": 3,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 336
+      "deflated_sharpe_trial_count": 392
     },
     {
       "stock_code": "3231",
       "pbo": {
-        "available": false,
+        "available": true,
         "pass": false,
-        "probability_percent": null,
-        "candidate_count": 2,
-        "original_candidate_count": 2,
-        "reason": "CSCV_requires_three_candidates_and_even_slices"
+        "probability_percent": 94.2857,
+        "candidate_count": 6,
+        "original_candidate_count": 8,
+        "reason": null
       },
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.554077,
-        "candidate_count": 2,
-        "active_candidate_count": 2,
+        "p_value": 0.617304,
+        "candidate_count": 6,
+        "active_candidate_count": 6,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 227
+      "deflated_sharpe_trial_count": 291
     },
     {
       "stock_code": "3711",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 54.2857,
-        "candidate_count": 5,
+        "probability_percent": 44.2857,
+        "candidate_count": 7,
         "original_candidate_count": 8,
         "reason": null
       },
       "spa": {
         "available": true,
         "pass": false,
-        "p_value": 0.668885,
-        "candidate_count": 5,
-        "active_candidate_count": 5,
+        "p_value": 0.658902,
+        "candidate_count": 7,
+        "active_candidate_count": 7,
         "observations": 246,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 352
+      "deflated_sharpe_trial_count": 416
     }
   ]
 }

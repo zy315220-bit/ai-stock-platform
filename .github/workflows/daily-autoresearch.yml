@@ -2,18 +2,6 @@ name: Daily Autonomous Research
 run-name: "Daily Autonomous Research · ${{ github.event_name }} · #${{ github.run_number }}"
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/daily-autoresearch.yml"
-      - "backend/app/api/research_lab.py"
-      - "backend/app/services/backtest/**"
-      - "backend/app/services/research_lab/**"
-      - "backend/scripts/run_daily_autoresearch.py"
-      - "backend/scripts/aggregate_daily_autoresearch.py"
-      - "backend/scripts/summarize_model_selection_evidence.py"
-      - "backend/scripts/summarize_gate_bottlenecks.py"
-      - "backend/scripts/run_final_holdout_gate.py"
   schedule:
     # 06:30 and 18:30 Asia/Taipei every day.
     - cron: "30 22,10 * * *"

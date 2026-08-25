@@ -1,13 +1,15 @@
 {
-  "schema_version": 2,
-  "generated_at_utc": "2026-08-25T16:42:15.485547+00:00",
+  "schema_version": 3,
+  "generated_at_utc": "2026-08-25T18:01:22+00:00",
   "system_status": "OPERATIONAL",
   "system_ready": true,
   "research_engine_complete": true,
+  "competition_research_loop_complete": true,
   "certified_robot_count": 0,
+  "competition_challenger_count": 0,
   "champion_discovery_status": "SEARCH_CONTINUES",
-  "completion_semantics": "research_engine_complete means the autonomous research lifecycle is wired and integrity checks pass; it does not assert that a strategy has passed the one-shot Final Holdout.",
-  "passed_check_count": 14,
+  "completion_semantics": "research_engine_complete means the autonomous Train-to-Final-Holdout lifecycle, certified challenger bridge, and competition feedback isolation are wired and integrity checks pass; it does not assert that a strategy has passed Final Holdout.",
+  "passed_check_count": 16,
   "failed_check_count": 0,
   "checks": [
     {
@@ -79,6 +81,16 @@
       "name": "certified_registry_consistent",
       "passed": true,
       "detail": "certified_count=0 registry_rows=0"
+    },
+    {
+      "name": "certified_competition_bridge_registered",
+      "passed": true,
+      "detail": "certified=0 challengers=0"
+    },
+    {
+      "name": "certified_challenger_tournament_closed_loop",
+      "passed": true,
+      "detail": "status=WAITING_FOR_CERTIFIED_ROBOT challengers=0 feedback_to_train=None"
     }
   ]
 }

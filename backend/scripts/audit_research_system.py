@@ -10,7 +10,7 @@ from app.services.scanner_service import SCANNER_UNIVERSE
 from scripts.run_daily_autoresearch import write_json_atomic
 
 
-RESEARCH_SYSTEM_AUDIT_SCHEMA = 3
+RESEARCH_SYSTEM_AUDIT_SCHEMA = 4
 REQUIRED_RANKING_SCHEMA = "paper-guided-evidence-ranking-v1"
 REQUIRED_DAILY_SCHEDULE = "30 22,10 * * *"
 
@@ -163,16 +163,25 @@ def audit_research_system(
     challenger_policy = challenger_roster.get("policy") or {}
     challengers = challenger_roster.get("challengers") or []
     challenger_count = int(challenger_roster.get("challenger_count", -1) or 0)
+    contracts_ok = all(
+        isinstance(challenger, dict)
+        and (challenger.get("challenge_contract") or {}).get("post_certification_evidence_only") is True
+        and bool((challenger.get("challenge_contract") or {}).get("challenge_not_before"))
+        for challenger in challengers
+    )
     check(
         "certified_competition_bridge_registered",
-        challenger_roster.get("schema_version") == 1
+        challenger_roster.get("schema_version") == 2
         and isinstance(challengers, list)
         and challenger_count == certified_count == len(challengers)
         and challenger_policy.get("certified_final_holdout_required") is True
         and challenger_policy.get("immutable_rule_fingerprint_required") is True
         and challenger_policy.get("competition_rebinds_capital_cost_risk_and_universe") is True
         and challenger_policy.get("holdout_score_used_for_ranking") is False
-        and challenger_policy.get("same_campaign_competition_feedback_to_train") is False,
+        and challenger_policy.get("same_campaign_competition_feedback_to_train") is False
+        and challenger_policy.get("post_certification_evidence_only") is True
+        and challenger_policy.get("common_fresh_comparison_window") is True
+        and contracts_ok,
         f"certified={certified_count} challengers={challenger_count}",
     )
 
@@ -181,18 +190,32 @@ def audit_research_system(
         competition_tournament.get("challenger_count", -1) or 0
     )
     promotion = competition_tournament.get("promotion") or {}
-    tournament_valid = (
-        tournament_challenger_count == challenger_count
-        and promotion.get("competition_feedback_to_same_campaign_train") is False
-        if challenger_count > 0
-        else (
+    tournament_policy = competition_tournament.get("evaluation_policy") or {}
+    if challenger_count == 0:
+        tournament_valid = (
             tournament_status == "WAITING_FOR_CERTIFIED_ROBOT"
             and tournament_challenger_count == 0
             and promotion.get("challenger_replaced_incumbent") is False
+            and promotion.get("competition_feedback_to_same_campaign_train") is False
         )
-    )
-    if challenger_count > 0:
-        tournament_valid = tournament_valid and tournament_status == "completed"
+    elif tournament_status == "ACCUMULATING_POST_CERTIFICATION_EVIDENCE":
+        tournament_valid = (
+            tournament_challenger_count == challenger_count
+            and promotion.get("challenger_replaced_incumbent") is False
+            and promotion.get("competition_feedback_to_same_campaign_train") is False
+            and (competition_tournament.get("common_fresh_window") or {}).get("available") is False
+        )
+    else:
+        tournament_valid = (
+            tournament_status == "completed"
+            and tournament_challenger_count == challenger_count
+            and promotion.get("competition_feedback_to_same_campaign_train") is False
+            and tournament_policy.get("post_certification_evidence_only") is True
+            and tournament_policy.get("final_holdout_overlap_forbidden") is True
+            and tournament_policy.get("common_fresh_comparison_window") is True
+            and tournament_policy.get("same_capital_cost_risk_universe") is True
+            and (competition_tournament.get("common_fresh_window") or {}).get("available") is True
+        )
     check(
         "certified_challenger_tournament_closed_loop",
         tournament_valid,
@@ -200,6 +223,21 @@ def audit_research_system(
             f"status={tournament_status} challengers={tournament_challenger_count} "
             f"feedback_to_train={promotion.get('competition_feedback_to_same_campaign_train')}"
         ),
+    )
+
+    check(
+        "post_certification_title_evidence_isolated",
+        (
+            challenger_count == 0
+            or tournament_status == "ACCUMULATING_POST_CERTIFICATION_EVIDENCE"
+            or (
+                tournament_status == "completed"
+                and tournament_policy.get("post_certification_evidence_only") is True
+                and tournament_policy.get("final_holdout_overlap_forbidden") is True
+                and tournament_policy.get("common_fresh_comparison_window") is True
+            )
+        ),
+        "title changes may use only a common market window strictly after certification/Final Holdout",
     )
 
     failed = [row for row in checks if not row["passed"]]
@@ -211,6 +249,7 @@ def audit_research_system(
         "system_ready": system_ready,
         "research_engine_complete": system_ready,
         "competition_research_loop_complete": system_ready,
+        "post_certification_evidence_isolated": system_ready,
         "certified_robot_count": certified_count,
         "competition_challenger_count": challenger_count,
         "champion_discovery_status": (
@@ -218,8 +257,9 @@ def audit_research_system(
         ),
         "completion_semantics": (
             "research_engine_complete means the autonomous Train-to-Final-Holdout lifecycle, "
-            "certified challenger bridge, and competition feedback isolation are wired and "
-            "integrity checks pass; it does not assert that a strategy has passed Final Holdout."
+            "certified challenger bridge, post-certification competition quarantine, and "
+            "feedback isolation are wired and integrity checks pass; it does not assert "
+            "that a strategy has passed Final Holdout or accumulated enough live-like title evidence."
         ),
         "passed_check_count": len(checks) - len(failed),
         "failed_check_count": len(failed),

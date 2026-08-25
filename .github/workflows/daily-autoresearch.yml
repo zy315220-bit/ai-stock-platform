@@ -27,10 +27,14 @@ concurrency:
 jobs:
   research-shards:
     name: Research ${{ matrix.stock }}
+    # Heavy autonomous research stays on isolated GitHub-hosted runners. The
+    # production Vercel app never executes these 64-experiment research shards.
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
+      # Keep bounded parallelism even though public-repo standard runners are
+      # free. Four concurrent shards avoids unnecessary upstream data bursts.
       max-parallel: 4
       matrix:
         stock:
@@ -80,7 +84,7 @@ jobs:
           python -m scripts.run_daily_autoresearch
           --stock-code "${{ matrix.stock }}"
           --as-of-date "${{ steps.research-date.outputs.value }}"
-          --max-experiments 32
+          --max-experiments 64
           --attempts 2
           --retry-delay-seconds 20
           --prior-memory "../research-data/daily/memory/${{ matrix.stock }}.json"
@@ -91,7 +95,9 @@ jobs:
           name: daily-research-${{ matrix.stock }}
           path: backend/research_artifacts/daily/${{ matrix.stock }}.json
           if-no-files-found: error
-          retention-days: 90
+          # 64 experiments roughly doubles shard size; 45 days keeps the
+          # rolling artifact footprint near the former 32 x 90-day budget.
+          retention-days: 45
 
   publish-snapshot:
     name: Publish fail-closed snapshot
@@ -143,7 +149,7 @@ jobs:
             backend/research_artifacts/published/daily/gate-bottlenecks.json
             backend/research_artifacts/published/daily/memory/*.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 45
       - name: Check out durable research-data branch
         uses: actions/checkout@v4
         with:

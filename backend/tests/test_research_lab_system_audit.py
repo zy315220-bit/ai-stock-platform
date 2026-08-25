@@ -79,7 +79,7 @@ def _certified() -> dict:
 
 def _challengers() -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "WAITING_FOR_CERTIFIED_ROBOT",
         "challenger_count": 0,
         "policy": {
@@ -88,6 +88,8 @@ def _challengers() -> dict:
             "competition_rebinds_capital_cost_risk_and_universe": True,
             "holdout_score_used_for_ranking": False,
             "same_campaign_competition_feedback_to_train": False,
+            "post_certification_evidence_only": True,
+            "common_fresh_comparison_window": True,
         },
         "challengers": [],
     }
@@ -95,12 +97,13 @@ def _challengers() -> dict:
 
 def _tournament() -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "WAITING_FOR_CERTIFIED_ROBOT",
         "challenger_count": 0,
         "promotion": {
             "challenger_replaced_incumbent": False,
             "reason": "No Final-Holdout-certified challenger exists yet.",
+            "competition_feedback_to_same_campaign_train": False,
         },
     }
 
@@ -126,10 +129,10 @@ def _audit(
 
 def test_full_research_lifecycle_can_be_operational_without_forcing_a_champion() -> None:
     audit = _audit()
-
     assert audit["system_ready"] is True
     assert audit["research_engine_complete"] is True
     assert audit["competition_research_loop_complete"] is True
+    assert audit["post_certification_evidence_isolated"] is True
     assert audit["system_status"] == "OPERATIONAL"
     assert audit["certified_robot_count"] == 0
     assert audit["competition_challenger_count"] == 0
@@ -184,3 +187,77 @@ def test_audit_fails_closed_if_competition_bridge_is_missing_certified_robot() -
     assert audit["system_ready"] is False
     failed_names = {row["name"] for row in audit["checks"] if not row["passed"]}
     assert "certified_competition_bridge_registered" in failed_names
+
+
+def test_audit_accepts_quarantine_while_waiting_for_fresh_market_data() -> None:
+    certified = {
+        "certified_robot_count": 1,
+        "unresolved_reservation_count": 0,
+        "robots": [{"status": "CERTIFIED_FINAL_HOLDOUT_PASS"}],
+    }
+    challengers = _challengers()
+    challengers["status"] = "READY"
+    challengers["challenger_count"] = 1
+    challengers["challengers"] = [
+        {
+            "challenge_contract": {
+                "post_certification_evidence_only": True,
+                "challenge_not_before": "2026-08-27",
+            }
+        }
+    ]
+    tournament = {
+        "schema_version": 2,
+        "status": "ACCUMULATING_POST_CERTIFICATION_EVIDENCE",
+        "challenger_count": 1,
+        "common_fresh_window": {
+            "start": "2026-08-27",
+            "end": "2026-08-25",
+            "available": False,
+        },
+        "promotion": {
+            "challenger_replaced_incumbent": False,
+            "competition_feedback_to_same_campaign_train": False,
+        },
+    }
+    audit = _audit(certified=certified, challengers=challengers, tournament=tournament)
+    assert audit["system_ready"] is True
+
+
+def test_audit_rejects_completed_tournament_without_fresh_window_policy() -> None:
+    certified = {
+        "certified_robot_count": 1,
+        "unresolved_reservation_count": 0,
+        "robots": [{"status": "CERTIFIED_FINAL_HOLDOUT_PASS"}],
+    }
+    challengers = _challengers()
+    challengers["status"] = "READY"
+    challengers["challenger_count"] = 1
+    challengers["challengers"] = [
+        {
+            "challenge_contract": {
+                "post_certification_evidence_only": True,
+                "challenge_not_before": "2026-08-21",
+            }
+        }
+    ]
+    tournament = {
+        "schema_version": 2,
+        "status": "completed",
+        "challenger_count": 1,
+        "common_fresh_window": {"start": "2026-08-21", "end": "2026-08-25", "available": True},
+        "evaluation_policy": {
+            "post_certification_evidence_only": False,
+            "final_holdout_overlap_forbidden": False,
+            "common_fresh_comparison_window": False,
+            "same_capital_cost_risk_universe": True,
+        },
+        "promotion": {
+            "challenger_replaced_incumbent": False,
+            "competition_feedback_to_same_campaign_train": False,
+        },
+    }
+    audit = _audit(certified=certified, challengers=challengers, tournament=tournament)
+    assert audit["system_ready"] is False
+    failed_names = {row["name"] for row in audit["checks"] if not row["passed"]}
+    assert "post_certification_title_evidence_isolated" in failed_names

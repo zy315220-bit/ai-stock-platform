@@ -24,6 +24,10 @@ from app.services.research_lab.statistical_evidence import (
     deflated_sharpe_evidence,
     hansen_spa_test,
 )
+from app.services.research_lab.training_memory import (
+    FAMILY_COVERAGE_BUCKETS,
+    _reserve_family_coverage_prefix,
+)
 from app.services.research_lab.walk_forward import (
     run_walk_forward_validation,
 )
@@ -41,11 +45,38 @@ OUT = Path("research_artifacts/research_lab_2330_latest.json")
 MIN_TRADES = 4
 
 
+def _family_covered_initial_candidates():
+    """Use the same Train-only family reservation policy as daily research."""
+    grid = generate_parameter_candidates()
+    queues = [("novel_grid", grid)]
+    prefix, missing = _reserve_family_coverage_prefix(queues)
+    if missing:
+        raise RuntimeError(
+            "Real-data audit refused incomplete family coverage: "
+            + ", ".join(missing)
+        )
+    return (
+        [candidate for _, _, candidate in prefix] + grid,
+        [
+            {
+                "bucket": bucket,
+                "source": source,
+                "candidate_id": candidate.candidate_id,
+                "strategy_family": candidate.strategy_family,
+            }
+            for bucket, source, candidate in prefix
+        ],
+    )
+
+
 def main() -> None:
+    initial_candidates, family_coverage_prefix = (
+        _family_covered_initial_candidates()
+    )
     session = run_autoresearch(
         STOCK_CODE,
         SPLIT,
-        generate_parameter_candidates(),
+        initial_candidates,
         backtest_fn=backtest_stock,
         max_generations=4,
         max_experiments=48,
@@ -53,6 +84,23 @@ def main() -> None:
         target_score=75.0,
         min_validation_trades=MIN_TRADES,
     )
+    first_round_families = (
+        [result.candidate.strategy_family for result in session.rounds[0].evaluated]
+        if session.rounds
+        else []
+    )
+    required_prefix_families = [
+        item["strategy_family"] for item in family_coverage_prefix
+    ]
+    missing_first_round_families = sorted(
+        set(required_prefix_families) - set(first_round_families)
+    )
+    if missing_first_round_families:
+        raise RuntimeError(
+            "Real-data audit did not execute reserved family candidates: "
+            + ", ".join(missing_first_round_families)
+        )
+
     train_results = sorted(
         (
             result
@@ -286,6 +334,13 @@ def main() -> None:
             "walk_forward_holdout_used": False,
             "regime_labels_point_in_time": True,
             "holdout_opened_only_after_all_gates": True,
+            "daily_family_coverage_policy_exercised": True,
+        },
+        "family_coverage": {
+            "required_buckets": list(FAMILY_COVERAGE_BUCKETS),
+            "prefix": family_coverage_prefix,
+            "first_round_strategy_families": first_round_families,
+            "reserved_families_executed": True,
         },
         "experiments_run": session.experiments_run,
         "stopped_reason": session.stopped_reason,
@@ -342,6 +397,8 @@ def main() -> None:
                 "stock_code": STOCK_CODE,
                 "experiments_run": session.experiments_run,
                 "stopped_reason": session.stopped_reason,
+                "family_coverage": family_coverage_prefix,
+                "first_round_strategy_families": first_round_families,
                 "training_best_score": (
                     session.best_result.research_score
                     if session.best_result

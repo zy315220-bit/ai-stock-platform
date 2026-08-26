@@ -27,7 +27,10 @@ def _returns() -> pd.Series:
 def test_regime_window_extends_until_missing_bear_is_found(monkeypatch) -> None:
     def fake_estimate(_series, as_of_date):
         as_of = pd.Timestamp(as_of_date)
-        regime = "BEAR" if as_of.year < 2020 else "BULL"
+        # The base 2020-2024 window begins with a 2019-12-31 as-of date,
+        # so keep that BULL. A two-year extension reaches a 2017 as-of date
+        # and should be the first attempt able to observe the synthetic BEAR.
+        regime = "BEAR" if as_of.year < 2018 else "BULL"
         return SimpleNamespace(
             regime=regime,
             to_dict=lambda: {

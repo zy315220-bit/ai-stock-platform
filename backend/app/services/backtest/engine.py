@@ -58,17 +58,21 @@ ENTRY_MODES = {
     "score_and_rsi_momentum",
     "score_and_bollinger_breakout",
     "score_and_volume_confirmation",
+    "mean_reversion_bollinger_rsi",
 }
 EXIT_MODES = {
     "score",
     "score_or_time",
     "score_or_ema_reversal",
     "score_or_time_or_ema_reversal",
+    "mean_reversion_or_time",
 }
 
 
 class InsufficientBacktestHistoryError(ValueError):
     """The requested evaluation slice cannot support indicator research."""
+
+
 SCORE_SERIES_CACHE_SCHEMA = "score-engine-series-v1"
 _SCORE_SERIES_CACHE_MAX_ENTRIES = 32
 _SCORE_SERIES_CACHE: OrderedDict[
@@ -434,6 +438,25 @@ def _download_backtest_history(
     raise ValueError(detail or f"找不到 {stock_code} 的歷史資料。")
 
 
+def _position_fraction_for_atr(
+    *,
+    atr_percent: float,
+    atr_target_percent: float | None,
+    min_position_fraction: float,
+    max_position_fraction: float,
+) -> float:
+    """Return a causal ATR-targeted allocation fraction for one entry signal."""
+    if atr_target_percent is None:
+        return max_position_fraction
+    if not math.isfinite(atr_percent) or atr_percent <= 0:
+        return min_position_fraction
+    raw_fraction = atr_target_percent / atr_percent
+    return max(
+        min_position_fraction,
+        min(max_position_fraction, raw_fraction),
+    )
+
+
 def backtest_stock(
     stock_code: str,
     start_date: str | None = None,
@@ -449,6 +472,9 @@ def backtest_stock(
     entry_mode: str = "score",
     exit_mode: str = "score",
     max_holding_days: int = 60,
+    atr_target_percent: float | None = None,
+    min_position_fraction: float = 0.20,
+    max_position_fraction: float = 1.00,
     liquidate_at_end: bool = True,
     include_research_series: bool = False,
 ) -> dict[str, Any]:
@@ -493,6 +519,18 @@ def backtest_stock(
     ):
         raise ValueError(
             "max_holding_days must be between 2 and 252 trading days."
+        )
+    if atr_target_percent is not None:
+        if (
+            not math.isfinite(float(atr_target_percent))
+            or not 0.10 <= float(atr_target_percent) <= 20.0
+        ):
+            raise ValueError(
+                "atr_target_percent must be between 0.10 and 20.0."
+            )
+    if not 0 < min_position_fraction <= max_position_fraction <= 1:
+        raise ValueError(
+            "position fractions must satisfy 0 < min <= max <= 1."
         )
 
     effective_start_date = (
@@ -540,6 +578,12 @@ def backtest_stock(
         required_columns.extend(["Close", "Upper"])
     elif entry_mode == "score_and_volume_confirmation":
         required_columns.append("VolumeRatio")
+    elif entry_mode == "mean_reversion_bollinger_rsi":
+        required_columns.extend(["Close", "Lower", "RSI", "MA20"])
+    if atr_target_percent is not None:
+        required_columns.append("NATR")
+    if exit_mode == "mean_reversion_or_time":
+        required_columns.extend(["Close", "RSI", "MA20"])
     df = df.dropna(subset=list(dict.fromkeys(required_columns))).reset_index(
         drop=True
     )
@@ -565,6 +609,7 @@ def backtest_stock(
     entry_gross_amount = 0.0
     entry_commission = 0.0
     entry_total_cost = 0.0
+    entry_position_fraction = 0.0
     trades: list[dict[str, Any]] = []
     equity_curve: list[dict[str, Any]] = []
     total_commission = 0.0
@@ -624,6 +669,12 @@ def backtest_stock(
                 entry_mode == "score_and_volume_confirmation"
                 and float(current_row["VolumeRatio"]) >= 1.2
             )
+            or (
+                entry_mode == "mean_reversion_bollinger_rsi"
+                and float(current_row["Close"])
+                <= float(current_row["Lower"])
+                and float(current_row["RSI"]) <= 35.0
+            )
         )
         if (
             shares == 0
@@ -631,8 +682,18 @@ def backtest_stock(
             and ema_trend_ok
             and entry_structure_ok
         ):
+            current_atr_percent = float(
+                current_row.get("NATR", current_row["ATR"] / current_row["Close"] * 100)
+            )
+            position_fraction = _position_fraction_for_atr(
+                atr_percent=current_atr_percent,
+                atr_target_percent=atr_target_percent,
+                min_position_fraction=min_position_fraction,
+                max_position_fraction=max_position_fraction,
+            )
+            allocation_cash = cash * position_fraction
             purchasable_shares = _calculate_purchasable_shares(
-                cash=cash,
+                cash=allocation_cash,
                 price=next_open,
                 commission_rate=commission_rate,
             )
@@ -651,6 +712,7 @@ def backtest_stock(
                 entry_gross_amount = buy_cost["gross_amount"]
                 entry_commission = buy_cost["commission"]
                 entry_total_cost = buy_cost["total_cost"]
+                entry_position_fraction = position_fraction
                 total_commission += entry_commission
         elif shares > 0:
             held_days = (
@@ -658,10 +720,17 @@ def backtest_stock(
                 if entry_index is not None
                 else 0
             )
-            score_exit = score <= exit_score
+            score_exit = (
+                exit_mode != "mean_reversion_or_time"
+                and score <= exit_score
+            )
             time_exit = (
                 exit_mode
-                in {"score_or_time", "score_or_time_or_ema_reversal"}
+                in {
+                    "score_or_time",
+                    "score_or_time_or_ema_reversal",
+                    "mean_reversion_or_time",
+                }
                 and held_days >= max_holding_days
             )
             ema_exit = (
@@ -673,14 +742,26 @@ def backtest_stock(
                 and float(current_row[ema_fast_column])
                 <= float(current_row[ema_slow_column])
             )
-            if score_exit or time_exit or ema_exit:
+            mean_reversion_exit = (
+                exit_mode == "mean_reversion_or_time"
+                and (
+                    float(current_row["Close"])
+                    >= float(current_row["MA20"])
+                    or float(current_row["RSI"]) >= 55.0
+                )
+            )
+            if score_exit or time_exit or ema_exit or mean_reversion_exit:
                 exit_reason = (
                     "score_below_exit_threshold"
                     if score_exit
                     else (
                         "max_holding_days"
                         if time_exit
-                        else "ema_reversal"
+                        else (
+                            "ema_reversal"
+                            if ema_exit
+                            else "mean_reversion_recovered"
+                        )
                     )
                 )
                 sell_result = _calculate_sell_value(
@@ -716,6 +797,9 @@ def backtest_stock(
                         ),
                         "entry_commission": round(entry_commission, 2),
                         "entry_total_cost": round(entry_total_cost, 2),
+                        "entry_position_fraction": round(
+                            entry_position_fraction, 4
+                        ),
                         "exit_gross_amount": round(
                             sell_result["gross_amount"], 2
                         ),
@@ -745,6 +829,7 @@ def backtest_stock(
                 entry_gross_amount = 0.0
                 entry_commission = 0.0
                 entry_total_cost = 0.0
+                entry_position_fraction = 0.0
                 position_dividends = 0.0
 
         equity = cash + shares * next_close
@@ -796,6 +881,9 @@ def backtest_stock(
                     "entry_gross_amount": round(entry_gross_amount, 2),
                     "entry_commission": round(entry_commission, 2),
                     "entry_total_cost": round(entry_total_cost, 2),
+                    "entry_position_fraction": round(
+                        entry_position_fraction, 4
+                    ),
                     "exit_gross_amount": round(
                         sell_result["gross_amount"], 2
                     ),
@@ -839,6 +927,9 @@ def backtest_stock(
                     round(entry_signal_score, 2)
                     if entry_signal_score is not None
                     else None
+                ),
+                "entry_position_fraction": round(
+                    entry_position_fraction, 4
                 ),
                 "mark_date": final_date,
                 "mark_price": round(final_close, 2),
@@ -916,6 +1007,9 @@ def backtest_stock(
         "entry_mode": entry_mode,
         "exit_mode": exit_mode,
         "max_holding_days": max_holding_days,
+        "atr_target_percent": atr_target_percent,
+        "min_position_fraction": min_position_fraction,
+        "max_position_fraction": max_position_fraction,
         "liquidate_at_end": liquidate_at_end,
     }
     return {

@@ -17,7 +17,7 @@ class EvolutionRound:
     survivors: tuple[ResearchCandidate, ...]
 
 
-SEARCH_SPACE_SCHEMA = "alpha-family-diversity-v4"
+SEARCH_SPACE_SCHEMA = "alpha-family-diversity-v5"
 
 
 RESEARCH_STRUCTURES = (
@@ -37,11 +37,9 @@ RESEARCH_STRUCTURES = (
     ("score_and_rsi_momentum", True, "EMA20", "EMA60", "score_or_time_or_ema_reversal", 120, "RSI-confirmed medium/long EMA trend with time and reversal exits"),
 )
 
-# These seeds deliberately use the existing audited execution engine with a
-# near-neutral score gate (entry=1, exit=0). The substantive entry condition
-# therefore comes from the technical structure rather than a high Score Engine
-# threshold. This creates materially different return paths without copying or
-# bypassing transaction-cost, corporate-action, next-open, or no-lookahead code.
+# Signal-dominant families retain the audited execution engine while making the
+# actual technical condition, rather than a high Score Engine threshold, the
+# primary source of entries.
 SIGNAL_DOMINANT_STRUCTURES = (
     ("alpha_trend_ema_fast", "score", True, "EMA5", "EMA20", "score_or_time_or_ema_reversal", 40, "fast EMA trend-following"),
     ("alpha_trend_ema_slow", "score", True, "EMA20", "EMA60", "score_or_time_or_ema_reversal", 80, "medium/long EMA trend-following"),
@@ -53,12 +51,82 @@ SIGNAL_DOMINANT_STRUCTURES = (
     ("alpha_breakout_volume_trend", "score_and_volume_confirmation", True, "EMA5", "EMA20", "score_or_time_or_ema_reversal", 40, "volume expansion with fast EMA trend filter"),
 )
 
-SIGNAL_DOMINANT_FAMILIES = frozenset(structure[0] for structure in SIGNAL_DOMINANT_STRUCTURES)
+ADVANCED_ALPHA_SEEDS = (
+    {
+        "family": "alpha_mean_reversion_bollinger_rsi",
+        "label": "Bollinger lower-band and low-RSI mean reversion",
+        "parameters": {
+            "entry_score": 1,
+            "exit_score": 0,
+            "require_ema_trend": False,
+            "ema_fast_column": "EMA20",
+            "ema_slow_column": "EMA60",
+            "entry_mode": "mean_reversion_bollinger_rsi",
+            "exit_mode": "mean_reversion_or_time",
+            "max_holding_days": 20,
+        },
+    },
+    {
+        "family": "alpha_mean_reversion_bollinger_rsi_vol",
+        "label": "mean reversion with causal ATR-targeted exposure",
+        "parameters": {
+            "entry_score": 1,
+            "exit_score": 0,
+            "require_ema_trend": False,
+            "ema_fast_column": "EMA20",
+            "ema_slow_column": "EMA60",
+            "entry_mode": "mean_reversion_bollinger_rsi",
+            "exit_mode": "mean_reversion_or_time",
+            "max_holding_days": 20,
+            "atr_target_percent": 1.5,
+            "min_position_fraction": 0.25,
+            "max_position_fraction": 0.75,
+        },
+    },
+    {
+        "family": "alpha_trend_ema_slow_vol",
+        "label": "medium/long EMA trend with causal ATR-targeted exposure",
+        "parameters": {
+            "entry_score": 1,
+            "exit_score": 0,
+            "require_ema_trend": True,
+            "ema_fast_column": "EMA20",
+            "ema_slow_column": "EMA60",
+            "entry_mode": "score",
+            "exit_mode": "score_or_time_or_ema_reversal",
+            "max_holding_days": 80,
+            "atr_target_percent": 2.0,
+            "min_position_fraction": 0.25,
+            "max_position_fraction": 0.85,
+        },
+    },
+    {
+        "family": "alpha_breakout_bollinger_vol",
+        "label": "Bollinger breakout with causal ATR-targeted exposure",
+        "parameters": {
+            "entry_score": 1,
+            "exit_score": 0,
+            "require_ema_trend": False,
+            "ema_fast_column": "EMA20",
+            "ema_slow_column": "EMA60",
+            "entry_mode": "score_and_bollinger_breakout",
+            "exit_mode": "score_or_time",
+            "max_holding_days": 30,
+            "atr_target_percent": 2.0,
+            "min_position_fraction": 0.25,
+            "max_position_fraction": 0.75,
+        },
+    },
+)
+
+SIGNAL_DOMINANT_FAMILIES = frozenset(
+    [structure[0] for structure in SIGNAL_DOMINANT_STRUCTURES]
+    + [seed["family"] for seed in ADVANCED_ALPHA_SEEDS]
+)
 SHORTER_RISK_EXIT_DAYS = (20, 30)
 
 
 def candidate_parameter_signature(candidate: ResearchCandidate) -> str:
-    """Return a stable identity for one executable strategy configuration."""
     payload = json.dumps(
         {
             "strategy_family": candidate.strategy_family,
@@ -79,16 +147,31 @@ def _strategy_family(entry_mode: str) -> str:
         "score_and_rsi_momentum": "score_engine_rsi_confirmed",
         "score_and_bollinger_breakout": "score_engine_bollinger_breakout",
         "score_and_volume_confirmation": "score_engine_volume_confirmed",
+        "mean_reversion_bollinger_rsi": "alpha_mean_reversion_bollinger_rsi",
     }.get(entry_mode, "score_engine")
 
 
-def generate_signal_dominant_candidates(*, initial_capital: float = 1_000_000.0) -> list[ResearchCandidate]:
-    """Seed alpha families whose primary trigger is not a high score threshold."""
+def generate_signal_dominant_candidates(
+    *,
+    initial_capital: float = 1_000_000.0,
+) -> list[ResearchCandidate]:
     candidates: list[ResearchCandidate] = []
-    for family, entry_mode, require_ema_trend, fast, slow, exit_mode, max_holding_days, label in SIGNAL_DOMINANT_STRUCTURES:
+    for (
+        family,
+        entry_mode,
+        require_ema_trend,
+        fast,
+        slow,
+        exit_mode,
+        max_holding_days,
+        label,
+    ) in SIGNAL_DOMINANT_STRUCTURES:
         candidates.append(
             ResearchCandidate(
-                candidate_id=f"signal-{family}-{entry_mode}-{fast.lower()}-{slow.lower()}-{exit_mode}-{max_holding_days}",
+                candidate_id=(
+                    f"signal-{family}-{entry_mode}-{fast.lower()}-"
+                    f"{slow.lower()}-{exit_mode}-{max_holding_days}"
+                ),
                 strategy_family=family,
                 parameters={
                     "entry_score": 1,
@@ -101,7 +184,33 @@ def generate_signal_dominant_candidates(*, initial_capital: float = 1_000_000.0)
                     "exit_mode": exit_mode,
                     "max_holding_days": max_holding_days,
                 },
-                hypothesis=f"Signal-dominant {label}; Score Engine threshold is kept at 1/0 only for execution-interface compatibility",
+                hypothesis=(
+                    f"Signal-dominant {label}; Score Engine threshold is kept at "
+                    "1/0 only for execution-interface compatibility"
+                ),
+            )
+        )
+    for seed in ADVANCED_ALPHA_SEEDS:
+        parameters = dict(seed["parameters"])
+        parameters["initial_capital"] = initial_capital
+        candidate_id_payload = json.dumps(
+            {
+                "family": seed["family"],
+                "parameters": parameters,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        suffix = sha256(candidate_id_payload.encode("utf-8")).hexdigest()[:12]
+        candidates.append(
+            ResearchCandidate(
+                candidate_id=f"signal-{seed['family']}-{suffix}",
+                strategy_family=str(seed["family"]),
+                parameters=parameters,
+                hypothesis=(
+                    f"Signal-dominant {seed['label']}; uses only causal indicators "
+                    "and next-session-open execution"
+                ),
             )
         )
     return candidates
@@ -115,18 +224,40 @@ def generate_parameter_candidates(
     strategy_family: str = "score_engine",
     include_signal_dominant: bool = True,
 ) -> list[ResearchCandidate]:
-    """Generate deterministic executable score and signal-family hypotheses."""
     candidates: list[ResearchCandidate] = []
-    for entry_score, exit_score, structure in product(entry_scores, exit_scores, RESEARCH_STRUCTURES):
+    for entry_score, exit_score, structure in product(
+        entry_scores,
+        exit_scores,
+        RESEARCH_STRUCTURES,
+    ):
         if exit_score >= entry_score:
             continue
-        entry_mode, require_ema_trend, fast, slow, exit_mode, max_holding_days, label = structure
-        trend_id = "base" if not require_ema_trend else f"{fast.lower()}-{slow.lower()}"
+        (
+            entry_mode,
+            require_ema_trend,
+            fast,
+            slow,
+            exit_mode,
+            max_holding_days,
+            label,
+        ) = structure
+        trend_id = (
+            "base"
+            if not require_ema_trend
+            else f"{fast.lower()}-{slow.lower()}"
+        )
         structure_id = f"{entry_mode}-{trend_id}"
         candidates.append(
             ResearchCandidate(
-                candidate_id=f"grid-{entry_score}-{exit_score}-{structure_id}-{exit_mode}-{max_holding_days}",
-                strategy_family=(strategy_family if strategy_family != "score_engine" else _strategy_family(entry_mode)),
+                candidate_id=(
+                    f"grid-{entry_score}-{exit_score}-{structure_id}-"
+                    f"{exit_mode}-{max_holding_days}"
+                ),
+                strategy_family=(
+                    strategy_family
+                    if strategy_family != "score_engine"
+                    else _strategy_family(entry_mode)
+                ),
                 parameters={
                     "entry_score": entry_score,
                     "exit_score": exit_score,
@@ -142,8 +273,16 @@ def generate_parameter_candidates(
             )
         )
     if include_signal_dominant and strategy_family == "score_engine":
-        candidates.extend(generate_signal_dominant_candidates(initial_capital=initial_capital))
-    candidates.sort(key=lambda candidate: sha256(candidate.candidate_id.encode("utf-8")).hexdigest())
+        candidates.extend(
+            generate_signal_dominant_candidates(
+                initial_capital=initial_capital,
+            )
+        )
+    candidates.sort(
+        key=lambda candidate: sha256(
+            candidate.candidate_id.encode("utf-8")
+        ).hexdigest()
+    )
     return candidates
 
 
@@ -157,14 +296,28 @@ def mutate_survivor(
     max_holding_days_override: int | None = None,
 ) -> ResearchCandidate:
     params = dict(parent.parameters)
-    params["entry_score"] = max(1, min(99, int(params["entry_score"]) + entry_delta))
-    params["exit_score"] = max(0, min(98, int(params["exit_score"]) + exit_delta))
+    params["entry_score"] = max(
+        1,
+        min(99, int(params["entry_score"]) + entry_delta),
+    )
+    params["exit_score"] = max(
+        0,
+        min(98, int(params["exit_score"]) + exit_delta),
+    )
     if params["exit_score"] >= params["entry_score"]:
         params["exit_score"] = params["entry_score"] - 1
     structure_note = ""
     strategy_family = parent.strategy_family
     if strategy_structure is not None:
-        entry_mode, require, fast, slow, exit_mode, max_holding_days, label = strategy_structure
+        (
+            entry_mode,
+            require,
+            fast,
+            slow,
+            exit_mode,
+            max_holding_days,
+            label,
+        ) = strategy_structure
         params.update(
             require_ema_trend=require,
             ema_fast_column=fast,
@@ -176,8 +329,13 @@ def mutate_survivor(
         strategy_family = _strategy_family(entry_mode)
         structure_note = f"; structure={label}"
     if max_holding_days_override is not None:
-        params["max_holding_days"] = max(5, int(max_holding_days_override))
-        structure_note += f"; max_hold={params['max_holding_days']} sessions"
+        params["max_holding_days"] = max(
+            5,
+            int(max_holding_days_override),
+        )
+        structure_note += (
+            f"; max_hold={params['max_holding_days']} sessions"
+        )
     identity_payload = json.dumps(
         {
             "parent_id": parent.candidate_id,
@@ -196,19 +354,43 @@ def mutate_survivor(
         strategy_family=strategy_family,
         parameters=params,
         parent_id=parent.candidate_id,
-        hypothesis=f"Adaptive {hypothesis_suffix} mutation of {parent.candidate_id}: entry {entry_delta:+d}, exit {exit_delta:+d}{structure_note}",
+        hypothesis=(
+            f"Adaptive {hypothesis_suffix} mutation of {parent.candidate_id}: "
+            f"entry {entry_delta:+d}, exit {exit_delta:+d}{structure_note}"
+        ),
     )
 
 
-def _mutation_neighborhood(result: ExperimentResult) -> tuple[tuple[int, int, str], ...]:
+def _mutation_neighborhood(
+    result: ExperimentResult,
+) -> tuple[tuple[int, int, str], ...]:
     if result.candidate.strategy_family in SIGNAL_DOMINANT_FAMILIES:
         return ((0, 0, "signal-preserve"),)
     score = result.research_score
     if result.decision is ExperimentDecision.HOLDOUT_READY or score >= 60:
-        return ((-2, 0, "fine"), (2, 0, "fine"), (0, -2, "fine"), (0, 2, "fine"), (-2, -2, "fine"), (2, 2, "fine"))
+        return (
+            (-2, 0, "fine"),
+            (2, 0, "fine"),
+            (0, -2, "fine"),
+            (0, 2, "fine"),
+            (-2, -2, "fine"),
+            (2, 2, "fine"),
+        )
     if score >= 25:
-        return ((-5, 0, "local"), (5, 0, "local"), (0, -5, "local"), (0, 5, "local"), (-5, -5, "local"), (5, 5, "local"))
-    return ((-10, 0, "broad"), (10, 0, "broad"), (0, -10, "broad"), (0, 10, "broad"))
+        return (
+            (-5, 0, "local"),
+            (5, 0, "local"),
+            (0, -5, "local"),
+            (0, 5, "local"),
+            (-5, -5, "local"),
+            (5, 5, "local"),
+        )
+    return (
+        (-10, 0, "broad"),
+        (10, 0, "broad"),
+        (0, -10, "broad"),
+        (0, 10, "broad"),
+    )
 
 
 def _supports_time_exit(candidate: ResearchCandidate) -> bool:
@@ -221,30 +403,47 @@ def evolve_candidates(
     top_k: int = 3,
     preserve_input_order: bool = False,
 ) -> list[ResearchCandidate]:
-    """Evolve thresholds, structure, and duration from selected Train parents."""
-    eligible = [result for result in results if result.decision is not ExperimentDecision.DISCARD]
-    ranked = eligible[:top_k] if preserve_input_order else sorted(eligible, key=lambda result: result.research_score, reverse=True)[:top_k]
+    eligible = [
+        result
+        for result in results
+        if result.decision is not ExperimentDecision.DISCARD
+    ]
+    ranked = (
+        eligible[:top_k]
+        if preserve_input_order
+        else sorted(
+            eligible,
+            key=lambda result: result.research_score,
+            reverse=True,
+        )[:top_k]
+    )
     children: list[ResearchCandidate] = []
-    seen: set[tuple[int, int, bool, str, str, str, str, int]] = set()
+    seen: set[tuple[object, ...]] = set()
     for result in ranked:
         parent = result.candidate
         mutations = [
             (entry_delta, exit_delta, label, None, None)
             for entry_delta, exit_delta, label in _mutation_neighborhood(result)
         ]
-        # A signal-dominant parent stays in its family lane. Cross-family
-        # exploration already happens through the global seed universe, so
-        # mutating it back into score-labeled structures only destroys family
-        # identity without adding a genuinely new hypothesis.
         if parent.strategy_family not in SIGNAL_DOMINANT_FAMILIES:
-            mutations.extend((0, 0, "structure", structure, None) for structure in RESEARCH_STRUCTURES)
+            mutations.extend(
+                (0, 0, "structure", structure, None)
+                for structure in RESEARCH_STRUCTURES
+            )
         if _supports_time_exit(parent):
             mutations.extend(
                 (0, 0, "duration", None, holding_days)
                 for holding_days in SHORTER_RISK_EXIT_DAYS
-                if holding_days != int(parent.parameters.get("max_holding_days", 60))
+                if holding_days
+                != int(parent.parameters.get("max_holding_days", 60))
             )
-        for entry_delta, exit_delta, label, structure, holding_override in mutations:
+        for (
+            entry_delta,
+            exit_delta,
+            label,
+            structure,
+            holding_override,
+        ) in mutations:
             child = mutate_survivor(
                 parent,
                 entry_delta=entry_delta,
@@ -262,6 +461,9 @@ def evolve_candidates(
                 str(child.parameters.get("entry_mode", "score")),
                 str(child.parameters.get("exit_mode", "score")),
                 int(child.parameters.get("max_holding_days", 60)),
+                child.parameters.get("atr_target_percent"),
+                child.parameters.get("min_position_fraction"),
+                child.parameters.get("max_position_fraction"),
             )
             if key not in seen:
                 seen.add(key)
@@ -278,6 +480,17 @@ def run_evolution_round(
     backtest_fn: BacktestFn,
     top_k: int = 3,
 ) -> EvolutionRound:
-    evaluated = tuple(run_research_batch(stock_code, split, candidates, backtest_fn=backtest_fn))
+    evaluated = tuple(
+        run_research_batch(
+            stock_code,
+            split,
+            candidates,
+            backtest_fn=backtest_fn,
+        )
+    )
     survivors = tuple(evolve_candidates(evaluated, top_k=top_k))
-    return EvolutionRound(generation=generation, evaluated=evaluated, survivors=survivors)
+    return EvolutionRound(
+        generation=generation,
+        evaluated=evaluated,
+        survivors=survivors,
+    )

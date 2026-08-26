@@ -19,6 +19,14 @@ TRAIN_DATA_IDENTITY_SCHEMA = "canonical-train-score-series-v1"
 MAX_ELITES = 12
 MAX_FRONTIER = 96
 MAX_SEEN_SIGNATURES = 10_000
+FAMILY_COVERAGE_BUCKETS = (
+    "mean_reversion",
+    "volatility_managed",
+    "trend",
+    "breakout",
+    "momentum",
+    "score_control",
+)
 
 
 @dataclass(frozen=True)
@@ -85,14 +93,33 @@ def _memory_compatibility(
     if not isinstance(memory, dict):
         return None, "missing"
     checks = (
-        (memory.get("schema_version") == TRAINING_MEMORY_SCHEMA_VERSION, "schema_changed"),
-        (memory.get("search_space_schema") == SEARCH_SPACE_SCHEMA, "search_space_changed"),
+        (
+            memory.get("schema_version") == TRAINING_MEMORY_SCHEMA_VERSION,
+            "schema_changed",
+        ),
+        (
+            memory.get("search_space_schema") == SEARCH_SPACE_SCHEMA,
+            "search_space_changed",
+        ),
         (memory.get("provenance") == "TRAIN_ONLY", "unsafe_provenance"),
-        (str(memory.get("stock_code") or "").upper() == stock_code.upper(), "stock_changed"),
+        (
+            str(memory.get("stock_code") or "").upper()
+            == stock_code.upper(),
+            "stock_changed",
+        ),
         (memory.get("campaign_id") == campaign_id, "campaign_changed"),
-        (list(memory.get("train_window") or []) == list(train_window), "train_window_changed"),
-        (memory.get("validation_feedback_used") is False, "validation_feedback_detected"),
-        (memory.get("holdout_feedback_used") is False, "holdout_feedback_detected"),
+        (
+            list(memory.get("train_window") or []) == list(train_window),
+            "train_window_changed",
+        ),
+        (
+            memory.get("validation_feedback_used") is False,
+            "validation_feedback_detected",
+        ),
+        (
+            memory.get("holdout_feedback_used") is False,
+            "holdout_feedback_detected",
+        ),
     )
     for safe, reason in checks:
         if not safe:
@@ -125,6 +152,86 @@ def _unique_candidates(
     return selected
 
 
+def _family_coverage_bucket(candidate: ResearchCandidate) -> str | None:
+    """Map one Train-safe candidate to one mutually exclusive diversity bucket."""
+    family = str(candidate.strategy_family or "")
+    parameters = candidate.parameters
+    volatility_managed = parameters.get("atr_target_percent") is not None
+
+    # Prefer a pure mean-reversion representative in its own bucket. A
+    # volatility-managed mean-reversion variant belongs to the vol bucket so
+    # the reserved prefix contains two genuinely different return/risk paths.
+    if family.startswith("alpha_mean_reversion") and not volatility_managed:
+        return "mean_reversion"
+    if volatility_managed:
+        return "volatility_managed"
+    if family.startswith("alpha_trend"):
+        return "trend"
+    if family.startswith("alpha_breakout"):
+        return "breakout"
+    if family.startswith("alpha_momentum"):
+        return "momentum"
+    if family == "score_engine":
+        return "score_control"
+    return None
+
+
+def _reserve_family_coverage_prefix(
+    queues: list[tuple[str, list[ResearchCandidate]]],
+) -> tuple[
+    list[tuple[str, str, ResearchCandidate]],
+    tuple[str, ...],
+]:
+    """Reserve deterministic first-generation slots without outcome feedback.
+
+    Selection uses only candidate metadata and parameters that already belong to
+    the Train search space. No Validation, walk-forward, regime, or Final
+    Holdout result can influence this ordering.
+    """
+    source_by_signature: dict[str, str] = {}
+    available: list[ResearchCandidate] = []
+    available_signatures: set[str] = set()
+    for source_name, queue in queues:
+        for candidate in queue:
+            signature = candidate_parameter_signature(candidate)
+            if signature in available_signatures:
+                continue
+            available_signatures.add(signature)
+            source_by_signature[signature] = source_name
+            available.append(candidate)
+
+    reserved: list[tuple[str, str, ResearchCandidate]] = []
+    reserved_signatures: set[str] = set()
+    covered: set[str] = set()
+    for bucket in FAMILY_COVERAGE_BUCKETS:
+        for candidate in available:
+            signature = candidate_parameter_signature(candidate)
+            if signature in reserved_signatures:
+                continue
+            if _family_coverage_bucket(candidate) != bucket:
+                continue
+            reserved.append(
+                (bucket, source_by_signature[signature], candidate)
+            )
+            reserved_signatures.add(signature)
+            covered.add(bucket)
+            break
+
+    if reserved_signatures:
+        for _, queue in queues:
+            queue[:] = [
+                candidate
+                for candidate in queue
+                if candidate_parameter_signature(candidate)
+                not in reserved_signatures
+            ]
+
+    missing = tuple(
+        bucket for bucket in FAMILY_COVERAGE_BUCKETS if bucket not in covered
+    )
+    return reserved, missing
+
+
 def prepare_daily_candidate_plan(
     *,
     stock_code: str,
@@ -151,7 +258,9 @@ def prepare_daily_candidate_plan(
     )
     seen = {
         str(signature)
-        for signature in (compatible or {}).get("seen_parameter_signatures", [])
+        for signature in (compatible or {}).get(
+            "seen_parameter_signatures", []
+        )
     }
     frontier = _unique_candidates(
         (
@@ -180,6 +289,27 @@ def prepare_daily_candidate_plan(
     planned: list[ResearchCandidate] = []
     planned_signatures: set[str] = set()
     seed_source_counts = {name: 0 for name, _ in queues}
+    coverage_prefix, missing_coverage = _reserve_family_coverage_prefix(
+        queues
+    )
+    coverage_details: list[dict[str, str]] = []
+    for bucket, source_name, candidate in coverage_prefix:
+        signature = candidate_parameter_signature(candidate)
+        if signature in planned_signatures:
+            continue
+        planned_signatures.add(signature)
+        planned.append(candidate)
+        seed_source_counts[source_name] += 1
+        coverage_details.append(
+            {
+                "bucket": bucket,
+                "source": source_name,
+                "candidate_id": candidate.candidate_id,
+                "strategy_family": candidate.strategy_family,
+                "parameter_signature": signature,
+            }
+        )
+
     while any(queue for _, queue in queues):
         for name, queue in queues:
             if not queue:
@@ -211,6 +341,11 @@ def prepare_daily_candidate_plan(
         ),
         "planned_candidate_count": len(planned),
         "seed_source_counts": seed_source_counts,
+        "family_coverage_enabled": True,
+        "family_coverage_prefix_count": len(coverage_details),
+        "family_coverage_required_buckets": list(FAMILY_COVERAGE_BUCKETS),
+        "family_coverage_missing_buckets": list(missing_coverage),
+        "family_coverage_prefix": coverage_details,
         "validation_feedback_used": False,
         "holdout_feedback_used": False,
     }
@@ -223,7 +358,8 @@ def prepare_daily_candidate_plan(
                 "train_trial_period_sharpes",
                 [],
             )
-            if isinstance(value, (int, float)) and math.isfinite(float(value))
+            if isinstance(value, (int, float))
+            and math.isfinite(float(value))
         ),
         audit=audit,
     )
@@ -233,14 +369,18 @@ def _training_records(result: dict[str, Any]) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for round_payload in result.get("rounds") or []:
         if round_payload.get("evaluation_phase") != "train":
-            raise RuntimeError("Training memory refused non-train round evidence")
+            raise RuntimeError(
+                "Training memory refused non-train round evidence"
+            )
         generation = int(round_payload.get("generation", 0) or 0)
         for serialized in round_payload.get("evaluated") or []:
             if serialized.get("evaluation_phase") != "train":
                 raise RuntimeError(
                     "Training memory refused validation or holdout evidence"
                 )
-            candidate = _candidate_from_payload(serialized.get("candidate"))
+            candidate = _candidate_from_payload(
+                serialized.get("candidate")
+            )
             if candidate is None:
                 continue
             try:
@@ -254,10 +394,15 @@ def _training_records(result: dict[str, Any]) -> list[dict[str, Any]]:
             records.append(
                 {
                     "candidate": asdict(candidate),
-                    "parameter_signature": candidate_parameter_signature(candidate),
+                    "parameter_signature": candidate_parameter_signature(
+                        candidate
+                    ),
                     "research_score": score,
                     "decision": decision.value,
-                    "reasons": [str(item) for item in serialized.get("reasons") or []],
+                    "reasons": [
+                        str(item)
+                        for item in serialized.get("reasons") or []
+                    ],
                     "generation": generation,
                     "data_fingerprint": metrics.get("data_fingerprint"),
                     "train_period_sharpe": (
@@ -316,7 +461,9 @@ def build_training_memory(
     )
     prior_fingerprints = sorted(
         str(item)
-        for item in (compatible or {}).get("train_data_fingerprints", [])
+        for item in (compatible or {}).get(
+            "train_data_fingerprints", []
+        )
     )
     prior_identity = str(
         (compatible or {}).get("train_data_identity") or ""
@@ -328,7 +475,9 @@ def build_training_memory(
 
     prior_seen = {
         str(item)
-        for item in (compatible or {}).get("seen_parameter_signatures", [])
+        for item in (compatible or {}).get(
+            "seen_parameter_signatures", []
+        )
     }
     current_seen = {
         str(record["parameter_signature"]) for record in records
@@ -338,7 +487,9 @@ def build_training_memory(
     elite_by_signature: dict[str, dict[str, Any]] = {}
     for item in (compatible or {}).get("elites", []):
         if isinstance(item, dict) and item.get("parameter_signature"):
-            elite_by_signature[str(item["parameter_signature"])] = dict(item)
+            elite_by_signature[str(item["parameter_signature"])] = dict(
+                item
+            )
     source_run_id = result.get("research_run_id")
     for record in records:
         if record["decision"] == ExperimentDecision.DISCARD.value:
@@ -381,7 +532,9 @@ def build_training_memory(
     previous_experiments = int(
         (compatible or {}).get("lifetime_experiment_count", 0) or 0
     )
-    previous_runs = int((compatible or {}).get("lifetime_run_count", 0) or 0)
+    previous_runs = int(
+        (compatible or {}).get("lifetime_run_count", 0) or 0
+    )
     strategy_families = sorted(
         {
             str(item)
@@ -423,7 +576,8 @@ def build_training_memory(
         "train_data_identity": str(train_data_identity).strip(),
         "train_data_identity_verified": identity_verified,
         "train_data_identity_migrated": identity_migrated,
-        "train_data_fingerprints": current_fingerprints or prior_fingerprints,
+        "train_data_fingerprints": current_fingerprints
+        or prior_fingerprints,
         "seen_parameter_signatures": merged_seen,
         "elites": elites,
         "frontier": frontier,
@@ -448,8 +602,12 @@ def build_training_memory(
                 "train_data_identity_schema"
             ],
             "train_data_identity": memory["train_data_identity"],
-            "train_data_fingerprints": memory["train_data_fingerprints"],
-            "seen_parameter_signatures": memory["seen_parameter_signatures"],
+            "train_data_fingerprints": memory[
+                "train_data_fingerprints"
+            ],
+            "seen_parameter_signatures": memory[
+                "seen_parameter_signatures"
+            ],
             "elites": memory["elites"],
             "frontier": memory["frontier"],
             "strategy_families": memory["strategy_families"],
@@ -499,7 +657,9 @@ def training_memory_summary(memory: dict[str, Any]) -> dict[str, Any]:
         "lifetime_experiment_count": int(
             memory.get("lifetime_experiment_count", 0) or 0
         ),
-        "lifetime_run_count": int(memory.get("lifetime_run_count", 0) or 0),
+        "lifetime_run_count": int(
+            memory.get("lifetime_run_count", 0) or 0
+        ),
         "last_run_new_experiment_count": int(
             memory.get("last_run_new_experiment_count", 0) or 0
         ),

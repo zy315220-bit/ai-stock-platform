@@ -354,6 +354,33 @@ def cscv_probability_of_backtest_overfitting(
     }
 
 
+def _stationary_long_run_variance(
+    values: np.ndarray,
+    *,
+    average_block_length: int,
+) -> float:
+    """Estimate long-run variance using stationary-bootstrap dependence weights."""
+    observations = len(values)
+    if observations < 2:
+        return 0.0
+    demeaned = values - float(np.mean(values))
+    restart_probability = 1.0 / max(1, average_block_length)
+    variance = float(np.sum(demeaned**2) / observations)
+    for lag in range(1, observations):
+        kappa = (
+            (1.0 - lag / observations)
+            * (1.0 - restart_probability) ** lag
+            + (lag / observations)
+            * (1.0 - restart_probability) ** (observations - lag)
+        )
+        covariance = float(
+            np.sum(demeaned[: observations - lag] * demeaned[lag:])
+            / observations
+        )
+        variance += 2.0 * kappa * covariance
+    return max(0.0, variance)
+
+
 def hansen_spa_test(
     candidate_excess_returns: dict[str, Iterable[float]],
     *,
@@ -361,6 +388,12 @@ def hansen_spa_test(
     average_block_length: int = 10,
     seed: int = 20260825,
 ) -> dict[str, Any]:
+    """Hansen SPA with dependence-aware studentization and full audit output.
+
+    The promotion decision continues to use the consistent SPA p-value at the
+    unchanged 5% threshold. Lower and upper recentering variants are diagnostic
+    bounds only. Validation observations never feed Train search.
+    """
     cleaned = {
         name: _clean(values)
         for name, values in candidate_excess_returns.items()
@@ -380,58 +413,149 @@ def hansen_spa_test(
             "available": False,
             "reason": "SPA_requires_at_least_30_return_observations",
             "candidate_count": len(cleaned),
+            "original_candidate_count": original_candidate_count,
             "observations": observations,
         }
-    names = list(cleaned)
-    matrix = np.vstack(
-        [cleaned[name][-observations:] for name in names]
-    )
-    means = matrix.mean(axis=1)
-    stds = matrix.std(axis=1, ddof=1)
-    safe_stds = np.where(stds > 0, stds, np.inf)
-    observed_statistics = np.sqrt(observations) * means / safe_stds
-    observed = max(0.0, float(np.max(observed_statistics)))
 
-    # Hansen's consistent recentering drops very poor alternatives before the
-    # common stationary bootstrap. This is the key power improvement over an
-    # unstudentized Reality Check while preserving cross-model dependence.
-    cutoff = -math.sqrt(
-        max(0.0, 2.0 * math.log(max(math.log(observations), 1.0)))
+    names = list(cleaned)
+    matrix = np.vstack([cleaned[name][-observations:] for name in names])
+    means = matrix.mean(axis=1)
+    long_run_variances = np.asarray(
+        [
+            _stationary_long_run_variance(
+                values,
+                average_block_length=average_block_length,
+            )
+            for values in matrix
+        ],
+        dtype=float,
     )
-    active = observed_statistics >= cutoff
+    positive_variance = np.isfinite(long_run_variances) & (
+        long_run_variances > 0.0
+    )
+    if not np.any(positive_variance):
+        return {
+            "available": False,
+            "reason": "SPA_requires_positive_long_run_variance",
+            "candidate_count": len(names),
+            "original_candidate_count": original_candidate_count,
+            "observations": observations,
+        }
+    safe_long_run_stds = np.where(
+        positive_variance,
+        np.sqrt(long_run_variances),
+        np.inf,
+    )
+    observed_statistics = (
+        math.sqrt(observations) * means / safe_long_run_stds
+    )
+    observed = max(0.0, float(np.max(observed_statistics)))
+    best_index = int(np.argmax(observed_statistics))
+
+    # Hansen's consistent recentering retains alternatives whose mean is close
+    # enough to the benchmark under a log(log(T)) bound. The scale uses a
+    # dependence-aware long-run variance rather than the one-period sample std.
+    log_log_term = max(0.0, math.log(math.log(observations)))
+    consistent_thresholds = -np.sqrt(
+        (long_run_variances / observations) * 2.0 * log_log_term
+    )
+    active = positive_variance & (means >= consistent_thresholds)
     if not np.any(active):
-        active[np.argmax(observed_statistics)] = True
-    centered = matrix - means[:, None]
+        active[best_index] = True
+
+    lower_recentering = np.maximum(means, 0.0)
+    consistent_recentering = means.copy()
+    consistent_recentering[~active] = 0.0
+    upper_recentering = means.copy()
+    recentering = np.vstack(
+        [lower_recentering, consistent_recentering, upper_recentering]
+    )
+
     indices = _stationary_bootstrap_indices(
         observations,
         bootstrap_samples,
         average_block_length=average_block_length,
         seed=seed,
     )
-    exceedances = 0
-    for sample_indices in indices:
-        bootstrap_means = centered[:, sample_indices].mean(axis=1)
-        statistic = float(
-            np.max(
-                np.sqrt(observations)
-                * bootstrap_means[active]
-                / safe_stds[active]
+    simulated_maxima = np.empty((bootstrap_samples, 3), dtype=float)
+    root_n = math.sqrt(observations)
+    for sample_number, sample_indices in enumerate(indices):
+        bootstrap_means = matrix[:, sample_indices].mean(axis=1)
+        for recenter_index in range(3):
+            statistics = (
+                root_n
+                * (bootstrap_means - recentering[recenter_index])
+                / safe_long_run_stds
             )
-        )
-        if statistic >= observed:
-            exceedances += 1
-    p_value = (exceedances + 1.0) / (bootstrap_samples + 1.0)
+            simulated_maxima[sample_number, recenter_index] = max(
+                0.0,
+                float(np.max(statistics)),
+            )
+
+    exceedances = np.sum(simulated_maxima >= observed, axis=0)
+    p_values = (exceedances + 1.0) / (bootstrap_samples + 1.0)
+    critical_values = np.quantile(simulated_maxima, 0.95, axis=0)
+    lower_p, consistent_p, upper_p = [float(value) for value in p_values]
+    lower_critical, consistent_critical, upper_critical = [
+        float(value) for value in critical_values
+    ]
+
+    best_mean = float(means[best_index])
+    best_lrv = float(long_run_variances[best_index])
+    best_lrv_std = math.sqrt(best_lrv) if best_lrv > 0.0 else float("inf")
+    required_mean = (
+        consistent_critical * best_lrv_std / root_n
+        if math.isfinite(best_lrv_std)
+        else float("inf")
+    )
+    additional_mean = (
+        max(0.0, required_mean - best_mean)
+        if math.isfinite(required_mean)
+        else float("inf")
+    )
+
     return {
         "available": True,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v1",
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v2_lrv",
         "candidate_count": len(names),
         "original_candidate_count": original_candidate_count,
         "active_candidate_count": int(np.sum(active)),
         "observations": observations,
         "bootstrap_samples": bootstrap_samples,
         "average_block_length": average_block_length,
+        "studentization": "stationary_bootstrap_long_run_variance",
+        "recentring_rule": "Hansen_log_log_consistent",
+        "best_candidate_id": names[best_index],
+        "best_mean_daily_excess_percent": round(best_mean * 100.0, 6),
+        "best_annualized_arithmetic_excess_percent": round(
+            best_mean * 252.0 * 100.0,
+            4,
+        ),
+        "best_long_run_variance": round(best_lrv, 12),
+        "best_long_run_std": round(best_lrv_std, 10),
         "observed_max_studentized_statistic": round(observed, 6),
-        "spa_p_value": round(p_value, 6),
-        "superior_predictive_ability_pass": p_value < 0.05,
+        "p_values": {
+            "lower": round(lower_p, 6),
+            "consistent": round(consistent_p, 6),
+            "upper": round(upper_p, 6),
+        },
+        "critical_values_5pct": {
+            "lower": round(lower_critical, 6),
+            "consistent": round(consistent_critical, 6),
+            "upper": round(upper_critical, 6),
+        },
+        "spa_p_value": round(consistent_p, 6),
+        "required_mean_daily_excess_percent_at_5pct": (
+            round(required_mean * 100.0, 6)
+            if math.isfinite(required_mean)
+            else None
+        ),
+        "additional_mean_daily_excess_percent_needed_at_5pct": (
+            round(additional_mean * 100.0, 6)
+            if math.isfinite(additional_mean)
+            else None
+        ),
+        "superior_predictive_ability_pass": consistent_p < 0.05,
+        "promotion_threshold": "consistent_spa_p_value_below_0.05",
         "benchmark": "same_stock_split_adjusted_buy_and_hold_total_return",
     }

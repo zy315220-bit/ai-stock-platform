@@ -91,7 +91,7 @@ def test_cscv_reports_low_pbo_for_a_stable_winner() -> None:
     assert result["overfitting_risk_pass"] is True
 
 
-def test_hansen_spa_uses_common_stationary_bootstrap() -> None:
+def test_hansen_spa_uses_lrv_studentized_common_stationary_bootstrap() -> None:
     rng = np.random.default_rng(19)
     result = hansen_spa_test(
         {
@@ -102,5 +102,51 @@ def test_hansen_spa_uses_common_stationary_bootstrap() -> None:
         bootstrap_samples=300,
     )
     assert result["available"] is True
+    assert result["method"] == "Hansen_SPA_consistent_stationary_bootstrap_v2_lrv"
+    assert result["studentization"] == "stationary_bootstrap_long_run_variance"
+    assert result["best_candidate_id"] == "strong"
+    assert result["best_long_run_variance"] > 0.0
+    assert result["spa_p_value"] == result["p_values"]["consistent"]
+    assert result["p_values"]["lower"] <= result["p_values"]["consistent"]
+    assert result["p_values"]["consistent"] <= result["p_values"]["upper"]
     assert result["spa_p_value"] < 0.05
     assert result["superior_predictive_ability_pass"] is True
+
+
+def test_hansen_spa_is_deterministic_for_serially_correlated_returns() -> None:
+    rng = np.random.default_rng(43)
+    innovations = rng.normal(0.0002, 0.003, (3, 420))
+    paths = np.zeros_like(innovations)
+    paths[:, 0] = innovations[:, 0]
+    for index in range(1, paths.shape[1]):
+        paths[:, index] = 0.65 * paths[:, index - 1] + innovations[:, index]
+    candidates = {
+        "a": paths[0] + 0.0002,
+        "b": paths[1],
+        "c": paths[2] - 0.0001,
+    }
+
+    first = hansen_spa_test(candidates, bootstrap_samples=240, seed=17)
+    second = hansen_spa_test(candidates, bootstrap_samples=240, seed=17)
+
+    assert first == second
+    assert first["available"] is True
+    assert first["best_long_run_variance"] > 0.0
+    assert first["critical_values_5pct"]["consistent"] > 0.0
+    assert first["additional_mean_daily_excess_percent_needed_at_5pct"] >= 0.0
+
+
+def test_hansen_spa_does_not_pass_noise_only_candidates() -> None:
+    rng = np.random.default_rng(1234)
+    result = hansen_spa_test(
+        {
+            "a": rng.normal(0.0, 0.004, 400),
+            "b": rng.normal(0.0, 0.004, 400),
+            "c": rng.normal(-0.0001, 0.004, 400),
+        },
+        bootstrap_samples=400,
+    )
+
+    assert result["available"] is True
+    assert result["spa_p_value"] >= 0.05
+    assert result["superior_predictive_ability_pass"] is False

@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from app.services.backtest.engine import (
+    _clear_score_series_cache,
     _position_fraction_for_atr,
     backtest_stock,
 )
@@ -14,6 +15,14 @@ from app.services.research_lab.evolution import (
     SEARCH_SPACE_SCHEMA,
     generate_parameter_candidates,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_score_cache():
+    """Prevent mocked score engines from contaminating neighboring tests."""
+    _clear_score_series_cache()
+    yield
+    _clear_score_series_cache()
 
 
 def _frame(periods: int = 90) -> pd.DataFrame:
@@ -46,9 +55,6 @@ def _frame(periods: int = 90) -> pd.DataFrame:
 
 def _indicator_frame(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    # Production reaches add_indicators after _prepare_stock_data has exposed
-    # Date as a column. Keep the mock output under the same contract rather than
-    # bypassing the engine's required-column fail-closed check.
     if "Date" not in out.columns:
         out["Date"] = pd.to_datetime(out.index)
     out["EMA5"] = 101.0

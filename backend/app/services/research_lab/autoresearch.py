@@ -8,8 +8,9 @@ from .evolution import (
     candidate_parameter_signature,
     evolve_candidates,
 )
-from .models import ExperimentDecision, ExperimentResult, ResearchCandidate, ResearchSplit
+from .models import ExperimentResult, ResearchCandidate, ResearchSplit
 from .runner import BacktestFn, run_research_batch
+from .train_selection import select_train_multiobjective, train_target_reached
 
 
 @dataclass(frozen=True)
@@ -36,12 +37,14 @@ def run_autoresearch(
     min_validation_trades: int = 8,
     excluded_parameter_signatures: Iterable[str] = (),
 ) -> ResearchSession:
-    """Bounded train-only keep/discard/evolve loop with a compute budget.
+    """Bounded Train-only keep/discard/evolve loop with a compute budget.
 
-    The experiment budget is shared fairly across remaining generations instead
-    of allowing generation 1 to consume everything. Validation and holdout are
-    deliberately absent from adaptive search. Validation is a separate finalist
-    gate and holdout is handled only by the one-shot promotion gate.
+    Adaptive search never reads Validation or Final Holdout evidence. Rather
+    than letting one scalar score monopolize every parent slot, each generation
+    now preserves a small deterministic frontier spanning score, persistent
+    active return, dependence-adjusted active evidence, and strategy-family
+    diversity. This is a search policy only; independent promotion gates remain
+    unchanged.
     """
     candidates = list(initial_candidates)
     rounds: list[EvolutionRound] = []
@@ -61,9 +64,6 @@ def run_autoresearch(
             break
 
         generations_left = max_generations - generation + 1
-        # Reserve a fair share for every generation still allowed to run. This
-        # guarantees that, when survivors exist, later generations can actually
-        # be evaluated rather than merely generated at the end of the budget.
         generation_budget = max(1, remaining // generations_left)
         batch: list[ResearchCandidate] = []
         for candidate in candidates:
@@ -95,14 +95,33 @@ def run_autoresearch(
             )
         )
         experiments += len(evaluated)
-        if evaluated and (best is None or evaluated[0].research_score > best.research_score):
+        if evaluated and (
+            best is None
+            or evaluated[0].research_score > best.research_score
+        ):
             best = evaluated[0]
 
-        children = tuple(evolve_candidates(evaluated, top_k=top_k))
-        rounds.append(EvolutionRound(generation=generation, evaluated=evaluated, survivors=children))
+        parent_results = select_train_multiobjective(
+            evaluated,
+            limit=max(1, top_k),
+        )
+        children = tuple(
+            evolve_candidates(
+                parent_results,
+                top_k=len(parent_results),
+                preserve_input_order=True,
+            )
+        )
+        rounds.append(
+            EvolutionRound(
+                generation=generation,
+                evaluated=evaluated,
+                survivors=children,
+            )
+        )
 
-        if best and best.decision is ExperimentDecision.HOLDOUT_READY and best.research_score >= target_score:
-            stopped_reason = "target_validation_score_reached"
+        if train_target_reached(best, target_score=target_score):
+            stopped_reason = "train_active_target_reached"
             break
         if experiments >= max_experiments:
             stopped_reason = "experiment_budget_reached"

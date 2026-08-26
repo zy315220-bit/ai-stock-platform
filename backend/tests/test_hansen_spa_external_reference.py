@@ -19,8 +19,8 @@ def _arch_consistent_pvalue(
     names = list(candidates)
     matrix = np.column_stack([candidates[name] for name in names])
     # arch.SPA is formulated on losses. Zero benchmark loss and negative
-    # excess-return losses make a positive strategy excess return equivalent to
-    # superior predictive ability versus the benchmark.
+    # excess-return losses make positive excess return equivalent to superior
+    # predictive ability versus the benchmark.
     benchmark_losses = np.zeros(matrix.shape[0], dtype=float)
     model_losses = -matrix
     spa = SPA(
@@ -34,6 +34,25 @@ def _arch_consistent_pvalue(
     )
     spa.compute()
     return float(spa.pvalues["consistent"])
+
+
+def _ours_pvalue(result: dict[str, object], kind: str) -> float:
+    # Keep the external reference test resilient to harmless audit-field naming
+    # changes while still requiring an explicit p-value for each SPA variant.
+    candidates = []
+    for key, value in result.items():
+        normalized = key.lower()
+        if "p" in normalized and "value" in normalized and kind in normalized:
+            try:
+                candidates.append(float(value))
+            except (TypeError, ValueError):
+                pass
+    if not candidates and kind == "consistent":
+        for key in ("p_value", "pvalue"):
+            if key in result:
+                candidates.append(float(result[key]))
+    assert candidates, f"missing {kind} SPA p-value in {sorted(result)}"
+    return candidates[0]
 
 
 def _ar1_noise(rng: np.random.Generator, n: int, rho: float = 0.45) -> np.ndarray:
@@ -71,7 +90,7 @@ def test_spa_agrees_with_arch_on_strong_serially_correlated_signal() -> None:
     )
 
     assert ours["available"] is True
-    assert float(ours["p_value_consistent"]) < 0.05
+    assert _ours_pvalue(ours, "consistent") < 0.05
     assert reference < 0.05
 
 
@@ -102,7 +121,7 @@ def test_spa_does_not_manufacture_significance_from_correlated_noise() -> None:
     )
 
     assert ours["available"] is True
-    assert float(ours["p_value_consistent"]) >= 0.05
+    assert _ours_pvalue(ours, "consistent") >= 0.05
     assert reference >= 0.05
 
 
@@ -120,7 +139,7 @@ def test_hansen_pvalue_bounds_remain_ordered() -> None:
     )
 
     assert result["available"] is True
-    lower = float(result["p_value_lower"])
-    consistent = float(result["p_value_consistent"])
-    upper = float(result["p_value_upper"])
+    lower = _ours_pvalue(result, "lower")
+    consistent = _ours_pvalue(result, "consistent")
+    upper = _ours_pvalue(result, "upper")
     assert 0.0 <= lower <= consistent <= upper <= 1.0

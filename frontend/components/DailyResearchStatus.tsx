@@ -149,6 +149,9 @@ type DailyStatus = {
   snapshot_available: boolean;
 };
 
+const AVAILABLE_STRATEGY_FAMILY_COUNT = 16;
+const MINIMUM_FAMILY_COVERAGE_PER_ROUND = 6;
+
 function formatTaipeiTime(value?: string): string {
   if (!value) return "等待首次執行";
   const parsed = new Date(value);
@@ -346,10 +349,14 @@ export default function DailyResearchStatus() {
             <div><dt>略過重複</dt><dd>{formatMetric(memory.last_run_duplicate_skip_count)}</dd></div>
             <div><dt>Train 菁英</dt><dd>{formatMetric(memory.elite_count)}</dd></div>
             <div><dt>待探索前沿</dt><dd>{formatMetric(memory.frontier_count)}</dd></div>
-            <div><dt>策略家族</dt><dd>{formatMetric(memory.strategy_family_count)}</dd></div>
+            <div><dt>可用策略家族</dt><dd>{formatMetric(AVAILABLE_STRATEGY_FAMILY_COUNT)}</dd></div>
+            <div><dt>已研究策略家族</dt><dd>{formatMetric(memory.strategy_family_count)}</dd></div>
+            <div><dt>每輪最低覆蓋</dt><dd>{formatMetric(MINIMUM_FAMILY_COVERAGE_PER_ROUND)} 類</dd></div>
           </dl>
           <p>
-            自適應回饋僅來自 Train；Validation 與 Final Holdout
+            可用家族是目前 alpha-family-diversity-v5 的完整研究宇宙；已研究家族來自跨日 Train 記憶。
+            每輪至少覆蓋 Mean Reversion、Volatility、Trend、Breakout、Momentum 與 Score control；
+            Validation 與 Final Holdout
             {memory.validation_feedback_used || memory.holdout_feedback_used ? " 發生異常回饋" : " 保持隔離"}。
           </p>
         </div>

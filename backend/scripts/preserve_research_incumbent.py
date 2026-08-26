@@ -104,6 +104,7 @@ def select_research_incumbent(
     incumbent_id = _candidate_identity(incumbent)
     round_id = _candidate_identity(round_candidate)
     previous_id = _candidate_identity(previous)
+    incumbent_in_current_round = incumbent_id == round_id
 
     if previous is None:
         state = "BOOTSTRAPPED"
@@ -129,6 +130,8 @@ def select_research_incumbent(
             and round_id == incumbent_id
             and incumbent_id != previous_id
         ),
+        "incumbent_in_current_round": incumbent_in_current_round,
+        "requires_current_revalidation": not incumbent_in_current_round,
         "same_campaign_only": True,
         "feeds_train_memory": False,
         "opens_final_holdout": False,
@@ -200,6 +203,9 @@ def main() -> None:
                 "source": incumbent["selection"]["source"],
                 "round_challenger": incumbent["selection"][
                     "round_challenger_identity"
+                ],
+                "requires_current_revalidation": incumbent["selection"][
+                    "requires_current_revalidation"
                 ],
             },
             ensure_ascii=False,

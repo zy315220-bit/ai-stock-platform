@@ -1,7 +1,8 @@
 name: Preserve Research Incumbent
-run-name: "Preserve Research Incumbent · #${{ github.event.workflow_run.run_number }}"
+run-name: "Preserve Research Incumbent · ${{ github.event_name }}"
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows:
       - Daily Autonomous Research
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   preserve-incumbent:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

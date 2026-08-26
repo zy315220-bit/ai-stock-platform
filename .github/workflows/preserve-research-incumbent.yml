@@ -50,11 +50,23 @@ jobs:
           --runs-root ../research-data/daily/runs
           --incumbent ../research-data/daily/incumbent.json
 
+      - name: Mirror incumbent-aware daily history
+        run: |
+          RESEARCH_DATE=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('research-data/daily/latest.json').read_text())
+          print(payload['as_of_date'])
+          PY
+          )
+          mkdir -p research-data/daily/history
+          cp research-data/daily/latest.json "research-data/daily/history/${RESEARCH_DATE}.json"
+
       - name: Persist incumbent and compatibility snapshot
         run: |
           git -C research-data config user.name "ai-stock-research-bot"
           git -C research-data config user.email "actions@users.noreply.github.com"
-          git -C research-data add daily/latest.json daily/incumbent.json
+          git -C research-data add daily/latest.json daily/incumbent.json daily/history
           if git -C research-data diff --cached --quiet; then
             echo "Incumbent unchanged; nothing to publish."
           else

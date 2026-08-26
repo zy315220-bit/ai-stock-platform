@@ -50,17 +50,18 @@ RegimeLabelFn = Callable[
 ]
 
 
+_REQUIRED_REGIMES = (MarketRegime.BULL.value, MarketRegime.BEAR.value)
+_DEFAULT_EXTENSION_STEP_YEARS = 2
+_DEFAULT_MAX_EXTENSION_YEARS = 10
+
+
 def classify_market_regime(
     benchmark_return_percent: float,
     *,
     bull_threshold_percent: float = 5.0,
     bear_threshold_percent: float = -5.0,
 ) -> MarketRegime:
-    """Classify a completed evaluation slice from benchmark performance.
-
-    This label is post-hoc audit metadata. It is never available to the trading
-    rule while orders are generated, so it cannot become a look-ahead signal.
-    """
+    """Classify a completed slice from benchmark performance for audit use."""
     if benchmark_return_percent >= bull_threshold_percent:
         return MarketRegime.BULL
     if benchmark_return_percent <= bear_threshold_percent:
@@ -71,10 +72,17 @@ def classify_market_regime(
 def load_point_in_time_benchmark_returns(
     benchmark_code: str,
     split: ResearchSplit,
+    *,
+    max_extension_years: int = _DEFAULT_MAX_EXTENSION_YEARS,
 ) -> pd.Series:
-    """Load a split-safe total-return series for causal regime estimation."""
+    """Load enough pre-holdout benchmark history for causal regime discovery.
+
+    The extra history is used only by the regime stress test. It never enters
+    Train memory, Validation feedback, or Final Holdout.
+    """
     required_start = (
-        pd.Timestamp(split.train_start) - pd.DateOffset(years=3)
+        pd.Timestamp(split.train_start)
+        - pd.DateOffset(years=max(0, int(max_extension_years)) + 3)
     ).strftime("%Y-%m-%d")
     frame = _download_backtest_history(
         benchmark_code,
@@ -97,16 +105,16 @@ def load_point_in_time_benchmark_returns(
         )
     closes = closes.dropna().sort_index()
     returns = closes.pct_change().dropna()
-    dividend_events = dividends_by_ex_date(frame)
-    for event_date, amount in dividend_events.items():
+    for event_date, amount in dividends_by_ex_date(frame).items():
         timestamp = pd.Timestamp(event_date).normalize()
         prior = closes.loc[closes.index < timestamp]
         if prior.empty or timestamp not in returns.index:
             continue
         returns.loc[timestamp] += float(amount) / float(prior.iloc[-1])
     returns = returns.sort_index()
+
     digest = hashlib.sha256()
-    digest.update(b"causal-regime-total-return-series-v1")
+    digest.update(b"causal-regime-total-return-series-v2-extended")
     digest.update(benchmark_code.strip().upper().encode("utf-8"))
     digest.update(
         pd.util.hash_pandas_object(
@@ -119,14 +127,12 @@ def load_point_in_time_benchmark_returns(
         json.dumps(
             {
                 "price_basis": frame.attrs.get("price_basis"),
-                "split_adjustments": frame.attrs.get(
-                    "split_adjustments",
-                    [],
-                ),
+                "split_adjustments": frame.attrs.get("split_adjustments", []),
                 "dividends": frame.attrs.get("dividends", []),
                 "corporate_action_catalog_revision": frame.attrs.get(
                     "corporate_action_catalog_revision"
                 ),
+                "max_extension_years": max(0, int(max_extension_years)),
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -140,19 +146,18 @@ def load_point_in_time_benchmark_returns(
     return returns
 
 
-def build_pre_holdout_regime_slices(
-    split: ResearchSplit,
+def _build_regime_slices_for_window(
+    start: pd.Timestamp,
+    end: pd.Timestamp,
     *,
-    slice_count: int = 6,
+    slice_count: int,
 ) -> tuple[RegimeSlice, ...]:
-    """Cover development plus validation while excluding final holdout."""
     if slice_count < 3:
         raise ValueError("regime slice_count must be at least 3")
-    start = pd.Timestamp(split.train_start).normalize()
-    end = pd.Timestamp(split.validation_end).normalize()
+    start = pd.Timestamp(start).normalize()
+    end = pd.Timestamp(end).normalize()
     if start >= end:
         raise ValueError("pre-holdout range must contain multiple dates")
-
     boundaries = pd.date_range(
         start=start,
         end=end + pd.Timedelta(days=1),
@@ -161,9 +166,7 @@ def build_pre_holdout_regime_slices(
     slices: list[RegimeSlice] = []
     for index in range(slice_count):
         slice_start = boundaries[index].normalize()
-        slice_end = (
-            boundaries[index + 1] - pd.Timedelta(days=1)
-        ).normalize()
+        slice_end = (boundaries[index + 1] - pd.Timedelta(days=1)).normalize()
         if index == slice_count - 1:
             slice_end = end
         if slice_end < slice_start:
@@ -178,16 +181,102 @@ def build_pre_holdout_regime_slices(
     return tuple(slices)
 
 
+def build_pre_holdout_regime_slices(
+    split: ResearchSplit,
+    *,
+    slice_count: int = 6,
+) -> tuple[RegimeSlice, ...]:
+    """Cover Train + Validation while excluding Final Holdout."""
+    return _build_regime_slices_for_window(
+        pd.Timestamp(split.train_start),
+        pd.Timestamp(split.validation_end),
+        slice_count=slice_count,
+    )
+
+
 def _benchmark_return(report: dict[str, Any]) -> float:
     buy_and_hold = report.get("buy_and_hold") or {}
     value = buy_and_hold.get(
         "return_percent",
-        report.get("benchmark_return_percent", report.get("total_return_percent", 0.0)),
+        report.get(
+            "benchmark_return_percent",
+            report.get("total_return_percent", 0.0),
+        ),
     )
     try:
         return float(value or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _label_slices(
+    slices: tuple[RegimeSlice, ...],
+    *,
+    causal_returns: pd.Series,
+    estimate_cache: dict[str, tuple[MarketRegime, dict[str, Any]]],
+) -> list[tuple[RegimeSlice, MarketRegime, dict[str, Any]]]:
+    labelled: list[tuple[RegimeSlice, MarketRegime, dict[str, Any]]] = []
+    for regime_slice in slices:
+        key = regime_slice.start_date
+        cached = estimate_cache.get(key)
+        if cached is None:
+            as_of_date = pd.Timestamp(regime_slice.start_date) - pd.Timedelta(days=1)
+            estimate = estimate_hamilton_regime_as_of(causal_returns, as_of_date)
+            cached = (MarketRegime(estimate.regime), estimate.to_dict())
+            estimate_cache[key] = cached
+        labelled.append((regime_slice, cached[0], cached[1]))
+    return labelled
+
+
+def _adaptive_labelled_slices(
+    split: ResearchSplit,
+    *,
+    slice_count: int,
+    causal_returns: pd.Series,
+    estimate_cache: dict[str, tuple[MarketRegime, dict[str, Any]]],
+    extension_step_years: int,
+    max_extension_years: int,
+) -> tuple[
+    list[tuple[RegimeSlice, MarketRegime, dict[str, Any]]],
+    int,
+    tuple[str, ...],
+]:
+    """Extend only when the base window cannot observe all required regimes.
+
+    Slice density is preserved as the window grows so extending the horizon does
+    not turn each slice into a multi-year block that can hide regime changes.
+    """
+    original_start = pd.Timestamp(split.train_start).normalize()
+    end = pd.Timestamp(split.validation_end).normalize()
+    base_span_days = max(1, (end - original_start).days)
+    step = max(1, int(extension_step_years))
+    cap = max(0, int(max_extension_years))
+    last_missing: tuple[str, ...] = _REQUIRED_REGIMES
+
+    for extension_years in range(0, cap + 1, step):
+        start = original_start - pd.DateOffset(years=extension_years)
+        span_days = max(1, (end - start).days)
+        scaled_count = max(
+            slice_count,
+            round(slice_count * span_days / base_span_days),
+        )
+        slices = _build_regime_slices_for_window(
+            start,
+            end,
+            slice_count=scaled_count,
+        )
+        labelled = _label_slices(
+            slices,
+            causal_returns=causal_returns,
+            estimate_cache=estimate_cache,
+        )
+        observed = {regime.value for _, regime, _ in labelled}
+        missing = tuple(name for name in _REQUIRED_REGIMES if name not in observed)
+        if not missing:
+            return labelled, extension_years, ()
+        last_missing = missing
+
+    return labelled, cap, last_missing
 
 
 def _aggregate_regime_rows(
@@ -198,41 +287,23 @@ def _aggregate_regime_rows(
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     by_regime: dict[str, dict[str, Any]] = {}
     reasons: list[str] = []
-    required = (MarketRegime.BULL.value, MarketRegime.BEAR.value)
 
     for regime in MarketRegime:
-        labelled = [
-            row for row in rows
-            if row["market_regime"] == regime.value
-        ]
-        selected = [
-            row for row in labelled
-            if row.get("evidence_available", True)
-        ]
+        labelled = [row for row in rows if row["market_regime"] == regime.value]
+        selected = [row for row in labelled if row.get("evidence_available", True)]
         slice_count = len(selected)
         unavailable_slice_count = len(labelled) - slice_count
         completed = sum(int(row["completed_trades"]) for row in selected)
         wins = sum(int(row["winning_trades"]) for row in selected)
         denominator = max(1, slice_count)
-        mean_return = sum(
-            float(row["total_return_percent"]) for row in selected
-        ) / denominator
-        mean_benchmark = sum(
-            float(row["benchmark_return_percent"]) for row in selected
-        ) / denominator
-        mean_alpha = sum(
-            float(row["alpha_percent"]) for row in selected
-        ) / denominator
+        mean_return = sum(float(row["total_return_percent"]) for row in selected) / denominator
+        mean_benchmark = sum(float(row["benchmark_return_percent"]) for row in selected) / denominator
+        mean_alpha = sum(float(row["alpha_percent"]) for row in selected) / denominator
         worst_drawdown = max(
-            (
-                abs(float(row["max_drawdown_percent"]))
-                for row in selected
-            ),
+            (abs(float(row["max_drawdown_percent"])) for row in selected),
             default=0.0,
         )
-        positive_alpha_slices = sum(
-            float(row["alpha_percent"]) >= 0 for row in selected
-        )
+        positive_alpha_slices = sum(float(row["alpha_percent"]) >= 0 for row in selected)
         wilson_percent = wilson_lower_bound(wins, completed) * 100.0
         by_regime[regime.value] = {
             "labelled_slice_count": len(labelled),
@@ -240,32 +311,22 @@ def _aggregate_regime_rows(
             "unavailable_slice_count": unavailable_slice_count,
             "completed_trades": completed,
             "winning_trades": wins,
-            "win_rate_percent": round(
-                wins / completed * 100.0 if completed else 0.0,
-                4,
-            ),
-            "wilson_win_rate_lower_bound_percent": round(
-                wilson_percent,
-                4,
-            ),
+            "win_rate_percent": round(wins / completed * 100.0 if completed else 0.0, 4),
+            "wilson_win_rate_lower_bound_percent": round(wilson_percent, 4),
             "mean_return_percent": round(mean_return, 4),
             "mean_benchmark_return_percent": round(mean_benchmark, 4),
             "mean_alpha_percent": round(mean_alpha, 4),
-            "positive_alpha_slice_ratio": round(
-                positive_alpha_slices / denominator,
-                4,
-            ),
+            "positive_alpha_slice_ratio": round(positive_alpha_slices / denominator, 4),
             "worst_drawdown_percent": round(worst_drawdown, 4),
         }
 
     unavailable_slice_count = sum(
-        int(item["unavailable_slice_count"])
-        for item in by_regime.values()
+        int(item["unavailable_slice_count"]) for item in by_regime.values()
     )
     if unavailable_slice_count:
         reasons.append("insufficient_regime_slice_history")
 
-    for regime in required:
+    for regime in _REQUIRED_REGIMES:
         item = by_regime[regime]
         if item["slice_count"] == 0:
             reasons.append(f"missing_{regime.lower()}_regime")
@@ -279,56 +340,35 @@ def _aggregate_regime_rows(
         if item["worst_drawdown_percent"] > max_drawdown_percent:
             reasons.append(f"{regime.lower()}_drawdown_too_high")
 
-    required_items = [by_regime[name] for name in required]
+    required_items = [by_regime[name] for name in _REQUIRED_REGIMES]
     conservative_wilson = min(
-        (
-            float(item["wilson_win_rate_lower_bound_percent"])
-            for item in required_items
-            if item["slice_count"] > 0
-        ),
+        (float(item["wilson_win_rate_lower_bound_percent"]) for item in required_items if item["slice_count"] > 0),
         default=0.0,
     )
     conservative_return = min(
-        (
-            float(item["mean_return_percent"])
-            for item in required_items
-            if item["slice_count"] > 0
-        ),
+        (float(item["mean_return_percent"]) for item in required_items if item["slice_count"] > 0),
         default=-100.0,
     )
     conservative_alpha = min(
-        (
-            float(item["mean_alpha_percent"])
-            for item in required_items
-            if item["slice_count"] > 0
-        ),
+        (float(item["mean_alpha_percent"]) for item in required_items if item["slice_count"] > 0),
         default=-100.0,
     )
     worst_required_drawdown = max(
-        (
-            float(item["worst_drawdown_percent"])
-            for item in required_items
-        ),
+        (float(item["worst_drawdown_percent"]) for item in required_items),
         default=0.0,
     )
     robustness_score = (
         35.0 * max(0.0, min(conservative_wilson / 60.0, 1.0))
         + 30.0 * max(-1.0, min(conservative_return / 15.0, 1.0))
         + 25.0 * max(-1.0, min(conservative_alpha / 15.0, 1.0))
-        + 10.0
-        * max(0.0, 1.0 - worst_required_drawdown / max_drawdown_percent)
+        + 10.0 * max(0.0, 1.0 - worst_required_drawdown / max_drawdown_percent)
     )
-    robustness = {
+    return by_regime, {
         "robust_across_required_regimes": not reasons,
-        "required_regimes": list(required),
-        "minimum_completed_trades_per_regime": (
-            min_completed_trades_per_regime
-        ),
+        "required_regimes": list(_REQUIRED_REGIMES),
+        "minimum_completed_trades_per_regime": min_completed_trades_per_regime,
         "maximum_drawdown_percent": max_drawdown_percent,
-        "conservative_wilson_lower_bound_percent": round(
-            conservative_wilson,
-            4,
-        ),
+        "conservative_wilson_lower_bound_percent": round(conservative_wilson, 4),
         "conservative_return_percent": round(conservative_return, 4),
         "conservative_alpha_percent": round(conservative_alpha, 4),
         "robustness_score": round(robustness_score, 4),
@@ -338,7 +378,6 @@ def _aggregate_regime_rows(
         "regime_labels_point_in_time": True,
         "regime_labels_are_trading_signals": False,
     }
-    return by_regime, robustness
 
 
 def run_market_regime_validation(
@@ -353,64 +392,54 @@ def run_market_regime_validation(
     min_completed_trades_per_regime: int = 3,
     max_drawdown_percent: float = 30.0,
     benchmark_cache: dict[tuple[str, str], dict[str, Any]] | None = None,
-    regime_estimate_cache: dict[
-        str,
-        tuple[MarketRegime, dict[str, Any]],
-    ] | None = None,
+    regime_estimate_cache: dict[str, tuple[MarketRegime, dict[str, Any]]] | None = None,
     regime_return_series: pd.Series | None = None,
     regime_label_fn: RegimeLabelFn | None = None,
+    extension_step_years: int = _DEFAULT_EXTENSION_STEP_YEARS,
+    max_extension_years: int = _DEFAULT_MAX_EXTENSION_YEARS,
 ) -> MarketRegimeMatrix:
-    """Audit one candidate across causally labelled market-regime slices."""
+    """Audit a candidate and extend history if the base window misses a regime."""
     unknown = set(candidate.parameters) - _ALLOWED_PARAMETERS
     if unknown:
         raise ValueError(f"Unsupported research parameters: {sorted(unknown)}")
+
     benchmark_fn = benchmark_backtest_fn or backtest_fn
     cache = benchmark_cache if benchmark_cache is not None else {}
-    estimate_cache = (
-        regime_estimate_cache
-        if regime_estimate_cache is not None
-        else {}
-    )
-    rows: list[dict[str, Any]] = []
+    estimate_cache = regime_estimate_cache if regime_estimate_cache is not None else {}
     data_fingerprints: set[str] = set()
     causal_returns = regime_return_series
     if regime_label_fn is None and causal_returns is None:
         causal_returns = load_point_in_time_benchmark_returns(
             benchmark_code,
             split,
+            max_extension_years=max_extension_years,
         )
     if causal_returns is not None:
         causal_fingerprint = causal_returns.attrs.get("data_fingerprint")
         if causal_fingerprint:
             data_fingerprints.add(str(causal_fingerprint))
 
-    for regime_slice in build_pre_holdout_regime_slices(
-        split,
-        slice_count=slice_count,
-    ):
-        if regime_label_fn is not None:
-            regime, regime_audit = regime_label_fn(regime_slice)
-        else:
-            if causal_returns is None:
-                raise ValueError("Point-in-time regime returns are unavailable")
-            estimate_key = regime_slice.start_date
-            cached_estimate = estimate_cache.get(estimate_key)
-            if cached_estimate is None:
-                as_of_date = (
-                    pd.Timestamp(regime_slice.start_date)
-                    - pd.Timedelta(days=1)
-                )
-                estimate = estimate_hamilton_regime_as_of(
-                    causal_returns,
-                    as_of_date,
-                )
-                cached_estimate = (
-                    MarketRegime(estimate.regime),
-                    estimate.to_dict(),
-                )
-                estimate_cache[estimate_key] = cached_estimate
-            regime, regime_audit = cached_estimate
+    if regime_label_fn is not None:
+        labelled_slices = [
+            (item, *regime_label_fn(item))
+            for item in build_pre_holdout_regime_slices(split, slice_count=slice_count)
+        ]
+        extension_years = 0
+        missing_after_extension: tuple[str, ...] = ()
+    else:
+        if causal_returns is None:
+            raise ValueError("Point-in-time regime returns are unavailable")
+        labelled_slices, extension_years, missing_after_extension = _adaptive_labelled_slices(
+            split,
+            slice_count=slice_count,
+            causal_returns=causal_returns,
+            estimate_cache=estimate_cache,
+            extension_step_years=extension_step_years,
+            max_extension_years=max_extension_years,
+        )
 
+    rows: list[dict[str, Any]] = []
+    for regime_slice, regime, regime_audit in labelled_slices:
         try:
             report = backtest_fn(
                 stock_code=stock_code,
@@ -446,6 +475,7 @@ def run_market_regime_validation(
                 }
             )
             continue
+
         metrics = _validation_metrics(report)
         cache_key = (regime_slice.start_date, regime_slice.end_date)
         if stock_code.strip().upper() == benchmark_code.strip().upper():
@@ -459,25 +489,19 @@ def run_market_regime_validation(
                 end_date=regime_slice.end_date,
                 entry_score=99,
                 exit_score=1,
-                initial_capital=float(
-                    candidate.parameters.get("initial_capital", 1_000_000.0)
-                ),
+                initial_capital=float(candidate.parameters.get("initial_capital", 1_000_000.0)),
                 liquidate_at_end=True,
             )
             cache[cache_key] = benchmark_report
 
         benchmark_return = _benchmark_return(benchmark_report)
         strategy_fingerprint = metrics.get("data_fingerprint")
-        benchmark_fingerprint = _validation_metrics(
-            benchmark_report
-        ).get("data_fingerprint")
+        benchmark_fingerprint = _validation_metrics(benchmark_report).get("data_fingerprint")
         if strategy_fingerprint:
             data_fingerprints.add(str(strategy_fingerprint))
         if benchmark_fingerprint:
             data_fingerprints.add(str(benchmark_fingerprint))
-        strategy_return = float(
-            metrics.get("total_return_percent", 0.0) or 0.0
-        )
+        strategy_return = float(metrics.get("total_return_percent", 0.0) or 0.0)
         completed = int(metrics.get("completed_trades", 0) or 0)
         winning = int(metrics.get("winning_trades", 0) or 0)
         rows.append(
@@ -495,41 +519,37 @@ def run_market_regime_validation(
                 "benchmark_data_fingerprint": benchmark_fingerprint,
                 "benchmark_return_percent": round(benchmark_return, 4),
                 "total_return_percent": round(strategy_return, 4),
-                "alpha_percent": round(
-                    strategy_return - benchmark_return,
-                    4,
-                ),
+                "alpha_percent": round(strategy_return - benchmark_return, 4),
                 "completed_trades": completed,
                 "winning_trades": winning,
-                "win_rate_percent": round(
-                    winning / completed * 100.0 if completed else 0.0,
-                    4,
-                ),
+                "win_rate_percent": round(winning / completed * 100.0 if completed else 0.0, 4),
                 "wilson_win_rate_lower_bound_percent": round(
                     wilson_lower_bound(winning, completed) * 100.0,
                     4,
                 ),
-                "max_drawdown_percent": round(
-                    abs(
-                        float(
-                            metrics.get("max_drawdown_percent", 0.0)
-                            or 0.0
-                        )
-                    ),
-                    4,
-                ),
-                "open_position_count": int(
-                    metrics.get("open_position_count", 0) or 0
-                ),
+                "max_drawdown_percent": round(abs(float(metrics.get("max_drawdown_percent", 0.0) or 0.0)), 4),
+                "open_position_count": int(metrics.get("open_position_count", 0) or 0),
             }
         )
 
     by_regime, robustness = _aggregate_regime_rows(
         rows,
-        min_completed_trades_per_regime=(
-            min_completed_trades_per_regime
-        ),
+        min_completed_trades_per_regime=min_completed_trades_per_regime,
         max_drawdown_percent=max_drawdown_percent,
+    )
+    robustness.update(
+        {
+            "regime_window_extended": extension_years > 0,
+            "regime_extension_years": extension_years,
+            "max_regime_extension_years": max(0, int(max_extension_years)),
+            "missing_regimes_after_extension": list(missing_after_extension),
+            "base_train_start": split.train_start,
+            "effective_regime_start": (
+                labelled_slices[0][0].start_date if labelled_slices else split.train_start
+            ),
+            "effective_regime_end": split.validation_end,
+            "adaptive_extension_is_train_feedback": False,
+        }
     )
     return MarketRegimeMatrix(
         candidate_id=candidate.candidate_id,

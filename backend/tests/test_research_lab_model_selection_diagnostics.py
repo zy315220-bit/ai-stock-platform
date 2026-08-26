@@ -35,11 +35,20 @@ def test_model_selection_diagnostics_counts_available_pass_and_reasons(tmp_path)
         },
         spa={
             "available": True,
+            "method": "Hansen_SPA_consistent_stationary_bootstrap_v2_lrv",
+            "studentization": "stationary_bootstrap_long_run_variance",
             "superior_predictive_ability_pass": True,
             "spa_p_value": 0.03,
+            "p_values": {"lower": 0.02, "consistent": 0.03, "upper": 0.04},
             "candidate_count": 5,
             "active_candidate_count": 3,
             "observations": 240,
+            "best_candidate_id": "candidate-a",
+            "best_mean_daily_excess_percent": 0.08,
+            "observed_max_studentized_statistic": 2.4,
+            "critical_values_5pct": {"consistent": 1.8},
+            "required_mean_daily_excess_percent_at_5pct": 0.06,
+            "additional_mean_daily_excess_percent_needed_at_5pct": 0.0,
         },
     )
     _write_payload(
@@ -60,6 +69,7 @@ def test_model_selection_diagnostics_counts_available_pass_and_reasons(tmp_path)
 
     diagnostics = summarize(tmp_path)
 
+    assert diagnostics["schema_version"] == 2
     assert diagnostics["symbol_count"] == 2
     assert diagnostics["pbo"]["available_symbol_count"] == 1
     assert diagnostics["pbo"]["pass_symbol_count"] == 1
@@ -81,6 +91,15 @@ def test_model_selection_diagnostics_counts_available_pass_and_reasons(tmp_path)
     )
     row = next(row for row in diagnostics["rows"] if row["stock_code"] == "2330")
     assert row["deflated_sharpe_trial_count"] == 123
+    assert row["spa"]["studentization"] == "stationary_bootstrap_long_run_variance"
+    assert row["spa"]["best_candidate_id"] == "candidate-a"
+    assert row["spa"]["p_values"] == {
+        "lower": 0.02,
+        "consistent": 0.03,
+        "upper": 0.04,
+    }
+    assert row["spa"]["critical_value_5pct_consistent"] == 1.8
+    assert row["spa"]["additional_mean_daily_excess_percent_needed_at_5pct"] == 0.0
 
 
 def test_model_selection_diagnostics_ranks_lowest_pbo_and_spa_first(tmp_path) -> None:

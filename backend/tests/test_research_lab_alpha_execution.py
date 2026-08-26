@@ -46,6 +46,11 @@ def _frame(periods: int = 90) -> pd.DataFrame:
 
 def _indicator_frame(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
+    # Production reaches add_indicators after _prepare_stock_data has exposed
+    # Date as a column. Keep the mock output under the same contract rather than
+    # bypassing the engine's required-column fail-closed check.
+    if "Date" not in out.columns:
+        out["Date"] = pd.to_datetime(out.index)
     out["EMA5"] = 101.0
     out["EMA20"] = 100.0
     out["EMA60"] = 99.0

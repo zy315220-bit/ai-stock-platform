@@ -6,3 +6,11 @@ backend/venv/
 backend/__pycache__/
 *.pyc
 backend/research_artifacts/
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example

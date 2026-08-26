@@ -1,4 +1,5 @@
 from app.services.research_lab.evolution import (
+    ADVANCED_ALPHA_SEEDS,
     RESEARCH_STRUCTURES,
     SIGNAL_DOMINANT_FAMILIES,
     SIGNAL_DOMINANT_STRUCTURES,
@@ -30,6 +31,9 @@ def _signature(candidate):
         p.get("entry_mode", "score"),
         p.get("exit_mode", "score"),
         p.get("max_holding_days", 60),
+        p.get("atr_target_percent"),
+        p.get("min_position_fraction"),
+        p.get("max_position_fraction"),
     )
 
 
@@ -50,7 +54,9 @@ def test_grid_generation_is_deterministic_and_structurally_unique():
     ]
 
     assert len(score_candidates) == 3 * len(RESEARCH_STRUCTURES)
-    assert len(signal_candidates) == len(SIGNAL_DOMINANT_STRUCTURES)
+    assert len(signal_candidates) == (
+        len(SIGNAL_DOMINANT_STRUCTURES) + len(ADVANCED_ALPHA_SEEDS)
+    )
     assert all(
         candidate.parameters["exit_score"]
         < candidate.parameters["entry_score"]
@@ -98,10 +104,35 @@ def test_signal_dominant_generation_is_deterministic_and_family_complete():
     assert {candidate.strategy_family for candidate in first} == (
         SIGNAL_DOMINANT_FAMILIES
     )
+    assert len(first) == (
+        len(SIGNAL_DOMINANT_STRUCTURES) + len(ADVANCED_ALPHA_SEEDS)
+    )
     assert all(
         candidate.parameters["entry_score"] == 1
         and candidate.parameters["exit_score"] == 0
         for candidate in first
+    )
+
+
+def test_advanced_families_include_mean_reversion_and_volatility_management():
+    candidates = generate_signal_dominant_candidates()
+    by_family = {candidate.strategy_family: candidate for candidate in candidates}
+    mean_reversion = by_family["alpha_mean_reversion_bollinger_rsi"]
+    assert mean_reversion.parameters["entry_mode"] == (
+        "mean_reversion_bollinger_rsi"
+    )
+    assert mean_reversion.parameters["exit_mode"] == "mean_reversion_or_time"
+
+    volatility_families = {
+        family: candidate
+        for family, candidate in by_family.items()
+        if family.endswith("_vol")
+    }
+    assert volatility_families
+    assert all(
+        candidate.parameters.get("atr_target_percent")
+        and candidate.parameters.get("max_position_fraction", 1.0) <= 0.85
+        for candidate in volatility_families.values()
     )
 
 

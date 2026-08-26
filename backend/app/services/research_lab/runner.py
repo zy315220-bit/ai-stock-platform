@@ -23,6 +23,9 @@ _ALLOWED_PARAMETERS = {
     "entry_mode",
     "exit_mode",
     "max_holding_days",
+    "atr_target_percent",
+    "min_position_fraction",
+    "max_position_fraction",
 }
 
 

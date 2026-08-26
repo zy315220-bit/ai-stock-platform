@@ -37,25 +37,21 @@ def _arch_consistent_pvalue(
 
 
 def _ours_pvalue(result: dict[str, object], kind: str) -> float:
-    # Keep the external reference test resilient to harmless audit-field naming
-    # changes while still requiring an explicit p-value for each SPA variant.
-    candidates = []
-    for key, value in result.items():
-        normalized = key.lower()
-        if "p" in normalized and "value" in normalized and kind in normalized:
-            try:
-                candidates.append(float(value))
-            except (TypeError, ValueError):
-                pass
-    if not candidates and kind == "consistent":
-        for key in ("p_value", "pvalue"):
-            if key in result:
-                candidates.append(float(result[key]))
-    assert candidates, f"missing {kind} SPA p-value in {sorted(result)}"
-    return candidates[0]
+    p_values = result.get("p_values")
+    if isinstance(p_values, dict) and kind in p_values:
+        return float(p_values[kind])
+    if kind == "consistent" and "spa_p_value" in result:
+        return float(result["spa_p_value"])
+    raise AssertionError(
+        f"missing {kind} SPA p-value; keys={sorted(result)}"
+    )
 
 
-def _ar1_noise(rng: np.random.Generator, n: int, rho: float = 0.45) -> np.ndarray:
+def _ar1_noise(
+    rng: np.random.Generator,
+    n: int,
+    rho: float = 0.45,
+) -> np.ndarray:
     shocks = rng.normal(0.0, 0.01, n)
     out = np.empty(n, dtype=float)
     out[0] = shocks[0]

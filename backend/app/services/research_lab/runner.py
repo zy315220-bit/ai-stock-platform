@@ -9,6 +9,7 @@ from .evidence import assess_validation_evidence
 from .models import ExperimentResult, ResearchCandidate, ResearchSplit
 from .scoring import evaluate_candidate
 from .statistical_evidence import build_statistical_evidence
+from .train_fitness import build_train_active_robustness_proxy
 
 BacktestFn = Callable[..., dict[str, Any]]
 EvaluationPhase = Literal["train", "validation"]
@@ -34,7 +35,10 @@ def _validation_metrics(report: dict[str, Any]) -> dict[str, Any]:
             report.get("trade_count", len(report.get("trades") or [])),
         ),
     )
-    open_position_count = report.get("open_position_count", 1 if report.get("open_position") else 0)
+    open_position_count = report.get(
+        "open_position_count",
+        1 if report.get("open_position") else 0,
+    )
     winning_trades = report.get(
         "winning_trade_count",
         sum(
@@ -44,32 +48,45 @@ def _validation_metrics(report: dict[str, Any]) -> dict[str, Any]:
         ),
     )
     buy_and_hold = report.get("buy_and_hold") or {}
-    metrics.update({
-        "total_return_percent": report.get("total_return_percent", report.get("total_return", 0.0)),
-        "max_drawdown_percent": report.get("max_drawdown_percent", report.get("max_drawdown", 0.0)),
-        "total_trades": completed_trades,
-        "completed_trades": completed_trades,
-        "winning_trades": winning_trades,
-        "win_rate_percent": report.get("win_rate_percent", 0.0),
-        "alpha_percent": report.get("alpha_percent", 0.0),
-        "benchmark_return_percent": buy_and_hold.get("return_percent", 0.0),
-        "total_transaction_cost": report.get("total_transaction_cost", 0.0),
-        "open_position_count": open_position_count,
-        "has_open_position": bool(open_position_count),
-        "open_position_unrealized_return_percent": (report.get("open_position") or {}).get("unrealized_return_percent", 0.0),
-        "data_source": report.get("data_source"),
-        "data_fingerprint": (
-            report.get("score_series_cache") or {}
-        ).get("fingerprint"),
-        "score_cache_schema": (
-            report.get("score_series_cache") or {}
-        ).get("schema"),
-        "history_coverage": report.get("history_coverage"),
-        "history_recovery": report.get("history_recovery"),
-        "corporate_action_audit": report.get("corporate_actions"),
-        "actual_start_date": report.get("actual_start_date"),
-        "actual_end_date": report.get("actual_end_date"),
-    })
+    metrics.update(
+        {
+            "total_return_percent": report.get(
+                "total_return_percent",
+                report.get("total_return", 0.0),
+            ),
+            "max_drawdown_percent": report.get(
+                "max_drawdown_percent",
+                report.get("max_drawdown", 0.0),
+            ),
+            "total_trades": completed_trades,
+            "completed_trades": completed_trades,
+            "winning_trades": winning_trades,
+            "win_rate_percent": report.get("win_rate_percent", 0.0),
+            "alpha_percent": report.get("alpha_percent", 0.0),
+            "benchmark_return_percent": buy_and_hold.get(
+                "return_percent",
+                0.0,
+            ),
+            "total_transaction_cost": report.get("total_transaction_cost", 0.0),
+            "open_position_count": open_position_count,
+            "has_open_position": bool(open_position_count),
+            "open_position_unrealized_return_percent": (
+                report.get("open_position") or {}
+            ).get("unrealized_return_percent", 0.0),
+            "data_source": report.get("data_source"),
+            "data_fingerprint": (
+                report.get("score_series_cache") or {}
+            ).get("fingerprint"),
+            "score_cache_schema": (
+                report.get("score_series_cache") or {}
+            ).get("schema"),
+            "history_coverage": report.get("history_coverage"),
+            "history_recovery": report.get("history_recovery"),
+            "corporate_action_audit": report.get("corporate_actions"),
+            "actual_start_date": report.get("actual_start_date"),
+            "actual_end_date": report.get("actual_end_date"),
+        }
+    )
     research_series = report.get("research_return_series") or {}
     strategy_returns = research_series.get("strategy_daily_returns") or []
     benchmark_returns = research_series.get("benchmark_daily_returns") or []
@@ -101,6 +118,31 @@ def _phase_dates(
     raise ValueError(f"Unsupported evaluation phase: {evaluation_phase}")
 
 
+def _apply_train_fitness(
+    result: ExperimentResult,
+) -> ExperimentResult:
+    metrics = dict(result.validation_metrics)
+    proxy = build_train_active_robustness_proxy(
+        metrics.get("_daily_excess_returns", []),
+    )
+    base_score = float(result.research_score)
+    adjustment = (
+        float(proxy.get("score_adjustment", 0.0))
+        if proxy.get("available")
+        else 0.0
+    )
+    metrics["train_active_robustness_proxy"] = proxy
+    metrics["base_research_score"] = round(base_score, 3)
+    metrics["train_fitness_adjustment"] = round(adjustment, 3)
+    metrics["train_fitness_validation_feedback_used"] = False
+    metrics["train_fitness_holdout_feedback_used"] = False
+    return replace(
+        result,
+        validation_metrics=metrics,
+        research_score=round(base_score + adjustment, 3),
+    )
+
+
 def run_candidate_validation(
     stock_code: str,
     split: ResearchSplit,
@@ -124,13 +166,18 @@ def run_candidate_validation(
         **candidate.parameters,
     )
     metrics = _validation_metrics(report)
-    evidence = assess_validation_evidence(metrics, min_trades=min_validation_trades)
+    evidence = assess_validation_evidence(
+        metrics,
+        min_trades=min_validation_trades,
+    )
     metrics["evidence_quality"] = asdict(evidence)
     result = evaluate_candidate(
         candidate,
         metrics,
         min_trades=min_validation_trades,
     )
+    if evaluation_phase == "train":
+        result = _apply_train_fitness(result)
     return replace(result, evaluation_phase=evaluation_phase)
 
 

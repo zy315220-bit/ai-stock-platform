@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 type Candidate = {
   stock_code?: string;
   candidate_id?: string;
+  robot_version_id?: string;
   strategy_family?: string;
   decision?: "DISCARD" | "KEEP" | "HOLDOUT_READY";
   research_score?: number;
@@ -26,6 +27,21 @@ type Candidate = {
     cscv_pbo_pass?: boolean;
     hansen_spa_pass?: boolean;
   };
+};
+
+type IncumbentStatus = {
+  state?: "BOOTSTRAPPED" | "RETAINED" | "REPLACED";
+  source?: string;
+  campaign_id?: string;
+  incumbent_identity?: string;
+  round_challenger_identity?: string;
+  previous_incumbent_identity?: string | null;
+  round_challenger_replaced_incumbent?: boolean;
+  incumbent_in_current_round?: boolean;
+  requires_current_revalidation?: boolean;
+  same_campaign_only?: boolean;
+  feeds_train_memory?: boolean;
+  opens_final_holdout?: boolean;
 };
 
 type DailySnapshot = {
@@ -61,6 +77,9 @@ type DailySnapshot = {
     holdout_feedback_used?: boolean;
   };
   top_candidate?: Candidate | null;
+  incumbent_candidate?: Candidate | null;
+  round_top_candidate?: Candidate | null;
+  incumbent_status?: IncumbentStatus | null;
 };
 
 type SystemAudit = {
@@ -165,6 +184,42 @@ function decisionLabel(value?: Candidate["decision"]): string {
   return "—";
 }
 
+function candidateIdentity(candidate?: Candidate | null): string {
+  if (!candidate) return "";
+  return candidate.robot_version_id || `${candidate.stock_code ?? ""}:${candidate.candidate_id ?? ""}`;
+}
+
+function CandidateEvidenceCard({
+  candidate,
+  title,
+  note,
+}: {
+  candidate: Candidate;
+  title: string;
+  note: string;
+}) {
+  return (
+    <div className="daily-top-candidate">
+      <div>
+        <span>{title}</span>
+        <strong>{candidate.stock_code}・{candidate.candidate_id}</strong>
+        <small>
+          {candidate.strategy_family}・{decisionLabel(candidate.decision)}・Research Score {formatMetric(candidate.research_score)}
+        </small>
+      </div>
+      <dl>
+        <div><dt>確認 Gate</dt><dd>{formatMetric(candidate.confirmation_gate_pass_count)}/{formatMetric(candidate.confirmation_gate_total)}</dd></div>
+        <div><dt>DSR</dt><dd>{formatMetric(candidate.validation?.deflated_sharpe_probability_percent)}%</dd></div>
+        <div><dt>Validation 報酬</dt><dd>{formatMetric(candidate.validation?.total_return_percent)}%</dd></div>
+        <div><dt>Alpha</dt><dd>{formatMetric(candidate.validation?.alpha_percent)}%</dd></div>
+        <div><dt>Wilson 下界</dt><dd>{formatMetric(candidate.validation?.wilson_lower_percent)}%</dd></div>
+        <div><dt>最大回撤</dt><dd>{formatMetric(candidate.validation?.max_drawdown_percent)}%</dd></div>
+      </dl>
+      <p>{note}</p>
+    </div>
+  );
+}
+
 export default function DailyResearchStatus() {
   const [status, setStatus] = useState<DailyStatus | null>(null);
   const [error, setError] = useState("");
@@ -203,7 +258,12 @@ export default function DailyResearchStatus() {
   }, []);
 
   const snapshot = status?.latest_snapshot ?? null;
-  const top = snapshot?.top_candidate ?? null;
+  const incumbent = snapshot?.incumbent_candidate ?? snapshot?.top_candidate ?? null;
+  const roundTop = snapshot?.round_top_candidate ?? null;
+  const incumbentStatus = snapshot?.incumbent_status ?? null;
+  const challengerDiffers = Boolean(
+    incumbent && roundTop && candidateIdentity(incumbent) !== candidateIdentity(roundTop)
+  );
   const memory = snapshot?.training_memory ?? null;
   const audit = status?.system_audit ?? null;
   const certifiedCount = status?.certified_robots?.certified_robot_count ?? 0;
@@ -318,27 +378,24 @@ export default function DailyResearchStatus() {
         </div>
       ) : null}
 
-      {top ? (
-        <div className="daily-top-candidate">
-          <div>
-            <span>最新最高證據候選・尚非正式冠軍</span>
-            <strong>{top.stock_code}・{top.candidate_id}</strong>
-            <small>
-              {top.strategy_family}・{decisionLabel(top.decision)}・Research Score {formatMetric(top.research_score)}
-            </small>
-          </div>
-          <dl>
-            <div><dt>確認 Gate</dt><dd>{formatMetric(top.confirmation_gate_pass_count)}/{formatMetric(top.confirmation_gate_total)}</dd></div>
-            <div><dt>DSR</dt><dd>{formatMetric(top.validation?.deflated_sharpe_probability_percent)}%</dd></div>
-            <div><dt>Validation 報酬</dt><dd>{formatMetric(top.validation?.total_return_percent)}%</dd></div>
-            <div><dt>Alpha</dt><dd>{formatMetric(top.validation?.alpha_percent)}%</dd></div>
-            <div><dt>Wilson 下界</dt><dd>{formatMetric(top.validation?.wilson_lower_percent)}%</dd></div>
-            <div><dt>最大回撤</dt><dd>{formatMetric(top.validation?.max_drawdown_percent)}%</dd></div>
-          </dl>
-          <p>
-            排名採論文導向證據階層；Wilson 只作輔助 tie-breaker，Final Holdout 通過前不稱正式冠軍。
-          </p>
-        </div>
+      {incumbent ? (
+        <CandidateEvidenceCard
+          candidate={incumbent}
+          title={incumbentStatus ? "本 Campaign 守擂候選・尚非正式冠軍" : "最新最高證據候選・尚非正式冠軍"}
+          note={
+            incumbentStatus?.requires_current_revalidation
+              ? "此守擂候選來自先前研究輪次；只保留歷史證據排名，不會直接開啟 Final Holdout。必須再次出現在當前可稽核研究並通過現行 Gate 才能晉級。"
+              : "排名採論文導向證據階層；Wilson 只作輔助 tie-breaker，Final Holdout 通過前不稱正式冠軍。"
+          }
+        />
+      ) : null}
+
+      {challengerDiffers && roundTop ? (
+        <CandidateEvidenceCard
+          candidate={roundTop}
+          title="本輪最高證據挑戰者"
+          note="這是本次自動研究的最高候選；只有證據階層真正超過同 Campaign 守擂者，才會取代守擂位置。比較結果不回灌 Train。"
+        />
       ) : null}
 
       {status?.workflow?.url ? (

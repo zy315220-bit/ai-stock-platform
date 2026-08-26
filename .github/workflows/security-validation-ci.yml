@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - "frontend/.env*"
       - ".github/workflows/security-validation-ci.yml"
       - ".gitignore"
   push:
     branches: [main]
     paths:
       - "backend/**"
+      - "frontend/.env*"
       - ".github/workflows/security-validation-ci.yml"
       - ".gitignore"
 
@@ -27,7 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tracked="$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '(^|/)\.env\.example$' || true)"
+          tracked="$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.example$' || true)"
           if [ -n "$tracked" ]; then
             echo "Tracked secret-bearing environment files are forbidden:"
             echo "$tracked"
@@ -53,6 +55,8 @@ jobs:
 
   external-spa-reference:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend
     steps:
       - uses: actions/checkout@v6
         with:

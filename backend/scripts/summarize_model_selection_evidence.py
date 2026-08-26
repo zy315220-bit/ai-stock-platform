@@ -49,6 +49,8 @@ def summarize(input_dir: Path) -> dict[str, Any]:
             reason = str(spa.get("reason") or "unknown")
             spa_unavailable_reasons[reason] = spa_unavailable_reasons.get(reason, 0) + 1
 
+        consistent_critical = (spa.get("critical_values_5pct") or {}).get("consistent")
+        p_values = spa.get("p_values") or {}
         rows.append(
             {
                 "stock_code": stock_code,
@@ -67,12 +69,37 @@ def summarize(input_dir: Path) -> dict[str, Any]:
                 "spa": {
                     "available": spa_is_available,
                     "pass": spa_is_pass,
+                    "method": spa.get("method"),
+                    "studentization": spa.get("studentization"),
                     "p_value": _finite_number(spa.get("spa_p_value")),
+                    "p_values": {
+                        "lower": _finite_number(p_values.get("lower")),
+                        "consistent": _finite_number(p_values.get("consistent")),
+                        "upper": _finite_number(p_values.get("upper")),
+                    },
                     "candidate_count": int(spa.get("candidate_count", 0) or 0),
                     "active_candidate_count": int(
                         spa.get("active_candidate_count", 0) or 0
                     ),
                     "observations": int(spa.get("observations", 0) or 0),
+                    "best_candidate_id": spa.get("best_candidate_id"),
+                    "best_mean_daily_excess_percent": _finite_number(
+                        spa.get("best_mean_daily_excess_percent")
+                    ),
+                    "observed_max_studentized_statistic": _finite_number(
+                        spa.get("observed_max_studentized_statistic")
+                    ),
+                    "critical_value_5pct_consistent": _finite_number(
+                        consistent_critical
+                    ),
+                    "required_mean_daily_excess_percent_at_5pct": _finite_number(
+                        spa.get("required_mean_daily_excess_percent_at_5pct")
+                    ),
+                    "additional_mean_daily_excess_percent_needed_at_5pct": _finite_number(
+                        spa.get(
+                            "additional_mean_daily_excess_percent_needed_at_5pct"
+                        )
+                    ),
                     "reason": spa.get("reason"),
                 },
                 "deflated_sharpe_trial_count": int(
@@ -99,7 +126,7 @@ def summarize(input_dir: Path) -> dict[str, Any]:
     )
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "symbol_count": len(rows),
         "pbo": {

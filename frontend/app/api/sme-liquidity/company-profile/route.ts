@@ -493,35 +493,36 @@ export async function GET(request: NextRequest) {
   const timer = setTimeout(() => controller.abort(), 5000);
 
   try {
-    const basicPayload = await fetchJson(basicUrl, controller.signal);
-    const marketPayloads = await Promise.all(
-      [
-        TWSE_LISTED_COMPANY_ENDPOINT,
-        TWSE_PUBLIC_COMPANY_ENDPOINT,
-        TPEX_OTC_COMPANY_ENDPOINT,
-      ].map(async (endpoint) => {
-        try {
-          const response = await fetch(endpoint, {
-            signal: controller.signal,
-            headers: {
-              accept: "application/json",
-              "user-agent": "SME-Liquidity-Radar-Competition-PoC/1.0",
-            },
-            next: { revalidate: 86400 },
-          });
-          return response.ok ? await response.json() : [];
-        } catch {
-          return [];
-        }
-      }),
-    );
+    const optionalJson = async (endpoint: string) => {
+      try {
+        const response = await fetch(endpoint, {
+          signal: controller.signal,
+          headers: {
+            accept: "application/json",
+            "user-agent": "SME-Liquidity-Radar-Competition-PoC/1.0",
+          },
+          next: { revalidate: 86400 },
+        });
+        return response.ok ? await response.json() : [];
+      } catch {
+        return [];
+      }
+    };
 
-    let businessPayload: unknown = [];
-    try {
-      businessPayload = await fetchJson(businessUrl, controller.signal);
-    } catch {
-      businessPayload = [];
-    }
+    const [
+      basicPayload,
+      businessPayload,
+      listedPayload,
+      publicPayload,
+      otcPayload,
+    ] = await Promise.all([
+      fetchJson(basicUrl, controller.signal),
+      fetchJson(businessUrl, controller.signal).catch(() => []),
+      optionalJson(TWSE_LISTED_COMPANY_ENDPOINT),
+      optionalJson(TWSE_PUBLIC_COMPANY_ENDPOINT),
+      optionalJson(TPEX_OTC_COMPANY_ENDPOINT),
+    ]);
+    const marketPayloads = [listedPayload, publicPayload, otcPayload];
 
     const basic = firstObject(basicPayload);
     if (!basic) {

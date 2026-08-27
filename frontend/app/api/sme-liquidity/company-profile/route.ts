@@ -333,9 +333,10 @@ function buildEstimate(
   const fxShare = hasInternationalTrade ? Math.max(p.fxShare, 30) : p.fxShare;
 
   return {
-    basis: "industry_and_registered_capital_heuristic_v1",
+    basis: "illustrative_industry_capital_prior_v1",
+    calibration_status: "SCENARIO_PRIOR_NOT_EMPIRICALLY_CALIBRATED",
     disclaimer:
-      "以下為競賽 PoC 的產業／規模估算，不是公司真實財務數據。若補入企業內部數據，預測會更準。",
+      "快速模式使用公開產業／資本額建立情境先驗，用來示範風險篩檢流程；不是公司真實財務資料，也不是經官方產業中位數校準的財務預測。補入企業真實現金流後才適合做較高信心判讀。",
     fields: {
       current_cash: moneyRange(currentCash, 0.4),
       safety_cash_floor: moneyRange(safetyFloor, 0.35),
@@ -431,6 +432,8 @@ function assessQuickEstimateEligibility(
     );
   } else {
     reasons.push("實收／出資額落在現行 SME 資本額判準 1 億元以下。");
+    if (status === "ELIGIBLE") status = "CAUTION";
+    reasons.push("快速模式的私有財務欄位仍屬情境先驗，未以該公司的真實帳務資料校準。");
   }
 
   if (businessItems.length === 0) {
@@ -605,6 +608,7 @@ export async function GET(request: NextRequest) {
             },
           ],
           estimate_model: estimate.basis,
+          estimate_calibration_status: estimate.calibration_status,
           industry_confidence: industry.confidence,
           sme_capital_criterion_twd: SME_PAID_CAPITAL_CRITERION,
           sme_employee_alternative_criterion: "fewer_than_200_regular_employees",

@@ -127,6 +127,32 @@ type ResearchStatus = {
   snapshot_available?: boolean;
 };
 
+
+type ServerResearchGate = {
+  source: "server_fetched_immutable_research_snapshot";
+  fail_closed: boolean;
+  risk_code: string;
+  max_research_drawdown_percent: number;
+  candidate_count: number;
+  profile_boundary_pass_count: number;
+  combined_pass_count: number;
+  rows: Array<{
+    stock_code: string | null;
+    candidate_id: string | null;
+    strategy_family: string | null;
+    confirmation_gate_pass_count: number;
+    confirmation_gate_total: number;
+    max_drawdown_percent: number | null;
+    research_gate_pass: boolean;
+    profile_boundary_pass: boolean;
+    combined_pass: boolean;
+    state:
+      | "RESEARCH_EVIDENCE_HOLD"
+      | "PROFILE_BOUNDARY_BLOCK"
+      | "HUMAN_REVIEW_ELIGIBLE";
+  }>;
+};
+
 type RequestState = "idle" | "loading" | "error";
 
 const OWNER_PROFILE: FormState = {
@@ -309,6 +335,25 @@ async function requestDecision(
   return response.json() as Promise<Decision>;
 }
 
+
+async function requestServerResearchGate(
+  nextForm: FormState,
+  signal: AbortSignal,
+): Promise<ServerResearchGate> {
+  const response = await fetch("/api/tbb-wealth/research-gate", {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(nextForm),
+    signal,
+  });
+  if (!response.ok) throw new Error("research gate failed");
+  return response.json() as Promise<ServerResearchGate>;
+}
+
 function isAbortError(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === "AbortError";
 }
@@ -319,6 +364,9 @@ export default function SuitabilityDemo() {
   const [requestState, setRequestState] = useState<RequestState>("loading");
   const [researchStatus, setResearchStatus] = useState<ResearchStatus | null>(null);
   const [researchUnavailable, setResearchUnavailable] = useState(false);
+  const [serverResearchGate, setServerResearchGate] =
+    useState<ServerResearchGate | null>(null);
+  const [serverGateUnavailable, setServerGateUnavailable] = useState(false);
   const decisionRequest = useRef<AbortController | null>(null);
 
   const evaluate = useCallback(async (nextForm: FormState) => {
@@ -328,12 +376,19 @@ export default function SuitabilityDemo() {
     setRequestState("loading");
 
     try {
-      const payload = await requestDecision(nextForm, controller.signal);
+      const [payload, gate] = await Promise.all([
+        requestDecision(nextForm, controller.signal),
+        requestServerResearchGate(nextForm, controller.signal),
+      ]);
       setDecision(payload);
+      setServerResearchGate(gate);
+      setServerGateUnavailable(false);
       setRequestState("idle");
     } catch (reason) {
       if (isAbortError(reason)) return;
       setDecision(null);
+      setServerResearchGate(null);
+      setServerGateUnavailable(true);
       setRequestState("error");
     }
   }, []);
@@ -341,14 +396,21 @@ export default function SuitabilityDemo() {
   useEffect(() => {
     const initialDecisionController = new AbortController();
     decisionRequest.current = initialDecisionController;
-    void requestDecision(OWNER_PROFILE, initialDecisionController.signal)
-      .then((payload) => {
+    void Promise.all([
+      requestDecision(OWNER_PROFILE, initialDecisionController.signal),
+      requestServerResearchGate(OWNER_PROFILE, initialDecisionController.signal),
+    ])
+      .then(([payload, gate]) => {
         setDecision(payload);
+        setServerResearchGate(gate);
+        setServerGateUnavailable(false);
         setRequestState("idle");
       })
       .catch((reason: unknown) => {
         if (isAbortError(reason)) return;
         setDecision(null);
+        setServerResearchGate(null);
+        setServerGateUnavailable(true);
         setRequestState("error");
       });
 
@@ -395,30 +457,11 @@ export default function SuitabilityDemo() {
   const evidenceReleaseBlocked =
     !snapshot || (snapshot.eligible_candidate_count ?? 0) === 0 || certifiedCount === 0;
   const gateRows = researchGateRows(researchStatus);
-  const profileFilteredCandidates = (snapshot?.candidates ?? []).map((item) => {
-    const drawdown = item.validation?.max_drawdown_percent;
-    const profileBoundaryPass = Boolean(
-      decision &&
-        typeof drawdown === "number" &&
-        Number.isFinite(drawdown) &&
-        drawdown <= decision.max_research_drawdown_percent,
-    );
-    const researchGatePass = Boolean(item.eligible_for_one_shot_holdout);
-    return {
-      item,
-      drawdown,
-      profileBoundaryPass,
-      researchGatePass,
-      combinedPass: profileBoundaryPass && researchGatePass,
-    };
-  });
-  const profileBoundaryPassCount = profileFilteredCandidates.filter(
-    (row) => row.profileBoundaryPass,
-  ).length;
-  const combinedPassCount = profileFilteredCandidates.filter(
-    (row) => row.combinedPass,
-  ).length;
-  const visibleProfileCandidates = profileFilteredCandidates.slice(0, 5);
+  const profileBoundaryPassCount =
+    serverResearchGate?.profile_boundary_pass_count ?? 0;
+  const combinedPassCount = serverResearchGate?.combined_pass_count ?? 0;
+  const visibleProfileCandidates = serverResearchGate?.rows ?? [];
+
 
   return (
     <section className={styles.demoShell} id="demo" aria-labelledby="demo-title">
@@ -912,58 +955,62 @@ export default function SuitabilityDemo() {
               </thead>
               <tbody>
                 {visibleProfileCandidates.length > 0 ? (
-                  visibleProfileCandidates.map(
-                    ({ item, drawdown, profileBoundaryPass, researchGatePass }) => {
-                      const label =
-                        item.stock_code && item.strategy_family
-                          ? `${item.stock_code} · ${item.strategy_family.replaceAll("_", " ")}`
-                          : item.stock_code ?? item.candidate_id ?? "未知候選";
-                      const gateCount = `${item.confirmation_gate_pass_count ?? 0}/${item.confirmation_gate_total ?? 7}`;
+                  visibleProfileCandidates.map((row) => {
+                    const label =
+                      row.stock_code && row.strategy_family
+                        ? `${row.stock_code} · ${row.strategy_family.replaceAll("_", " ")}`
+                        : row.stock_code ?? row.candidate_id ?? "未知候選";
+                    const gateCount = `${row.confirmation_gate_pass_count}/${row.confirmation_gate_total}`;
 
-                      return (
-                        <tr key={item.candidate_id ?? label}>
-                          <td>
-                            <strong>{label}</strong>
-                            <small>{item.candidate_id ?? "—"}</small>
-                          </td>
-                          <td>
-                            <span
-                              className={
-                                researchGatePass ? styles.bridgePass : styles.bridgeHold
-                              }
-                            >
-                              {researchGatePass ? "HOLDOUT-READY" : `HOLD · ${gateCount}`}
-                            </span>
-                          </td>
-                          <td>
-                            <strong>
-                              {typeof drawdown === "number" ? `${drawdown}%` : "—"}
-                            </strong>
-                          </td>
-                          <td>
-                            <span
-                              className={
-                                profileBoundaryPass
-                                  ? styles.bridgePass
-                                  : styles.bridgeBlock
-                              }
-                            >
-                              {profileBoundaryPass ? "PASS" : "BLOCK"}
-                            </span>
-                          </td>
-                          <td>
-                            <strong>
-                              {!researchGatePass
-                                ? "研究證據不足"
-                                : !profileBoundaryPass
-                                  ? "超出客戶邊界"
-                                  : "可進人工覆核"}
-                            </strong>
-                          </td>
-                        </tr>
-                      );
-                    },
-                  )
+                    return (
+                      <tr key={row.candidate_id ?? label}>
+                        <td>
+                          <strong>{label}</strong>
+                          <small>{row.candidate_id ?? "—"}</small>
+                        </td>
+                        <td>
+                          <span
+                            className={
+                              row.research_gate_pass
+                                ? styles.bridgePass
+                                : styles.bridgeHold
+                            }
+                          >
+                            {row.research_gate_pass
+                              ? "HOLDOUT-READY"
+                              : `HOLD · ${gateCount}`}
+                          </span>
+                        </td>
+                        <td>
+                          <strong>
+                            {typeof row.max_drawdown_percent === "number"
+                              ? `${row.max_drawdown_percent}%`
+                              : "—"}
+                          </strong>
+                        </td>
+                        <td>
+                          <span
+                            className={
+                              row.profile_boundary_pass
+                                ? styles.bridgePass
+                                : styles.bridgeBlock
+                            }
+                          >
+                            {row.profile_boundary_pass ? "PASS" : "BLOCK"}
+                          </span>
+                        </td>
+                        <td>
+                          <strong>
+                            {row.state === "RESEARCH_EVIDENCE_HOLD"
+                              ? "研究證據不足"
+                              : row.state === "PROFILE_BOUNDARY_BLOCK"
+                                ? "超出客戶邊界"
+                                : "可進人工覆核"}
+                          </strong>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan={5}>目前沒有可列示的完整研究候選，系統維持鎖定。</td>
@@ -974,6 +1021,9 @@ export default function SuitabilityDemo() {
           </div>
 
           <p className={styles.bridgeFootnote}>
+            {serverGateUnavailable
+              ? "雙閘門伺服器證據目前不可用，因此維持全部鎖定。 "
+              : "此表由伺服器直接抓 Research Lab 不可變快照計算，前端不能自行修改候選證據。 "}
             對客放行必須依序通過：Research Gate → 客戶風險邊界 → 一次性 Final Holdout
             認證 → 理專人工覆核。這個 PoC 不會把「回測好看」直接變成商品推薦。
           </p>

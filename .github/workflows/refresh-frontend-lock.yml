@@ -33,4 +33,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend/package-lock.json
           git commit -m "chore: refresh frontend lockfile [lock-refresh]"
+          git fetch origin competition/tbb-2026-sme-liquidity
+          git rebase origin/competition/tbb-2026-sme-liquidity
           git push origin HEAD:competition/tbb-2026-sme-liquidity

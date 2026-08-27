@@ -39,6 +39,25 @@ type StressName =
   | "twd_strengthens_5pct"
   | "combined";
 
+type Volatility = "low" | "medium" | "high";
+
+type CustomProfileInput = {
+  company_name: string;
+  industry: string;
+  current_cash: number;
+  safety_cash_floor: number;
+  avg_monthly_inflow: number;
+  monthly_fixed_outflow: number;
+  monthly_payroll: number;
+  largest_receivable_amount: number;
+  largest_receivable_due_days: number;
+  receivable_delay_mean_days: number;
+  largest_payable_amount: number;
+  largest_payable_due_days: number;
+  fx_receivable_share_percent: number;
+  income_volatility: Volatility;
+};
+
 const SIMULATIONS = 2500;
 const HORIZONS = [30, 60, 90] as const;
 const ENGINE_VERSION = "monte-carlo-baseline-v1";
@@ -226,11 +245,20 @@ function simulate(profile: Profile, seed: number) {
       if (random() < receivable.defaultProbability) continue;
       const delay = Math.max(
         0,
-        Math.round(normal(random, receivable.delayMeanDays, Math.max(0.01, receivable.delayStdDays))),
+        Math.round(
+          normal(
+            random,
+            receivable.delayMeanDays,
+            Math.max(0.01, receivable.delayStdDays),
+          ),
+        ),
       );
       const day = receivable.dueDay + delay;
       if (day >= 1 && day <= 90) {
-        receiptByDay.set(day, (receiptByDay.get(day) ?? 0) + receivable.amount);
+        receiptByDay.set(
+          day,
+          (receiptByDay.get(day) ?? 0) + receivable.amount,
+        );
       }
     }
 
@@ -247,10 +275,16 @@ function simulate(profile: Profile, seed: number) {
     for (let day = 1; day <= 90; day += 1) {
       const recurringInflow = Math.max(
         0,
-        normal(random, profile.baselineDailyInflow, profile.dailyInflowVolatility),
+        normal(
+          random,
+          profile.baselineDailyInflow,
+          profile.dailyInflowVolatility,
+        ),
       );
       let outflow = profile.fixedDailyOutflow;
-      if (day % profile.payrollEveryDays === 0) outflow += profile.payrollAmount;
+      if (day % profile.payrollEveryDays === 0) {
+        outflow += profile.payrollAmount;
+      }
       outflow += payableByDay.get(day) ?? 0;
       cash += recurringInflow + (receiptByDay.get(day) ?? 0) - outflow;
       path.push(cash);
@@ -294,7 +328,9 @@ function metrics(paths: number[][], floor: number, horizon: number) {
     ),
     cash_flow_at_risk_p50_to_p10: Math.round(p50 - p10),
     median_first_breach_day:
-      firstBreaches.length > 0 ? Math.round(quantile(firstBreaches, 0.5)) : null,
+      firstBreaches.length > 0
+        ? Math.round(quantile(firstBreaches, 0.5))
+        : null,
   };
 }
 
@@ -308,7 +344,10 @@ function drivers(profile: Profile) {
           item.amount *
             Math.min(
               1,
-              Math.max(0, item.defaultProbability + item.delayMeanDays / 90),
+              Math.max(
+                0,
+                item.defaultProbability + item.delayMeanDays / 90,
+              ),
             ),
         0,
       ),
@@ -351,30 +390,161 @@ function actionHint(topDriver: string) {
   if (topDriver.includes("應收帳款")) {
     return {
       route: "應收帳款管理／承購諮詢",
-      reason: "先確認最大客戶付款週期與可承作應收帳款，再由 RM 評估合適方案。",
+      reason:
+        "先確認最大客戶付款週期與可承作應收帳款，再由 RM 評估合適方案。",
     };
   }
   if (topDriver.includes("外幣")) {
     return {
       route: "外匯避險諮詢",
-      reason: "先盤點收付款幣別與時點，再由 RM／專責人員評估避險工具。",
+      reason:
+        "先盤點收付款幣別與時點，再由 RM／專責人員評估避險工具。",
     };
   }
   if (topDriver.includes("薪資") || topDriver.includes("營運")) {
     return {
       route: "營運週轉金檢視",
-      reason: "固定支出對安全水位影響較高，建議 RM 優先了解短期週轉需求。",
+      reason:
+        "固定支出對安全水位影響較高，建議 RM 優先了解短期週轉需求。",
     };
   }
   return {
     route: "現金流盤點",
-    reason: "由 RM 先確認大額付款時點與資金來源，再決定是否進一步媒合金融服務。",
+    reason:
+      "由 RM 先確認大額付款時點與資金來源，再決定是否進一步媒合金融服務。",
+  };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function validNumber(
+  value: unknown,
+  min: number,
+  max: number,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= min &&
+    value <= max
+  );
+}
+
+function parseCustomProfile(value: unknown): Profile | null {
+  if (!isPlainObject(value)) return null;
+
+  const allowed = new Set([
+    "company_name",
+    "industry",
+    "current_cash",
+    "safety_cash_floor",
+    "avg_monthly_inflow",
+    "monthly_fixed_outflow",
+    "monthly_payroll",
+    "largest_receivable_amount",
+    "largest_receivable_due_days",
+    "receivable_delay_mean_days",
+    "largest_payable_amount",
+    "largest_payable_due_days",
+    "fx_receivable_share_percent",
+    "income_volatility",
+  ]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) return null;
+
+  const companyName = value.company_name;
+  const industry = value.industry;
+  const volatility = value.income_volatility;
+
+  if (
+    typeof companyName !== "string" ||
+    companyName.trim().length < 1 ||
+    companyName.trim().length > 40 ||
+    typeof industry !== "string" ||
+    industry.trim().length < 1 ||
+    industry.trim().length > 40 ||
+    !["low", "medium", "high"].includes(String(volatility))
+  ) {
+    return null;
+  }
+
+  const numericChecks: Array<[unknown, number, number]> = [
+    [value.current_cash, 0, 10_000_000_000],
+    [value.safety_cash_floor, 0, 10_000_000_000],
+    [value.avg_monthly_inflow, 0, 10_000_000_000],
+    [value.monthly_fixed_outflow, 0, 10_000_000_000],
+    [value.monthly_payroll, 0, 10_000_000_000],
+    [value.largest_receivable_amount, 0, 10_000_000_000],
+    [value.largest_receivable_due_days, 1, 180],
+    [value.receivable_delay_mean_days, 0, 90],
+    [value.largest_payable_amount, 0, 10_000_000_000],
+    [value.largest_payable_due_days, 1, 180],
+    [value.fx_receivable_share_percent, 0, 100],
+  ];
+  if (numericChecks.some(([v, min, max]) => !validNumber(v, min, max))) {
+    return null;
+  }
+
+  if (
+    (value.safety_cash_floor as number) >
+    Math.max(value.current_cash as number, value.avg_monthly_inflow as number)
+  ) {
+    return null;
+  }
+
+  const monthlyInflow = value.avg_monthly_inflow as number;
+  const dailyInflow = monthlyInflow / 30;
+  const volatilityFactor =
+    volatility === "low" ? 0.15 : volatility === "high" ? 0.6 : 0.35;
+  const receivableAmount = value.largest_receivable_amount as number;
+  const payableAmount = value.largest_payable_amount as number;
+  const delayMean = value.receivable_delay_mean_days as number;
+
+  return {
+    id: "custom",
+    name: companyName.trim(),
+    industry: industry.trim(),
+    description: "使用者手動輸入的競賽 PoC 情境；本頁不保存這份資料。",
+    currentCash: value.current_cash as number,
+    safetyCashFloor: value.safety_cash_floor as number,
+    baselineDailyInflow: dailyInflow,
+    dailyInflowVolatility: dailyInflow * volatilityFactor,
+    fixedDailyOutflow: (value.monthly_fixed_outflow as number) / 30,
+    payrollAmount: value.monthly_payroll as number,
+    payrollEveryDays: 30,
+    receivables:
+      receivableAmount > 0
+        ? [
+            {
+              amount: receivableAmount,
+              dueDay: Math.round(value.largest_receivable_due_days as number),
+              delayMeanDays: delayMean,
+              delayStdDays: Math.max(2, delayMean * 0.6),
+              defaultProbability: 0.015,
+            },
+          ]
+        : [],
+    payables:
+      payableAmount > 0
+        ? [
+            {
+              amount: payableAmount,
+              dueDay: Math.round(value.largest_payable_due_days as number),
+            },
+          ]
+        : [],
+    fxReceivableShare:
+      (value.fx_receivable_share_percent as number) / 100,
   };
 }
 
 function sameOrigin(request: NextRequest) {
   const secFetchSite = request.headers.get("sec-fetch-site");
-  if (secFetchSite && !["same-origin", "same-site", "none"].includes(secFetchSite)) {
+  if (
+    secFetchSite &&
+    !["same-origin", "same-site", "none"].includes(secFetchSite)
+  ) {
     return false;
   }
   return true;
@@ -382,16 +552,22 @@ function sameOrigin(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!sameOrigin(request)) {
-    return NextResponse.json({ error: "cross-site request rejected" }, { status: 403 });
+    return NextResponse.json(
+      { error: "cross-site request rejected" },
+      { status: 403 },
+    );
   }
 
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
-    return NextResponse.json({ error: "application/json required" }, { status: 415 });
+    return NextResponse.json(
+      { error: "application/json required" },
+      { status: 415 },
+    );
   }
 
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declaredLength) && declaredLength > 1024) {
+  if (Number.isFinite(declaredLength) && declaredLength > 4096) {
     return NextResponse.json({ error: "request too large" }, { status: 413 });
   }
 
@@ -402,21 +578,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
+  if (!isPlainObject(payload)) {
+    return NextResponse.json({ error: "invalid payload" }, { status: 422 });
+  }
+
+  const topLevelKeys = Object.keys(payload);
   if (
-    !payload ||
-    typeof payload !== "object" ||
-    Array.isArray(payload) ||
-    Object.keys(payload as Record<string, unknown>).some((key) => key !== "profile_id")
+    topLevelKeys.length !== 1 ||
+    !["profile_id", "custom_profile"].includes(topLevelKeys[0])
   ) {
     return NextResponse.json({ error: "invalid payload" }, { status: 422 });
   }
 
-  const profileId = (payload as { profile_id?: unknown }).profile_id;
-  if (typeof profileId !== "string" || !(profileId in PROFILES)) {
-    return NextResponse.json({ error: "unknown profile" }, { status: 422 });
+  let profile: Profile | null = null;
+  let dataMode = "synthetic_demo";
+
+  if ("profile_id" in payload) {
+    const profileId = payload.profile_id;
+    if (typeof profileId !== "string" || !(profileId in PROFILES)) {
+      return NextResponse.json({ error: "unknown profile" }, { status: 422 });
+    }
+    profile = PROFILES[profileId];
+  } else {
+    profile = parseCustomProfile(payload.custom_profile);
+    dataMode = "user_supplied_demo";
+    if (!profile) {
+      return NextResponse.json(
+        { error: "custom profile validation failed" },
+        { status: 422 },
+      );
+    }
   }
 
-  const profile = PROFILES[profileId];
   const basePaths = simulate(profile, 20260827);
   const horizons = HORIZONS.map((horizon) =>
     metrics(basePaths, profile.safetyCashFloor, horizon),
@@ -459,7 +652,7 @@ export async function POST(request: NextRequest) {
         probabilistic: true,
         simulations: SIMULATIONS,
         horizons: [30, 60, 90],
-        data_mode: "synthetic_demo",
+        data_mode: dataMode,
       },
       horizons,
       stress_tests,
@@ -470,7 +663,8 @@ export async function POST(request: NextRequest) {
         is_loan_approval: false,
         automatic_product_sale: false,
         human_review_required: true,
-        synthetic_data_only: true,
+        profile_persisted: false,
+        synthetic_data_only: dataMode === "synthetic_demo",
       },
     },
     {

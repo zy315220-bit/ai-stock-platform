@@ -6,8 +6,12 @@ const BASIC_ENDPOINT =
   "https://data.gcis.nat.gov.tw/od/data/api/5F64D864-61CB-4D0D-8AD9-492047CC1EA6";
 const BUSINESS_ENDPOINT =
   "https://data.gcis.nat.gov.tw/od/data/api/236EE382-4942-41A9-BD03-CA0709025E7C";
+const TWSE_LISTED_COMPANY_ENDPOINT =
+  "https://openapi.twse.com.tw/v1/opendata/t187ap03_L";
 const TWSE_PUBLIC_COMPANY_ENDPOINT =
   "https://openapi.twse.com.tw/v1/opendata/t187ap03_P";
+const TPEX_OTC_COMPANY_ENDPOINT =
+  "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O";
 
 type JsonObject = Record<string, unknown>;
 
@@ -360,6 +364,7 @@ function findPublicCompany(payload: unknown, businessNo: string) {
     "營利事業統一編號",
     "統一編號",
     "Business_Accounting_NO",
+    "BusinessAccountingNO",
     "business_no",
   ];
 
@@ -383,8 +388,11 @@ function findPublicCompany(payload: unknown, businessNo: string) {
         stringValue(row["產業別"]) ||
         stringValue(row["產業類別"]) ||
         stringValue(row["Industry"]),
-      market_type: "PUBLIC_COMPANY",
-      source: "TWSE_OPENAPI",
+      market_type:
+        stringValue(row["公司代號"]) || stringValue(row["公司代碼"])
+          ? "PUBLIC_MARKET_COMPANY"
+          : "PUBLIC_COMPANY",
+      source: "OFFICIAL_MARKET_OPENAPI",
     };
   }
 
@@ -478,22 +486,27 @@ export async function GET(request: NextRequest) {
 
   try {
     const basicPayload = await fetchJson(basicUrl, controller.signal);
-    let publicCompanyPayload: unknown = [];
-    try {
-      const publicResponse = await fetch(TWSE_PUBLIC_COMPANY_ENDPOINT, {
-        signal: controller.signal,
-        headers: {
-          accept: "application/json",
-          "user-agent": "SME-Liquidity-Radar-Competition-PoC/1.0",
-        },
-        next: { revalidate: 86400 },
-      });
-      if (publicResponse.ok) {
-        publicCompanyPayload = await publicResponse.json();
-      }
-    } catch {
-      publicCompanyPayload = [];
-    }
+    const marketPayloads = await Promise.all(
+      [
+        TWSE_LISTED_COMPANY_ENDPOINT,
+        TWSE_PUBLIC_COMPANY_ENDPOINT,
+        TPEX_OTC_COMPANY_ENDPOINT,
+      ].map(async (endpoint) => {
+        try {
+          const response = await fetch(endpoint, {
+            signal: controller.signal,
+            headers: {
+              accept: "application/json",
+              "user-agent": "SME-Liquidity-Radar-Competition-PoC/1.0",
+            },
+            next: { revalidate: 86400 },
+          });
+          return response.ok ? await response.json() : [];
+        } catch {
+          return [];
+        }
+      }),
+    );
 
     let businessPayload: unknown = [];
     try {
@@ -511,7 +524,10 @@ export async function GET(request: NextRequest) {
     const paidCapital = numberOrNull(basic.Paid_In_Capital_Amount);
     const stockCapital = numberOrNull(basic.Capital_Stock_Amount);
     const businessItems = collectBusinessItems(businessPayload);
-    const publicCompany = findPublicCompany(publicCompanyPayload, businessNo);
+    const publicCompany =
+      marketPayloads
+        .map((payload) => findPublicCompany(payload, businessNo))
+        .find(Boolean) ?? null;
     const industry = inferIndustry(
       name,
       publicCompany?.industry
@@ -555,6 +571,11 @@ export async function GET(request: NextRequest) {
           recommended_data_route: publicCompany
             ? "PUBLIC_FINANCIAL_STATEMENTS"
             : "SME_ESTIMATE_OR_PRIVATE_DATA",
+          checked_sources: [
+            "TWSE_LISTED_COMPANY",
+            "TWSE_PUBLIC_COMPANY",
+            "TPEX_OTC_COMPANY",
+          ],
         },
         estimate,
         quick_estimate_eligibility: quickEstimateEligibility,

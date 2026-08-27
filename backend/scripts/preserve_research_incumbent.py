@@ -13,6 +13,15 @@ from scripts.run_daily_autoresearch import write_json_atomic
 INCUMBENT_SCHEMA_VERSION = 1
 
 
+def _behavior_signature(candidate: dict[str, Any] | None) -> str:
+    if not isinstance(candidate, dict):
+        return ""
+    behavior = candidate.get("behavior") or {}
+    if not isinstance(behavior, dict):
+        return ""
+    return str(behavior.get("behavior_signature") or "").strip()
+
+
 def _candidate_identity(candidate: dict[str, Any] | None) -> str:
     if not isinstance(candidate, dict):
         return ""
@@ -106,6 +115,15 @@ def select_research_incumbent(
     previous_id = _candidate_identity(previous)
     incumbent_in_current_round = incumbent_id == round_id
 
+    incumbent_behavior = _behavior_signature(incumbent)
+    round_behavior = _behavior_signature(round_candidate)
+    behavioral_near_duplicate = bool(
+        incumbent_behavior
+        and round_behavior
+        and incumbent_behavior == round_behavior
+        and incumbent_id != round_id
+    )
+
     if previous is None:
         state = "BOOTSTRAPPED"
     elif incumbent_id == previous_id:
@@ -136,6 +154,15 @@ def select_research_incumbent(
         "feeds_train_memory": False,
         "opens_final_holdout": False,
         "ranking_key": "paper_guided_evidence_hierarchy_v1",
+        "behavioral_near_duplicate": behavioral_near_duplicate,
+        "behavioral_duplicate_basis": (
+            "exact_behavior_signature"
+            if behavioral_near_duplicate
+            else None
+        ),
+        "behavioral_duplicate_of": (
+            incumbent_id if behavioral_near_duplicate else None
+        ),
     }
     incumbent_record = {
         "schema_version": INCUMBENT_SCHEMA_VERSION,

@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
 
     return Response.json(
       {
-        source: "server_fetched_immutable_research_snapshot",
+        source: "server_fetched_latest_integrity_checked_snapshot",
         fail_closed: true,
         risk_code: suitability.risk_code,
         max_research_drawdown_percent: boundary,

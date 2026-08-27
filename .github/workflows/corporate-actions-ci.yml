@@ -3,6 +3,7 @@ name: Research Integrity CI
 on:
   push:
     branches:
+      - main
       - agent/real-stock-analysis-v1
     paths:
       - 'backend/stock.py'
@@ -20,6 +21,7 @@ on:
       - 'backend/app/services/competition_dataset_guard.py'
       - 'backend/app/services/competition_runner.py'
       - 'backend/tests/test_corporate_actions.py'
+      - 'backend/tests/test_backtest_corporate_action_execution.py'
       - 'backend/tests/test_corporate_action_ledger.py'
       - 'backend/tests/test_corporate_action_adapter.py'
       - 'backend/tests/test_corporate_action_ingestion.py'
@@ -51,6 +53,7 @@ on:
       - 'backend/app/services/competition_dataset_guard.py'
       - 'backend/app/services/competition_runner.py'
       - 'backend/tests/test_corporate_actions.py'
+      - 'backend/tests/test_backtest_corporate_action_execution.py'
       - 'backend/tests/test_corporate_action_ledger.py'
       - 'backend/tests/test_corporate_action_adapter.py'
       - 'backend/tests/test_corporate_action_ingestion.py'

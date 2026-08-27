@@ -562,7 +562,6 @@ export async function GET(request: NextRequest) {
           status: stringValue(basic.Company_Status_Desc),
           capital_stock_amount: stockCapital,
           paid_in_capital_amount: paidCapital,
-          responsible_name: stringValue(basic.Responsible_Name),
           location: stringValue(basic.Company_Location),
           setup_date: stringValue(basic.Company_Setup_Date),
           register_organization: stringValue(basic.Register_Organization_Desc),

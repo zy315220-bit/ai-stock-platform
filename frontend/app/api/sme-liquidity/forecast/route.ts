@@ -184,6 +184,21 @@ function normal(random: () => number, mean: number, std: number) {
   return mean + z * std;
 }
 
+function nonNegativeWithMeanStd(
+  random: () => number,
+  mean: number,
+  std: number,
+) {
+  if (mean <= 0) return 0;
+  if (std <= 0) return mean;
+
+  const varianceRatio = (std * std) / (mean * mean);
+  const sigma2 = Math.log1p(varianceRatio);
+  const sigma = Math.sqrt(sigma2);
+  const mu = Math.log(mean) - sigma2 / 2;
+  return Math.exp(normal(random, mu, sigma));
+}
+
 function quantile(values: number[], q: number) {
   const sorted = [...values].sort((a, b) => a - b);
   if (!sorted.length) return 0;
@@ -273,13 +288,10 @@ function simulate(profile: Profile, seed: number) {
     }
 
     for (let day = 1; day <= 90; day += 1) {
-      const recurringInflow = Math.max(
-        0,
-        normal(
-          random,
-          profile.baselineDailyInflow,
-          profile.dailyInflowVolatility,
-        ),
+      const recurringInflow = nonNegativeWithMeanStd(
+        random,
+        profile.baselineDailyInflow,
+        profile.dailyInflowVolatility,
       );
       let outflow = profile.fixedDailyOutflow;
       if (day % profile.payrollEveryDays === 0) {
@@ -296,7 +308,12 @@ function simulate(profile: Profile, seed: number) {
   return paths;
 }
 
-function metrics(paths: number[][], floor: number, horizon: number) {
+function metrics(
+  paths: number[][],
+  floor: number,
+  horizon: number,
+  initialCash?: number,
+) {
   const endings: number[] = [];
   const minimums: number[] = [];
   const firstBreaches: number[] = [];
@@ -304,9 +321,17 @@ function metrics(paths: number[][], floor: number, horizon: number) {
   for (const path of paths) {
     const window = path.slice(0, horizon);
     const ending = window[window.length - 1];
-    const minimum = Math.min(...window);
+    const minimum =
+      typeof initialCash === "number"
+        ? Math.min(initialCash, ...window)
+        : Math.min(...window);
     endings.push(ending);
     minimums.push(minimum);
+
+    if (typeof initialCash === "number" && initialCash < floor) {
+      firstBreaches.push(0);
+      continue;
+    }
 
     const first = window.findIndex((cash) => cash < floor);
     if (first >= 0) firstBreaches.push(first + 1);
@@ -556,6 +581,7 @@ function adjustmentRecommendations(profile: Profile) {
     simulate(stressedBase, seed),
     stressedBase.safetyCashFloor,
     90,
+    stressedBase.currentCash,
   );
   const before = baseResult.shortfall_probability;
 
@@ -636,6 +662,7 @@ function adjustmentRecommendations(profile: Profile) {
         simulate(stressed, seed),
         stressed.safetyCashFloor,
         90,
+        stressed.currentCash,
       );
       const after = result.shortfall_probability;
       return {
@@ -854,7 +881,7 @@ export async function POST(request: NextRequest) {
 
   const basePaths = simulate(profile, 20260827);
   const horizons = HORIZONS.map((horizon) =>
-    metrics(basePaths, profile.safetyCashFloor, horizon),
+    metrics(basePaths, profile.safetyCashFloor, horizon, profile.currentCash),
   );
 
   const stressNames: StressName[] = [
@@ -867,7 +894,7 @@ export async function POST(request: NextRequest) {
   const stress_tests = stressNames.map((stress, index) => {
     const stressed = applyStress(profile, stress);
     const stressedPaths = simulate(stressed, 20260827 + index + 1);
-    const result = metrics(stressedPaths, stressed.safetyCashFloor, 90);
+    const result = metrics(stressedPaths, stressed.safetyCashFloor, 90, stressed.currentCash);
     return {
       stress,
       shortfall_probability: result.shortfall_probability,
@@ -906,6 +933,12 @@ export async function POST(request: NextRequest) {
         simulations: SIMULATIONS,
         horizons: [30, 60, 90],
         data_mode: dataMode,
+        assumptions: {
+          nonnegative_inflow_distribution: "lognormal_mean_std_calibrated",
+          receivable_delay_distribution: "truncated_normal_nonnegative",
+          day0_floor_breach_included: true,
+          deterministic_seed_for_demo: true,
+        },
       },
       horizons,
       stress_tests,

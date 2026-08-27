@@ -4,8 +4,9 @@
   --line: #d8dee5;
   --paper: #f6f4ef;
   --surface: #ffffff;
-  --accent: #0c6f62;
-  --accent-soft: #eaf3f0;
+  --accent: #b75a1a;
+  --tech: #24566e;
+  --accent-soft: #f7ede5;
   min-height: 100vh;
   background: var(--paper);
   color: var(--ink);
@@ -27,7 +28,7 @@
 .heroMonitor { border:1px solid var(--ink); background:var(--surface); }
 .monitorHead,.demoHeader { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:17px 18px; border-bottom:1px solid var(--line); }
 .monitorHead span:first-child,.panelLabel { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; font-weight:800; letter-spacing:.08em; }
-.liveBadge { padding:5px 8px; border:1px solid #88aaa3; color:var(--accent); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10px; font-weight:800; }
+.liveBadge { padding:5px 8px; border:1px solid #d3a47e; color:var(--accent); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10px; font-weight:800; }
 .monitorRows { margin:0; }
 .monitorRows > div { display:grid; grid-template-columns:1fr auto; gap:20px; padding:18px; border-bottom:1px solid var(--line); }
 .monitorRows > div:last-child { border-bottom:0; }

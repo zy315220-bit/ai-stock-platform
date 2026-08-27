@@ -439,6 +439,43 @@ export default function Tbb2026Page() {
         </div>
       </section>
 
+      <section className={styles.sourceSection} aria-labelledby="official-basis">
+        <div>
+          <span className={styles.kicker}>OFFICIAL BASIS</span>
+          <h2 id="official-basis">需求不是假設，來源可查。</h2>
+          <p>
+            競賽命題與產品邏輯優先採用臺灣企銀及主管機關公開資料；
+            PoC 不把未驗證的市場數字包裝成既成效益。
+          </p>
+        </div>
+        <div className={styles.sourceLinks}>
+          <a
+            href="https://www.tbb.com.tw/zh-tw/about/information/announcement/news/press-announcements/1150618"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span>臺灣企銀 · 2026/06/18</span>
+            <strong>開辦高資產業務，從商品銷售走向全方位資產管理 ↗</strong>
+          </a>
+          <a
+            href="https://www.tbb.com.tw/zh-tw/about/information/announcement/news/press-announcements/20260424"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span>臺灣企銀 · 2026/04/24</span>
+            <strong>跨部門整合與數位工具，擴大財富管理服務量能 ↗</strong>
+          </a>
+          <a
+            href="https://law.fsc.gov.tw/LawContent.aspx?id=GL003920"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span>金融監督管理委員會</span>
+            <strong>金融業運用人工智慧（AI）指引 ↗</strong>
+          </a>
+        </div>
+      </section>
+
       <footer className={styles.footer}>
         <div>
           <strong>企富雙衡 · BIZWEALTH GUARD</strong>

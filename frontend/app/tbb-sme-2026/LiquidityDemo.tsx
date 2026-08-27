@@ -755,11 +755,11 @@ export default function LiquidityDemo() {
                   <span>已停止 SME 快速估算</span>
                   <strong>
                     {companyProfile.market?.recommended_data_route === "PUBLIC_FINANCIAL_STATEMENTS"
-                      ? "這家公司應改走公開財報模式"
+                      ? "此競賽版不對公開市場公司啟用 SME 快速估算"
                       : "這家公司需要更多 SME 身分／真實財務資料"}
                   </strong>
                   <p>
-                    系統不展示資本額 heuristic 推出的現金、營收或應收估值，避免對超出適用範圍的公司製造假精準。
+                    系統不展示資本額 heuristic 推出的現金、營收或應收估值，避免製造假精準；完整產品應改接公開財報資料後另行建模。
                   </p>
                   {companyProfile.market?.public_company?.company_code && (
                     <small>
@@ -841,7 +841,7 @@ export default function LiquidityDemo() {
                     : profileLoading
                       ? "正在驗證公司資料…"
                       : companyProfile.quick_estimate_eligibility.can_run_quick_estimate
-                        ? "立即快速評估"
+                        ? "開始快速情境篩檢"
                         : "此公司尚未通過快速估算 Gate"}
                 </button>
               </div>
@@ -951,10 +951,10 @@ export default function LiquidityDemo() {
         <div id="forecast-result" className={styles.resultSection}>
           <div className={styles.resultIntro}>
             <div>
-              <span className={styles.kicker}>你的評估結果</span>
+              <span className={styles.kicker}>你的情境篩檢結果</span>
               <h2>{data.profile.name} 的 90 天資金壓力報告</h2>
               <p>
-                這不是核貸結果，而是未來資金壓力預警。快速模式使用公開資料＋估算；
+                這不是核貸結果，而是未來資金壓力情境篩檢。快速模式使用公開資料＋scenario prior；
                 若補入企業真實私有數據，可進一步提高準確度。
               </p>
             </div>

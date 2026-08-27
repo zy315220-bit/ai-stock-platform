@@ -271,6 +271,16 @@ def audit_research_system(
         "champion_discovery_status": (
             "CERTIFIED_ROBOT_AVAILABLE" if certified_count else "SEARCH_CONTINUES"
         ),
+        "train_identity_status": (
+            "VERIFIED"
+            if verified_identity_count == len(expected_universe)
+            else (
+                "MIGRATION_PENDING_CONFIRMATION"
+                if identity_coverage_complete and migration_is_fail_closed
+                else "INVALID_OR_INCOMPLETE"
+            )
+        ),
+        "promotion_blocked_by_train_identity": migrated_identity_count > 0,
         "completion_semantics": (
             "research_engine_complete means the autonomous Train-to-Final-Holdout lifecycle, "
             "certified challenger bridge, post-certification competition quarantine, and "

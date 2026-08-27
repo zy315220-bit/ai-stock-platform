@@ -36,7 +36,6 @@ type CompanyMatch = {
   capital: number | null;
   paid_in_capital: number | null;
   location: string;
-  responsible_name: string;
 };
 
 type EstimateRange = {
@@ -53,7 +52,6 @@ type CompanyProfile = {
     status: string;
     capital_stock_amount: number | null;
     paid_in_capital_amount: number | null;
-    responsible_name: string;
     location: string;
     setup_date: string;
     register_organization: string;
@@ -331,7 +329,6 @@ function buildFallbackProfile(company: CompanyMatch): CompanyProfile {
       status: company.status,
       capital_stock_amount: company.capital,
       paid_in_capital_amount: company.paid_in_capital,
-      responsible_name: company.responsible_name,
       location: company.location,
       setup_date: "",
       register_organization: "",

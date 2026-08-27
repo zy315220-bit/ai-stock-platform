@@ -87,4 +87,4 @@ jobs:
       - name: Run legacy research-integrity regression suite
         run: python -m unittest tests.test_corporate_actions tests.test_stock_price_basis tests.test_backtest_no_lookahead tests.test_production_split_pipeline -v
       - name: Run corporate-action integrity gates
-        run: python -m pytest tests/test_corporate_action_ledger.py tests/test_corporate_action_adapter.py tests/test_corporate_action_ingestion.py tests/test_taiwan_official_ca_mapper.py tests/test_competition_dataset_guard.py tests/test_competition_api_dataset_binding.py tests/test_competition_runner.py tests/test_official_data.py tests/test_backtest_history.py -v
+        run: python -m pytest tests/test_corporate_action_ledger.py tests/test_corporate_action_adapter.py tests/test_corporate_action_ingestion.py tests/test_backtest_corporate_action_execution.py tests/test_taiwan_official_ca_mapper.py tests/test_competition_dataset_guard.py tests/test_competition_api_dataset_binding.py tests/test_competition_runner.py tests/test_official_data.py tests/test_backtest_history.py -v

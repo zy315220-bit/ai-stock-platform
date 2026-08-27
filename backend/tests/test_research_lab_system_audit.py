@@ -29,6 +29,7 @@ def _snapshot() -> dict:
             "validation_feedback_used": False,
             "holdout_feedback_used": False,
             "verified_data_identity_symbol_count": 20,
+            "migrated_data_identity_symbol_count": 0,
         },
         "ranking_methodology": {
             "schema": "paper-guided-evidence-ranking-v1",
@@ -138,6 +139,39 @@ def test_full_research_lifecycle_can_be_operational_without_forcing_a_champion()
     assert audit["competition_challenger_count"] == 0
     assert audit["champion_discovery_status"] == "SEARCH_CONTINUES"
     assert audit["failed_check_count"] == 0
+
+
+def test_audit_accepts_safe_train_identity_migration_without_holdout_eligibility() -> None:
+    snapshot = _snapshot()
+    snapshot["training_memory"]["verified_data_identity_symbol_count"] = 0
+    snapshot["training_memory"]["migrated_data_identity_symbol_count"] = 20
+    snapshot["eligible_candidate_count"] = 0
+
+    audit = _audit(snapshot=snapshot)
+
+    assert audit["system_ready"] is True
+    identity_check = next(
+        row
+        for row in audit["checks"]
+        if row["name"] == "canonical_train_identity_verified"
+    )
+    assert identity_check["passed"] is True
+    assert "migrated=20/20" in identity_check["detail"]
+
+
+def test_audit_fails_closed_if_migrating_identity_has_holdout_eligible_candidate() -> None:
+    snapshot = _snapshot()
+    snapshot["training_memory"]["verified_data_identity_symbol_count"] = 0
+    snapshot["training_memory"]["migrated_data_identity_symbol_count"] = 20
+    snapshot["eligible_candidate_count"] = 1
+
+    audit = _audit(snapshot=snapshot)
+
+    assert audit["system_ready"] is False
+    failed_names = {
+        row["name"] for row in audit["checks"] if not row["passed"]
+    }
+    assert "canonical_train_identity_verified" in failed_names
 
 
 def test_audit_fails_closed_if_validation_feedback_enters_train_memory() -> None:

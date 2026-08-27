@@ -1,11 +1,7 @@
 name: Refresh frontend lockfile
 
 on:
-  push:
-    branches:
-      - competition/tbb-2026-sme-liquidity
-    paths:
-      - "frontend/package.json"
+  workflow_dispatch:
 
 permissions:
   contents: write

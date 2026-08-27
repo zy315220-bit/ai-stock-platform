@@ -46,7 +46,7 @@ export default function Page() {
             <strong>SME Liquidity Radar</strong> 預測企業未來 30 / 60 / 90 天
             的資金壓力，說明「為什麼」，再把訊號轉成 RM 能採取的下一步。
           </p>
-          <a className={styles.cta} href="#demo">直接看預警 Demo</a>
+          <a className={styles.cta} href="#demo">開始輸入企業資料</a>
         </div>
 
         <aside className={styles.heroCard}>

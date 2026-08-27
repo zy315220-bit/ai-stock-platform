@@ -3945,7 +3945,7 @@ export default function Dashboard() {
             value={strongest?.advance_ratio === null || strongest?.advance_ratio === undefined
               ? "—"
               : `${formatNumber(strongest.advance_ratio, 1)}%`}
-            detail={strongest?.advancing === null || strongest?.declining === null
+            detail={strongest?.advancing == null || strongest?.declining == null
               ? averageChange === null
                 ? undefined
                 : `${advancingSectors}／${sectors.length} 個產業上漲`

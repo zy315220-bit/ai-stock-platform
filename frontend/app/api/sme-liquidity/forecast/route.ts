@@ -34,23 +34,6 @@ type Profile = {
 
 type Volatility = "low" | "medium" | "high";
 
-type CustomProfileInput = {
-  company_name: string;
-  industry: string;
-  current_cash: number;
-  safety_cash_floor: number;
-  avg_monthly_inflow: number;
-  monthly_fixed_outflow: number;
-  monthly_payroll: number;
-  largest_receivable_amount: number;
-  largest_receivable_due_days: number;
-  receivable_delay_mean_days: number;
-  largest_payable_amount: number;
-  largest_payable_due_days: number;
-  fx_receivable_share_percent: number;
-  income_volatility: Volatility;
-};
-
 const PROFILES: Record<string, Profile> = {
   exporter: {
     id: "exporter",

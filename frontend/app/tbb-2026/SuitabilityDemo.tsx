@@ -376,14 +376,30 @@ export default function SuitabilityDemo() {
     setRequestState("loading");
 
     try {
-      const [payload, gate] = await Promise.all([
+      const [decisionResult, gateResult] = await Promise.allSettled([
         requestDecision(nextForm, controller.signal),
         requestServerResearchGate(nextForm, controller.signal),
       ]);
-      setDecision(payload);
-      setServerResearchGate(gate);
-      setServerGateUnavailable(false);
+
+      if (decisionResult.status === "rejected") {
+        if (isAbortError(decisionResult.reason)) return;
+        setDecision(null);
+        setServerResearchGate(null);
+        setServerGateUnavailable(true);
+        setRequestState("error");
+        return;
+      }
+
+      setDecision(decisionResult.value);
       setRequestState("idle");
+
+      if (gateResult.status === "fulfilled") {
+        setServerResearchGate(gateResult.value);
+        setServerGateUnavailable(false);
+      } else {
+        setServerResearchGate(null);
+        setServerGateUnavailable(true);
+      }
     } catch (reason) {
       if (isAbortError(reason)) return;
       setDecision(null);
@@ -396,23 +412,30 @@ export default function SuitabilityDemo() {
   useEffect(() => {
     const initialDecisionController = new AbortController();
     decisionRequest.current = initialDecisionController;
-    void Promise.all([
+    void Promise.allSettled([
       requestDecision(OWNER_PROFILE, initialDecisionController.signal),
       requestServerResearchGate(OWNER_PROFILE, initialDecisionController.signal),
-    ])
-      .then(([payload, gate]) => {
-        setDecision(payload);
-        setServerResearchGate(gate);
-        setServerGateUnavailable(false);
-        setRequestState("idle");
-      })
-      .catch((reason: unknown) => {
-        if (isAbortError(reason)) return;
+    ]).then(([decisionResult, gateResult]) => {
+      if (decisionResult.status === "rejected") {
+        if (isAbortError(decisionResult.reason)) return;
         setDecision(null);
         setServerResearchGate(null);
         setServerGateUnavailable(true);
         setRequestState("error");
-      });
+        return;
+      }
+
+      setDecision(decisionResult.value);
+      setRequestState("idle");
+
+      if (gateResult.status === "fulfilled") {
+        setServerResearchGate(gateResult.value);
+        setServerGateUnavailable(false);
+      } else {
+        setServerResearchGate(null);
+        setServerGateUnavailable(true);
+      }
+    });
 
     const researchController = new AbortController();
     async function loadResearchStatus() {

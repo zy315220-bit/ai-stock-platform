@@ -185,3 +185,13 @@
   .dynamicInterpretationHead{grid-template-columns:1fr}
   .probabilityPrimary{font-size:30px!important}
 }
+
+.eligibilityGate{display:grid;grid-template-columns:210px 1fr;gap:24px;padding:18px 32px;border-bottom:1px solid var(--line)}
+.eligibilityGate>div{display:grid;gap:5px}
+.eligibilityGate span{color:var(--muted);font:900 8px ui-monospace,SFMono-Regular,Menlo,monospace}
+.eligibilityGate strong{font-size:13px}
+.eligibilityGate ul{margin:0;padding-left:18px;color:var(--muted);font-size:9px;line-height:1.55}
+.eligibility_ELIGIBLE{background:#e7efeb}
+.eligibility_CAUTION{background:#f4ead8}
+.eligibility_NOT_RECOMMENDED{background:#f2dddd}
+@media(max-width:620px){.eligibilityGate{grid-template-columns:1fr;padding-left:18px;padding-right:18px}}

@@ -32,8 +32,6 @@ type Profile = {
   fxReceivableShare: number;
 };
 
-type Volatility = "low" | "medium" | "high";
-
 const PROFILES: Record<string, Profile> = {
   exporter: {
     id: "exporter",

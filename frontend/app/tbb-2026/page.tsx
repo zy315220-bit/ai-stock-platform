@@ -1,63 +1,181 @@
 import Link from "next/link";
 
-const gates = [
-  ["資料可信", "官方行情優先，保留資料版本與公司行動指紋"],
-  ["樣本外驗證", "Validation、Rolling Walk-forward、牛熊盤整分層"],
-  ["統計防過擬合", "Wilson、PSR、MinTRL、DSR、Bootstrap、PBO、SPA"],
-  ["最終考試", "Final Holdout 一次性開啟，互動 API 不得偷看"],
-  ["可稽核發布", "每次研究保留 Run ID、候選 lineage 與淘汰原因"],
+import SuitabilityDemo from "./SuitabilityDemo";
+import styles from "./tbb.module.css";
+
+const workflow = [
+  ["01", "建立風險邊界", "只收最小必要的風險偏好，不要求姓名、身分證或帳號。"],
+  ["02", "Research Lab 研究", "AI 在既定邊界內搜尋候選，不把研究結果直接當建議。"],
+  ["03", "可信度 Gate", "Walk-forward、DSR、PBO、SPA、Final Holdout 逐層 fail-closed。"],
+  ["04", "理專人工覆核", "AI 整理證據與風險，最終對客內容保留人工決策。"],
+  ["05", "可稽核摘要", "保留 Run ID、資料指紋、候選 lineage 與淘汰原因。"],
+];
+
+const auditRows = [
+  ["資料最小化", "只收 4 個非個資風險欄位", "PASS"],
+  ["額外欄位", "Pydantic extra=forbid，未知欄位直接 422", "BLOCK"],
+  ["交易權限", "競賽原型不具下單／資金移轉能力", "NONE"],
+  ["Final Holdout", "互動流程不可開啟", "LOCKED"],
+  ["對客輸出", "未通過 Gate 不發布；人工覆核必要", "CONTROLLED"],
 ];
 
 export default function Tbb2026Page() {
   return (
-    <main style={{maxWidth:1120,margin:"0 auto",padding:"48px 24px 80px",fontFamily:"system-ui,sans-serif"}}>
-      <p style={{fontWeight:700,letterSpacing:1,color:"#4f46e5"}}>2026 臺灣企銀校園金融科技創意挑戰賽｜智慧理財</p>
-      <h1 style={{fontSize:"clamp(36px,7vw,72px)",lineHeight:1.03,margin:"12px 0 20px"}}>
-        AI 理財研究，不只推薦，<br/>先證明它值得被相信。
-      </h1>
-      <p style={{fontSize:20,lineHeight:1.7,maxWidth:860,color:"#475569"}}>
-        將既有 AI 台股研究平台轉化為銀行可導入的「可稽核智慧理財研究引擎」：
-        AI 可以自主提出候選策略，但任何投資觀點都必須經過樣本外驗證、過擬合檢查、
-        市況分層與一次性 Final Holdout，通過後才可成為可對客呈現的研究證據。
-      </p>
+    <main className={styles.page}>
+      <nav className={styles.nav}>
+        <div className={styles.brand}>
+          <span className={styles.brandMark}>TBB</span>
+          <span>WEALTH RESEARCH COPILOT</span>
+        </div>
+        <div className={styles.navLinks}>
+          <a href="#problem">問題</a>
+          <a href="#workflow">流程</a>
+          <a href="#demo">Demo</a>
+          <a href="#audit">稽核</a>
+        </div>
+      </nav>
 
-      <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:16,marginTop:40}}>
-        {[
-          ["問題","一般 AI 理財容易把回測漂亮誤當真實可用，且難以追溯建議如何產生。"],
-          ["解法","把自主研究與正式對客建議分離，研究先經多層 Gate，再發布。"],
-          ["銀行價值","降低模型風險、強化適合度說明、留下完整稽核軌跡。"],
-          ["使用者價值","看到的不只是買賣分數，而是『為什麼可信、哪裡可能失效』。"],
-        ].map(([title,body])=>(
-          <article key={title} style={{border:"1px solid #e2e8f0",borderRadius:20,padding:22}}>
-            <h2 style={{fontSize:18,marginTop:0}}>{title}</h2>
-            <p style={{lineHeight:1.65,color:"#475569",marginBottom:0}}>{body}</p>
-          </article>
-        ))}
+      <section className={styles.hero}>
+        <div>
+          <span className={styles.eyebrow}>2026 臺灣企銀｜智慧理財</span>
+          <h1>
+            高資產財管需要的，
+            <br />
+            不是更多推薦。
+          </h1>
+          <p className={styles.heroLead}>
+            是讓理專可以快速取得「符合客戶風險邊界、經過研究驗證、
+            而且留下完整稽核證據」的 AI 研究副駕駛。
+          </p>
+          <div className={styles.heroActions}>
+            <a className={styles.primaryLink} href="#demo">
+              直接操作 Demo
+            </a>
+            <Link className={styles.secondaryLink} href="/research-lab">
+              查看研究引擎
+            </Link>
+          </div>
+        </div>
+
+        <aside className={styles.heroMonitor} aria-label="治理狀態">
+          <div className={styles.monitorHead}>
+            <span>CONTROL PANEL</span>
+            <span className={styles.liveBadge}>FAIL-CLOSED</span>
+          </div>
+          <dl className={styles.monitorRows}>
+            <div>
+              <dt>PII / 個資輸入</dt>
+              <dd className={styles.statusGood}>NOT REQUIRED</dd>
+            </div>
+            <div>
+              <dt>自動下單</dt>
+              <dd>DISABLED</dd>
+            </div>
+            <div>
+              <dt>人工覆核</dt>
+              <dd className={styles.statusGood}>REQUIRED</dd>
+            </div>
+            <div>
+              <dt>Final Holdout</dt>
+              <dd>LOCKED</dd>
+            </div>
+            <div>
+              <dt>研究證據</dt>
+              <dd className={styles.statusGood}>TRACEABLE</dd>
+            </div>
+          </dl>
+        </aside>
       </section>
 
-      <section style={{marginTop:56}}>
-        <h2 style={{fontSize:32}}>五層可信度 Gate</h2>
-        <div style={{display:"grid",gap:12}}>
-          {gates.map(([name,detail],i)=>(
-            <div key={name} style={{display:"grid",gridTemplateColumns:"64px 180px 1fr",gap:16,alignItems:"center",padding:"16px 18px",borderRadius:16,background:"#f8fafc"}}>
-              <strong>0{i+1}</strong><strong>{name}</strong><span style={{color:"#475569"}}>{detail}</span>
-            </div>
+      <section className={styles.proofStrip} aria-label="核心價值">
+        <div>
+          <strong>財管 2.0</strong>
+          <span>服務高資產與企業主場景</span>
+        </div>
+        <div>
+          <strong>Research-first</strong>
+          <span>研究與正式建議分離</span>
+        </div>
+        <div>
+          <strong>Human-in-control</strong>
+          <span>理專保留最終覆核</span>
+        </div>
+        <div>
+          <strong>Audit-ready</strong>
+          <span>證據可追溯、失敗也保留</span>
+        </div>
+      </section>
+
+      <section className={styles.section} id="problem">
+        <div className={styles.sectionIntro}>
+          <div>
+            <span className={styles.eyebrow}>THE CURRENT GAP</span>
+            <h2>從賣商品，走向整體資產管理。</h2>
+          </div>
+          <p>
+            臺灣企銀已正式跨入高資產財富管理市場。對企業主與高資產客戶而言，
+            問題不再只是「哪個商品可以買」，而是理專如何在更複雜的需求、
+            更多商品與更高合規要求下，快速產出一致、可解釋、可驗證的研究依據。
+            本原型不取代理專，而是把 AI 放在最適合的位置：研究、整理證據、守住風險邊界。
+          </p>
+        </div>
+
+        <div className={styles.workflow} id="workflow">
+          {workflow.map(([number, title, body]) => (
+            <article className={styles.step} key={number}>
+              <span className={styles.stepNumber}>{number}</span>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </article>
           ))}
         </div>
       </section>
 
-      <section style={{marginTop:56,padding:28,borderRadius:24,background:"#0f172a",color:"white"}}>
-        <h2 style={{fontSize:30,marginTop:0}}>競賽 Demo 流程</h2>
-        <p style={{lineHeight:1.8,color:"#cbd5e1"}}>
-          客戶輸入標的與風險偏好 → 系統讀取真實市場/基本/消息資料 →
-          研究引擎提供候選觀點與風險 → 可信度 Gate 顯示哪些證據通過、哪些失敗 →
-          僅將合格結果轉成可解釋的理財研究摘要。平台不保證獲利，也不自動下單。
-        </p>
-        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:20}}>
-          <Link href="/" style={{background:"white",color:"#0f172a",padding:"12px 18px",borderRadius:12,textDecoration:"none",fontWeight:700}}>查看現有分析平台</Link>
-          <Link href="/research-lab" style={{border:"1px solid #475569",color:"white",padding:"12px 18px",borderRadius:12,textDecoration:"none",fontWeight:700}}>查看 AI 研究室</Link>
-        </div>
+      <section className={styles.section}>
+        <SuitabilityDemo />
       </section>
+
+      <section className={styles.section} id="audit">
+        <div className={styles.sectionIntro}>
+          <div>
+            <span className={styles.eyebrow}>SECURITY & GOVERNANCE</span>
+            <h2>安全不是附錄，是產品邏輯。</h2>
+          </div>
+          <p>
+            競賽版預設「不能做」比「能做」更重要：不收不必要個資、不讓前端持有敏感祕密、
+            不開放自動下單、不允許互動流程偷看 Final Holdout。
+            當資料、研究證據或權限不完整時，系統應停止，而不是硬生一個答案。
+          </p>
+        </div>
+
+        <table className={styles.auditTable}>
+          <thead>
+            <tr>
+              <th>控制項</th>
+              <th>目前原型設計</th>
+              <th>狀態</th>
+            </tr>
+          </thead>
+          <tbody>
+            {auditRows.map(([control, design, status]) => (
+              <tr key={control}>
+                <td>{control}</td>
+                <td>{design}</td>
+                <td className={styles.auditStatus}>{status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <footer className={styles.footer}>
+        <span>
+          競賽原型：AI Wealth Research Copilot｜不保證獲利、不自動下單。
+        </span>
+        <span>
+          核心能力沿用現有 AI 台股 Research Lab，但競賽版獨立分支與獨立網址運作。
+        </span>
+      </footer>
     </main>
   );
 }

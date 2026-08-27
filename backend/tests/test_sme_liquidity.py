@@ -229,3 +229,16 @@ def test_guardrails_do_not_claim_credit_decision() -> None:
     assert guardrails["automatic_product_sale"] is False  # type: ignore[index]
     assert guardrails["human_review_required"] is True  # type: ignore[index]
     assert guardrails["profile_persisted"] is False  # type: ignore[index]
+
+
+def test_input_fingerprint_is_stable_and_input_sensitive() -> None:
+    first = forecast_liquidity(sample_profile(), simulations=1000, seed=99)
+    second = forecast_liquidity(sample_profile(), simulations=1000, seed=99)
+    changed = forecast_liquidity(
+        sample_profile(current_cash=4_300_000),
+        simulations=1000,
+        seed=99,
+    )
+
+    assert first["engine"]["input_fingerprint"] == second["engine"]["input_fingerprint"]  # type: ignore[index]
+    assert first["engine"]["input_fingerprint"] != changed["engine"]["input_fingerprint"]  # type: ignore[index]

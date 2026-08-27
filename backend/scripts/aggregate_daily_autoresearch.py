@@ -116,6 +116,18 @@ def _candidate_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
             eligibility.get("eligible_for_one_shot_holdout")
         ),
         "gate_reasons": eligibility.get("reasons") or [],
+        "behavior": {
+            "behavior_signature": str(metrics.get("behavior_signature") or ""),
+            "trade_path_signature": str(metrics.get("trade_path_signature") or ""),
+            "return_path_signature": str(metrics.get("return_path_signature") or ""),
+            "behavior_trade_count": int(_number(metrics.get("behavior_trade_count"))),
+            "behavior_return_observation_count": int(
+                _number(metrics.get("behavior_return_observation_count"))
+            ),
+            "behavioral_duplicate": bool(metrics.get("behavioral_duplicate")),
+            "behavioral_duplicate_of": metrics.get("behavioral_duplicate_of"),
+            "behavioral_duplicate_basis": metrics.get("behavioral_duplicate_basis"),
+        },
         "validation": {
             "completed_trades": int(_number(metrics.get("completed_trades"))),
             "win_rate_percent": _number(metrics.get("win_rate_percent")),

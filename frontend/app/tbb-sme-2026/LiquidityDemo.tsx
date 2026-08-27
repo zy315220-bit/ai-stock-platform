@@ -67,6 +67,27 @@ type CompanyProfile = {
       reason: string;
     };
   };
+  market?: {
+    public_company: {
+      company_code?: string;
+      company_name?: string;
+      industry?: string;
+      market_type?: string;
+      source?: string;
+    } | null;
+    recommended_data_route: "PUBLIC_FINANCIAL_STATEMENTS" | "SME_ESTIMATE_OR_PRIVATE_DATA";
+    checked_sources?: string[];
+  };
+  provenance?: {
+    retrieved_at: string;
+    public_sources: Array<{ id: string; role: string }>;
+    estimate_model: string;
+    industry_confidence: number;
+    sme_capital_criterion_twd: number;
+    sme_employee_alternative_criterion: string;
+    sme_rule_source: string;
+    public_data_cache_seconds: number;
+  };
   estimate: {
     basis: string;
     disclaimer: string;
@@ -725,35 +746,57 @@ export default function LiquidityDemo() {
                 </div>
               </div>
 
-              <div className={styles.quickEstimate}>
-                <div>
-                  <span>網站先幫你估</span>
-                  <strong>可直接開始，不必先填 11 個財務欄位</strong>
-                  <p>{companyProfile.estimate.disclaimer}</p>
+              {companyProfile.quick_estimate_eligibility.status === "NOT_RECOMMENDED" ? (
+                <div className={styles.outOfScopePanel}>
+                  <span>已停止 SME 快速估算</span>
+                  <strong>
+                    {companyProfile.market?.recommended_data_route === "PUBLIC_FINANCIAL_STATEMENTS"
+                      ? "這家公司應改走公開財報模式"
+                      : "這家公司需要更多 SME 身分／真實財務資料"}
+                  </strong>
+                  <p>
+                    系統不展示資本額 heuristic 推出的現金、營收或應收估值，避免對超出適用範圍的公司製造假精準。
+                  </p>
+                  {companyProfile.market?.public_company?.company_code && (
+                    <small>
+                      官方市場辨識：{companyProfile.market.public_company.company_code}
+                      {companyProfile.market.public_company.company_name
+                        ? ` · ${companyProfile.market.public_company.company_name}`
+                        : ""}
+                    </small>
+                  )}
                 </div>
-                <div className={styles.estimateSummary}>
+              ) : (
+                <div className={styles.quickEstimate}>
                   <div>
-                    <span>月入帳估算</span>
-                    <strong>{money(estimateFields?.avg_monthly_inflow.mid ?? 0)}</strong>
-                    <small>{rangeLabel(estimateFields?.avg_monthly_inflow)}</small>
+                    <span>網站先幫你估</span>
+                    <strong>可直接開始，不必先填 11 個財務欄位</strong>
+                    <p>{companyProfile.estimate.disclaimer}</p>
                   </div>
-                  <div>
-                    <span>目前現金估算</span>
-                    <strong>{money(estimateFields?.current_cash.mid ?? 0)}</strong>
-                    <small>{rangeLabel(estimateFields?.current_cash)}</small>
-                  </div>
-                  <div>
-                    <span>每月薪資估算</span>
-                    <strong>{money(estimateFields?.monthly_payroll.mid ?? 0)}</strong>
-                    <small>{rangeLabel(estimateFields?.monthly_payroll)}</small>
-                  </div>
-                  <div>
-                    <span>最大應收估算</span>
-                    <strong>{money(estimateFields?.largest_receivable_amount.mid ?? 0)}</strong>
-                    <small>{rangeLabel(estimateFields?.largest_receivable_amount)}</small>
+                  <div className={styles.estimateSummary}>
+                    <div>
+                      <span>月入帳估算</span>
+                      <strong>{money(estimateFields?.avg_monthly_inflow.mid ?? 0)}</strong>
+                      <small>{rangeLabel(estimateFields?.avg_monthly_inflow)}</small>
+                    </div>
+                    <div>
+                      <span>目前現金估算</span>
+                      <strong>{money(estimateFields?.current_cash.mid ?? 0)}</strong>
+                      <small>{rangeLabel(estimateFields?.current_cash)}</small>
+                    </div>
+                    <div>
+                      <span>每月薪資估算</span>
+                      <strong>{money(estimateFields?.monthly_payroll.mid ?? 0)}</strong>
+                      <small>{rangeLabel(estimateFields?.monthly_payroll)}</small>
+                    </div>
+                    <div>
+                      <span>最大應收估算</span>
+                      <strong>{money(estimateFields?.largest_receivable_amount.mid ?? 0)}</strong>
+                      <small>{rangeLabel(estimateFields?.largest_receivable_amount)}</small>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div
                 className={`${styles.eligibilityGate} ${styles[`eligibility_${companyProfile.quick_estimate_eligibility.status}`] ?? ""}`}

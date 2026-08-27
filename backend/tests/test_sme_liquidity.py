@@ -242,3 +242,14 @@ def test_input_fingerprint_is_stable_and_input_sensitive() -> None:
 
     assert first["engine"]["input_fingerprint"] == second["engine"]["input_fingerprint"]  # type: ignore[index]
     assert first["engine"]["input_fingerprint"] != changed["engine"]["input_fingerprint"]  # type: ignore[index]
+
+
+def test_zero_fx_stress_matches_base_with_common_random_numbers() -> None:
+    profile = sample_profile(fx_receivable_share=0.0)
+    result = forecast_liquidity(profile, simulations=1000, seed=101)
+
+    base_90 = horizon(result, 90)
+    fx = stress(result, "twd_strengthens_5pct")
+
+    assert fx["shortfall_probability"] == base_90["shortfall_probability"]
+    assert fx["ending_cash_p50"] == base_90["ending_cash_p50"]

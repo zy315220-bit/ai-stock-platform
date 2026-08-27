@@ -121,7 +121,9 @@ type AdjustmentRecommendation = {
   before_shortfall_probability: number;
   after_shortfall_probability: number;
   improvement_percentage_points: number;
+  ending_cash_p50_before: number;
   ending_cash_p50_after: number;
+  ending_cash_p50_change: number;
 };
 
 type Forecast = {
@@ -1008,7 +1010,7 @@ export default function LiquidityDemo() {
                     <div><dt>悲觀期末 P10</dt><dd>{money(item.ending_cash_p10)}</dd></div>
                     <div><dt>悲觀最低現金 P10</dt><dd>{money(item.min_cash_p10)}</dd></div>
                     <div><dt>安全水位緩衝</dt><dd>{money(item.p10_buffer_above_floor)}</dd></div>
-                    <div><dt>Cash-flow-at-Risk</dt><dd>{money(item.cash_flow_at_risk_p50_to_p10)}</dd></div>
+                    <div><dt>P50→P10 下行差距</dt><dd>{money(item.cash_flow_at_risk_p50_to_p10)}</dd></div>
                   </dl>
                 </article>
               );
@@ -1061,8 +1063,11 @@ export default function LiquidityDemo() {
             <section>
               <div className={styles.panelLabel}>
                 <span>05</span>
-                <strong>主要資金壓力從哪裡來？</strong>
+                <strong>主要曝險集中在哪裡？</strong>
               </div>
+              <p className={styles.driverDisclaimer}>
+                依金額與延遲／固定負擔曝險排序，用於協助 RM 排查；這不是因果歸因、SHAP 值或授信風險權重。
+              </p>
               <div className={styles.driverList}>
                 {data.drivers.slice(0, 5).map((driver) => (
                   <div key={driver.driver}>
@@ -1115,7 +1120,9 @@ export default function LiquidityDemo() {
                       </div>
                     </div>
                     <div className={styles.adjustmentBenefit}>
-                      估計降低 {item.improvement_percentage_points.toFixed(1)} 個百分點
+                      {item.improvement_percentage_points > 0
+                        ? `缺口機率估計降低 ${item.improvement_percentage_points.toFixed(1)} 個百分點`
+                        : `90 天 P50 現金估計增加 ${money(item.ending_cash_p50_change)}`}
                     </div>
                   </article>
                 ))}

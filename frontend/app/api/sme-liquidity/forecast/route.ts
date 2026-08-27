@@ -415,6 +415,115 @@ function actionHint(topDriver: string) {
   };
 }
 
+
+function adjustmentRecommendations(profile: Profile) {
+  const seed = 20260917;
+  const stressedBase = applyStress(profile, "combined");
+  const baseResult = metrics(
+    simulate(stressedBase, seed),
+    stressedBase.safetyCashFloor,
+    90,
+  );
+  const before = baseResult.shortfall_probability;
+
+  const scenarios: Array<{
+    code: string;
+    title: string;
+    rationale: string;
+    profile: Profile;
+  }> = [];
+
+  if (profile.receivables.length) {
+    const idx = profile.receivables.reduce(
+      (best, item, index, all) =>
+        item.amount > all[best].amount ? index : best,
+      0,
+    );
+    const receivables = profile.receivables.map((item) => ({ ...item }));
+    receivables[idx] = {
+      ...receivables[idx],
+      dueDay: Math.max(1, receivables[idx].dueDay - 10),
+      delayMeanDays: Math.max(0, receivables[idx].delayMeanDays - 5),
+    };
+    scenarios.push({
+      code: "accelerate_receivable",
+      title: "優先催收最大筆應收帳款",
+      rationale: "模擬把最大筆應收提前 10 天，並把平均延遲縮短 5 天。",
+      profile: { ...profile, receivables },
+    });
+  }
+
+  if (profile.payables.length) {
+    const idx = profile.payables.reduce(
+      (best, item, index, all) =>
+        item.amount > all[best].amount ? index : best,
+      0,
+    );
+    const payables = profile.payables.map((item) => ({ ...item }));
+    payables[idx] = {
+      ...payables[idx],
+      dueDay: Math.min(180, payables[idx].dueDay + 15),
+    };
+    scenarios.push({
+      code: "reschedule_payable",
+      title: "協商最大筆應付款延後",
+      rationale: "模擬把最大筆應付款延後 15 天，觀察短期現金水位是否改善。",
+      profile: { ...profile, payables },
+    });
+  }
+
+  if (profile.fixedDailyOutflow > 0) {
+    scenarios.push({
+      code: "reduce_fixed_cost",
+      title: "短期降低固定營運支出 10%",
+      rationale: "模擬未來 90 天固定營運支出下降 10%，不動薪資與應付款。",
+      profile: {
+        ...profile,
+        fixedDailyOutflow: profile.fixedDailyOutflow * 0.9,
+      },
+    });
+  }
+
+  if (profile.fxReceivableShare > 0.05) {
+    scenarios.push({
+      code: "reduce_fx_exposure",
+      title: "降低未避險外幣曝險",
+      rationale: "模擬把外幣應收曝險占比降低一半，再承受同一組壓力測試。",
+      profile: {
+        ...profile,
+        fxReceivableShare: profile.fxReceivableShare * 0.5,
+      },
+    });
+  }
+
+  return scenarios
+    .map((scenario) => {
+      const stressed = applyStress(scenario.profile, "combined");
+      const result = metrics(
+        simulate(stressed, seed),
+        stressed.safetyCashFloor,
+        90,
+      );
+      const after = result.shortfall_probability;
+      return {
+        code: scenario.code,
+        title: scenario.title,
+        rationale: scenario.rationale,
+        before_shortfall_probability: before,
+        after_shortfall_probability: after,
+        improvement_percentage_points: Math.round(
+          Math.max(0, before - after) * 10000,
+        ) / 100,
+        ending_cash_p50_after: result.ending_cash_p50,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.improvement_percentage_points - a.improvement_percentage_points,
+    )
+    .slice(0, 4);
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -636,6 +745,7 @@ export async function POST(request: NextRequest) {
 
   const driverRows = drivers(profile);
   const suggested = actionHint(driverRows[0]?.driver ?? "");
+  const adjustment_recommendations = adjustmentRecommendations(profile);
 
   return NextResponse.json(
     {
@@ -658,6 +768,7 @@ export async function POST(request: NextRequest) {
       stress_tests,
       drivers: driverRows,
       rm_next_step: suggested,
+      adjustment_recommendations,
       guardrails: {
         is_credit_decision: false,
         is_loan_approval: false,

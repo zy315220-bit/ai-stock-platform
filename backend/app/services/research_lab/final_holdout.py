@@ -59,15 +59,17 @@ def _canonical_candidate_identity(payload: dict[str, Any]) -> tuple[str, dict[st
 
 
 def ledger_path_for(payload: dict[str, Any], ledger_root: Path) -> Path:
+    """Return one durable final-exam ledger per campaign and stock.
+
+    The holdout window is a scarce one-shot exam. If one candidate has already
+    reserved or opened it, a later parameter mutation must not receive a fresh
+    ledger path for the same stock/campaign. Identity validation then fails
+    closed for a different candidate instead of silently reusing the exam.
+    """
     _, identity = _canonical_candidate_identity(payload)
     campaign_id = str(identity["campaign_id"] or "unknown-campaign")
     stock_code = str(identity["stock_code"])
-    candidate_id = str(identity["candidate_id"])
-    safe_candidate = "".join(
-        character if character.isalnum() or character in {"-", "_"} else "_"
-        for character in candidate_id
-    )
-    return ledger_root / campaign_id / stock_code / f"{safe_candidate}.json"
+    return ledger_root / campaign_id / stock_code / "final-holdout.json"
 
 
 def _assert_pre_holdout_eligibility(payload: dict[str, Any]) -> None:
@@ -125,6 +127,7 @@ def _policy(
         "durable_reservation_before_open": True,
         "holdout_feedback_to_train": False,
         "candidate_generation_after_open": False,
+        "holdout_scope": "one_exam_per_campaign_and_stock",
     }
 
 

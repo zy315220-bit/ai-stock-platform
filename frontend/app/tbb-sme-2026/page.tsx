@@ -143,6 +143,37 @@ export default function Page() {
         </div>
       </section>
 
+      <section className={styles.boundaries} id="boundaries" aria-labelledby="boundaries-title">
+        <div>
+          <span className={styles.kicker}>MODEL BOUNDARIES</span>
+          <h2 id="boundaries-title">知道模型什麼時候不該回答，也是能力的一部分。</h2>
+        </div>
+        <div className={styles.boundaryGrid}>
+          <article>
+            <strong>快速模式不是公司真實財報</strong>
+            <p>公開資料拿不到的現金、薪資、應收應付等欄位只用 scenario prior 建立篩檢情境；企業真實資料可覆蓋它。</p>
+          </article>
+          <article>
+            <strong>目前不建模季節性與假日</strong>
+            <p>baseline 採日尺度現金流分布與已知付款時點。正式銀行版會以實際交易流水、薪轉與帳款時序取代簡化假設。</p>
+          </article>
+          <article>
+            <strong>不是信用評分</strong>
+            <p>輸出是流動性壓力情境，不估計違約機率、核貸結果或客戶信用等級；RM 與銀行既有授信流程保留最終決策。</p>
+          </article>
+          <article>
+            <strong>不適用就拒絕</strong>
+            <p>公開市場公司、資料不足或超出快速 baseline 適用範圍時不硬算；系統直接說明缺口與下一個正確資料路徑。</p>
+          </article>
+        </div>
+        <div className={styles.sourceLinks}>
+          <span>官方依據</span>
+          <a href="https://data.gcis.nat.gov.tw/od/" target="_blank" rel="noreferrer">經濟部商工行政資料開放平臺</a>
+          <a href="https://law.moea.gov.tw/LawContent.aspx?id=FL011859" target="_blank" rel="noreferrer">中小企業認定標準</a>
+          <a href="https://service.mof.gov.tw/public/Data/statistic/std/zhtw/index.html" target="_blank" rel="noreferrer">財政部各業利潤標準查詢</a>
+        </div>
+      </section>
+
       <section className={styles.value} id="value">
         <div>
           <span className={styles.kicker}>BANK VALUE</span>

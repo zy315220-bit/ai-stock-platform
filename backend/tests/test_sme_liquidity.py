@@ -9,39 +9,39 @@ from app.services.sme_liquidity import (
 
 
 def sample_profile(**overrides: object) -> LiquidityProfile:
-    values = dict(
-        name="宏昇精密",
-        industry="出口製造",
-        description="test",
-        current_cash=4_200_000,
-        safety_cash_floor=1_200_000,
-        baseline_daily_inflow=92_000,
-        daily_inflow_volatility=38_000,
-        fixed_daily_outflow=82_000,
-        payroll_amount=920_000,
-        payroll_every_days=30,
-        receivables=(
+    values = {
+        "name": "宏昇精密",
+        "industry": "出口製造",
+        "description": "test",
+        "current_cash": 4_200_000,
+        "safety_cash_floor": 1_200_000,
+        "baseline_daily_inflow": 92_000,
+        "daily_inflow_volatility": 38_000,
+        "fixed_daily_outflow": 82_000,
+        "payroll_amount": 920_000,
+        "payroll_every_days": 30,
+        "receivables": (
             Receivable(
-                amount=2_100_000,
-                due_day=28,
-                delay_mean_days=11,
-                delay_std_days=8,
-                default_probability=0.02,
+                "amount": 2_100_000,
+                "due_day": 28,
+                "delay_mean_days": 11,
+                "delay_std_days": 8,
+                "default_probability": 0.02,
             ),
             Receivable(
-                amount=1_450_000,
-                due_day=52,
-                delay_mean_days=7,
-                delay_std_days=6,
-                default_probability=0.01,
+                "amount": 1_450_000,
+                "due_day": 52,
+                "delay_mean_days": 7,
+                "delay_std_days": 6,
+                "default_probability": 0.01,
             ),
         ),
-        payables=(
+        "payables": (
             Payable(amount=1_350_000, due_day=42),
             Payable(amount=1_100_000, due_day=73),
         ),
-        fx_receivable_share=0.55,
-    )
+        "fx_receivable_share": 0.55,
+    }
     values.update(overrides)
     return LiquidityProfile(**values)
 
@@ -102,12 +102,12 @@ def test_quantiles_and_wilson_interval_are_ordered() -> None:
 
 def test_zero_breaches_are_not_presented_as_certain_zero() -> None:
     profile = sample_profile(
-        current_cash=10_000_000,
-        safety_cash_floor=100_000,
-        fixed_daily_outflow=1_000,
-        payroll_amount=0,
-        payables=(),
-        receivables=(),
+        "current_cash": 10_000_000,
+        "safety_cash_floor": 100_000,
+        "fixed_daily_outflow": 1_000,
+        "payroll_amount": 0,
+        "payables": (),
+        "receivables": (),
     )
     result = forecast_liquidity(profile, simulations=1000, seed=9)
     h90 = horizon(result, 90)
@@ -119,8 +119,8 @@ def test_zero_breaches_are_not_presented_as_certain_zero() -> None:
 
 def test_day_zero_breach_is_counted_immediately() -> None:
     profile = sample_profile(
-        current_cash=100_000,
-        safety_cash_floor=500_000,
+        "current_cash": 100_000,
+        "safety_cash_floor": 500_000,
     )
     result = forecast_liquidity(profile, simulations=1000, seed=10)
 
@@ -133,13 +133,13 @@ def test_day_zero_breach_is_counted_immediately() -> None:
 
 def test_zero_revenue_with_continuing_costs_becomes_high_risk() -> None:
     profile = sample_profile(
-        baseline_daily_inflow=0,
-        daily_inflow_volatility=0,
-        current_cash=1_000_000,
-        safety_cash_floor=500_000,
-        fixed_daily_outflow=20_000,
-        payroll_amount=300_000,
-        receivables=(),
+        "baseline_daily_inflow": 0,
+        "daily_inflow_volatility": 0,
+        "current_cash": 1_000_000,
+        "safety_cash_floor": 500_000,
+        "fixed_daily_outflow": 20_000,
+        "payroll_amount": 300_000,
+        "receivables": (),
     )
     result = forecast_liquidity(profile, simulations=1000, seed=11)
 
@@ -149,9 +149,9 @@ def test_zero_revenue_with_continuing_costs_becomes_high_risk() -> None:
 
 def test_huge_payable_raises_near_term_risk() -> None:
     profile = sample_profile(
-        current_cash=1_000_000,
-        safety_cash_floor=500_000,
-        payables=(Payable(amount=10_000_000, due_day=20),),
+        "current_cash": 1_000_000,
+        "safety_cash_floor": 500_000,
+        "payables": (Payable(amount=10_000_000, due_day=20),),
     )
     result = forecast_liquidity(profile, simulations=1000, seed=12)
 
@@ -160,24 +160,24 @@ def test_huge_payable_raises_near_term_risk() -> None:
 
 def test_receivable_beyond_90_days_is_not_counted_inside_horizon() -> None:
     base = sample_profile(
-        receivables=(),
-        payables=(),
-        current_cash=1_000_000,
-        safety_cash_floor=500_000,
+        "receivables": (),
+        "payables": (),
+        "current_cash": 1_000_000,
+        "safety_cash_floor": 500_000,
     )
     outside = sample_profile(
-        receivables=(
+        "receivables": (
             Receivable(
-                amount=50_000_000,
-                due_day=180,
-                delay_mean_days=0,
-                delay_std_days=0,
-                default_probability=0,
+                "amount": 50_000_000,
+                "due_day": 180,
+                "delay_mean_days": 0,
+                "delay_std_days": 0,
+                "default_probability": 0,
             ),
         ),
-        payables=(),
-        current_cash=1_000_000,
-        safety_cash_floor=500_000,
+        "payables": (),
+        "current_cash": 1_000_000,
+        "safety_cash_floor": 500_000,
     )
 
     base_result = forecast_liquidity(base, simulations=1000, seed=13)
@@ -236,8 +236,8 @@ def test_input_fingerprint_is_stable_and_input_sensitive() -> None:
     second = forecast_liquidity(sample_profile(), simulations=1000, seed=99)
     changed = forecast_liquidity(
         sample_profile(current_cash=4_300_000),
-        simulations=1000,
-        seed=99,
+        "simulations": 1000,
+        "seed": 99,
     )
 
     assert first["engine"]["input_fingerprint"] == second["engine"]["input_fingerprint"]  # type: ignore[index]

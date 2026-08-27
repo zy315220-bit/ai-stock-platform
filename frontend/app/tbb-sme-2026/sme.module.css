@@ -162,3 +162,26 @@
   .quickActionBar button{width:100%}
   .precisionToggle{align-items:flex-start}
 }
+
+
+.probabilityPrimary{font-size:clamp(28px,4vw,44px)!important;line-height:1.05!important}
+.probabilityEvidence{display:grid;gap:5px;margin:-8px 0 16px;padding:10px 12px;border:1px solid var(--line);background:#f5f1e8}
+.probabilityEvidence span{color:var(--muted);font-size:8px}
+.probabilityEvidence strong{font-size:9px}
+.dynamicInterpretation{padding:22px 28px;border-bottom:1px solid var(--ink);background:#f2eee5}
+.dynamicInterpretationHead{display:grid;grid-template-columns:180px 1fr;gap:24px;align-items:start}
+.dynamicInterpretationHead>div{display:grid;gap:6px}
+.dynamicInterpretationHead span{color:var(--muted);font:900 8px ui-monospace,SFMono-Regular,Menlo,monospace}
+.dynamicInterpretationHead h3{margin:0;font-size:22px}
+.dynamicInterpretationHead p{margin:0;color:var(--muted);font-size:10px;line-height:1.65}
+.dynamicInterpretation ul{display:grid;gap:7px;margin:16px 0 0;padding:14px 0 0 20px;border-top:1px solid var(--line);color:var(--muted);font-size:9px;line-height:1.55}
+.interpretation_HIGH_RISK{background:#f2dddd}
+.interpretation_WATCH{background:#f3e8d8}
+.interpretation_NEAR_THRESHOLD{background:#f4ead6}
+.interpretation_STRESS_SENSITIVE{background:#f1e3d8}
+.interpretation_ROBUST{background:#e7efeb}
+
+@media(max-width:620px){
+  .dynamicInterpretationHead{grid-template-columns:1fr}
+  .probabilityPrimary{font-size:30px!important}
+}

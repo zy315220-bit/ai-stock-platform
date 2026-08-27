@@ -455,7 +455,12 @@ export default function SuitabilityDemo() {
     researchStatus?.certified_robots?.certified_robot_count ?? 0;
   const latestRunFailed = researchStatus?.workflow?.conclusion === "failure";
   const evidenceReleaseBlocked =
-    !snapshot || (snapshot.eligible_candidate_count ?? 0) === 0 || certifiedCount === 0;
+    !snapshot ||
+    (snapshot.eligible_candidate_count ?? 0) === 0 ||
+    certifiedCount === 0 ||
+    serverGateUnavailable ||
+    !serverResearchGate ||
+    serverResearchGate.combined_pass_count === 0;
   const gateRows = researchGateRows(researchStatus);
   const profileBoundaryPassCount =
     serverResearchGate?.profile_boundary_pass_count ?? 0;

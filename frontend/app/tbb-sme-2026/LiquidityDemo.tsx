@@ -137,6 +137,8 @@ type Forecast = {
     version: string;
     probabilistic: boolean;
     simulations: number;
+    seed: number;
+    input_fingerprint: string;
     horizons: number[];
     data_mode: string;
   };
@@ -957,7 +959,8 @@ export default function LiquidityDemo() {
             <div className={styles.engineSeal}>
               <span>ENGINE</span>
               <strong>{data.engine.version}</strong>
-              <small>{data.engine.simulations.toLocaleString("zh-TW")} paths</small>
+              <small>{data.engine.simulations.toLocaleString("zh-TW")} paths · seed {data.engine.seed}</small>
+              <small>fingerprint {data.engine.input_fingerprint.slice(0, 12)}</small>
               <small>即時計算 · 不保存輸入</small>
             </div>
           </div>

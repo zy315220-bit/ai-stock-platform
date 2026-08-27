@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.competition import router as competition_router
 from app.api.research_lab import router as research_lab_router
 from app.api.stocks import router as stocks_router
+from app.api.tbb_wealth import router as tbb_wealth_router
 from app.core.config import settings
 
 
@@ -52,6 +53,12 @@ app.include_router(
     research_lab_router,
     prefix="/api/research-lab",
     tags=["research-lab"],
+)
+
+app.include_router(
+    tbb_wealth_router,
+    prefix="/api/tbb-wealth",
+    tags=["tbb-wealth"],
 )
 
 # =========================

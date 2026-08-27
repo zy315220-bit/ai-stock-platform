@@ -363,10 +363,10 @@ function buildFallbackProfile(company: CompanyMatch): CompanyProfile {
     },
     quick_estimate_eligibility: {
       status: "CAUTION",
-      can_run_quick_estimate: true,
+      can_run_quick_estimate: false,
       requires_human_confirmation: true,
       reasons: [
-        "目前只取得公司搜尋層級的官方資料，先以保守估算提供快速評估。",
+        "正在完成公司類型、公開市場身分與資料完整性檢查；完成前不放行快速估算。",
       ],
     },
   };
@@ -785,14 +785,17 @@ export default function LiquidityDemo() {
                   onClick={() => void runCustomForecast()}
                   disabled={
                     loading ||
+                    profileLoading ||
                     companyProfile.quick_estimate_eligibility.can_run_quick_estimate === false
                   }
                 >
                   {loading
                     ? "正在評估…"
-                    : companyProfile.quick_estimate_eligibility.can_run_quick_estimate
-                      ? "立即快速評估"
-                      : "此公司不適合快速估算"}
+                    : profileLoading
+                      ? "正在驗證公司資料…"
+                      : companyProfile.quick_estimate_eligibility.can_run_quick_estimate
+                        ? "立即快速評估"
+                        : "此公司尚未通過快速估算 Gate"}
                 </button>
               </div>
             </section>

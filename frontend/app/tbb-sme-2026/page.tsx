@@ -174,6 +174,39 @@ export default function Page() {
         </div>
       </section>
 
+      <section className={styles.deployment} id="deployment" aria-labelledby="deployment-title">
+        <div>
+          <span className={styles.kicker}>DEMO → BANK PILOT</span>
+          <h2 id="deployment-title">競賽 Demo 用公開資料，銀行版改吃銀行真的看得到的現金流。</h2>
+          <p>
+            公開網站不能取得企業私有帳務，所以快速模式只做 scenario screening。
+            真正部署時不需要靠資本額猜現金流，而是以企業授權與銀行既有資料取代估算。
+          </p>
+        </div>
+        <div className={styles.deploymentFlow}>
+          <article>
+            <span>01 · DEMO</span>
+            <strong>公開公司資料</strong>
+            <p>公司登記、產業、資本額與官方市場身分，建立可操作的公開展示流程。</p>
+          </article>
+          <article>
+            <span>02 · PILOT</span>
+            <strong>企業授權現金流</strong>
+            <p>帳戶收支、薪轉、貸款還款與已知付款時點；必要時再串 ERP／電子發票等企業資料。</p>
+          </article>
+          <article>
+            <span>03 · VALIDATION</span>
+            <strong>Rolling OOS 驗證</strong>
+            <p>用歷史時間切片驗證 30／60／90 天預警是否真的優於簡單 baseline，再決定是否升級 AI 模型。</p>
+          </article>
+          <article>
+            <span>04 · RM WORKFLOW</span>
+            <strong>只排序，不自動核貸</strong>
+            <p>把高優先企業與主要曝險送到 RM 工作台，由人員確認資料、聯絡客戶並走既有授信／服務流程。</p>
+          </article>
+        </div>
+      </section>
+
       <section className={styles.value} id="value">
         <div>
           <span className={styles.kicker}>BANK VALUE</span>

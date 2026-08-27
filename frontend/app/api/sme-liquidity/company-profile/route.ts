@@ -410,50 +410,47 @@ function assessQuickEstimateEligibility(
 ) {
   const capital = paidCapital ?? stockCapital ?? null;
   const reasons: string[] = [];
-  let status: "ELIGIBLE" | "CAUTION" | "NOT_RECOMMENDED" = "ELIGIBLE";
+  let status: "CAUTION" | "NOT_RECOMMENDED" = "CAUTION";
 
   if (publicCompany) {
     status = "NOT_RECOMMENDED";
     reasons.push(
-      "已由證交所公開發行公司資料辨識為公開市場公司；不應使用 SME 資本額 heuristic，應改走公開財報模式。",
+      "已由官方市場資料辨識為公開市場／公開發行公司；此競賽版不套用 SME 快速 scenario prior，完整產品應改接公開財報後另行建模。",
     );
   }
 
   if (capital === null) {
-    status = "CAUTION";
-    reasons.push("缺少可用的登記／實收資本額，無法由公開資料確認是否符合 SME 資本額判準。");
+    reasons.push(
+      "缺少可用的登記／實收資本額，無法由公開資料確認是否符合 SME 資本額判準。",
+    );
   } else if (capital > SME_PAID_CAPITAL_CRITERION) {
     status = "NOT_RECOMMENDED";
     reasons.push(
-      "實收／出資額超過 1 億元，無法僅靠資本額確認 SME 身分；依現行標準仍可能因員工未滿 200 人而符合，但快速估算需先取得員工數或真實財務資料。",
+      "實收／出資額超過 1 億元，無法僅靠資本額確認 SME 身分；依現行標準仍可能因經常僱用員工未滿 200 人而符合，但需先取得員工數或真實財務資料。",
     );
     reasons.push(
-      "本快速 baseline 僅對 1 億元以下的公開資本額範圍放行，避免對超出校準範圍的公司產生假精準。",
+      "本快速 baseline 不對超出 1 億元資本額判準的公司直接放行，避免假精準。",
     );
   } else {
     reasons.push("實收／出資額落在現行 SME 資本額判準 1 億元以下。");
-    if (status === "ELIGIBLE") status = "CAUTION";
-    reasons.push("快速模式的私有財務欄位仍屬情境先驗，未以該公司的真實帳務資料校準。");
   }
 
+  reasons.push(
+    "快速模式的私有財務欄位屬 scenario prior，未以該公司的真實帳務資料校準，因此只能做第一輪情境篩檢。",
+  );
+
   if (businessItems.length === 0) {
-    if (status === "ELIGIBLE") status = "CAUTION";
     reasons.push("官方營業項目未取得，產業分類只能採較保守推測。");
   }
 
   if (industryConfidence < 0.6) {
-    if (status === "ELIGIBLE") status = "CAUTION";
     reasons.push("產業辨識信心偏低，產業參數可能不適合直接套用。");
-  }
-
-  if (!reasons.length) {
-    reasons.push("目前公開資料完整度與公司規模適合先做競賽版快速估算。");
   }
 
   return {
     status,
     can_run_quick_estimate: status !== "NOT_RECOMMENDED",
-    requires_human_confirmation: status !== "ELIGIBLE",
+    requires_human_confirmation: true,
     reasons,
   };
 }

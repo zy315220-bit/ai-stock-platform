@@ -3,6 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "not found" },
+      { status: 404, headers: { "cache-control": "no-store" } },
+    );
+  }
+
   const target = new URL("/api/sme-liquidity/forecast", request.url);
   const response = await fetch(target, {
     method: "POST",

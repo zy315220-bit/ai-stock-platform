@@ -12,7 +12,6 @@ type GcisCompany = {
   Capital_Stock_Amount?: number | string;
   Paid_In_Capital_Amount?: number | string;
   Company_Location?: string;
-  Responsible_Name?: string;
 };
 
 function cleanQuery(value: string) {
@@ -100,10 +99,6 @@ export async function GET(request: NextRequest) {
           location:
             typeof row.Company_Location === "string"
               ? row.Company_Location
-              : "",
-          responsible_name:
-            typeof row.Responsible_Name === "string"
-              ? row.Responsible_Name
               : "",
         };
       })

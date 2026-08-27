@@ -8,7 +8,12 @@ from typing import Any, Callable, Iterable, Literal
 
 from app.services.backtest.engine import backtest_stock
 from .evidence import assess_validation_evidence
-from .models import ExperimentResult, ResearchCandidate, ResearchSplit
+from .models import (
+    ExperimentDecision,
+    ExperimentResult,
+    ResearchCandidate,
+    ResearchSplit,
+)
 from .scoring import evaluate_candidate
 from .statistical_evidence import build_statistical_evidence
 from .train_fitness import build_train_active_robustness_proxy

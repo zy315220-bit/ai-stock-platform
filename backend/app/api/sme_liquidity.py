@@ -20,7 +20,7 @@ class ReceivableInput(BaseModel):
     due_day: int = Field(ge=1, le=180)
     delay_mean_days: float = Field(default=5.0, ge=0, le=120)
     delay_std_days: float = Field(default=5.0, ge=0, le=120)
-    default_probability: float = Field(default=0.01, ge=0, le=1)
+    default_probability: float = Field(default=0.0, ge=0, le=1)
 
 
 class PayableInput(BaseModel):

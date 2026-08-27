@@ -128,7 +128,6 @@ type AdjustmentRecommendation = {
 
 type Forecast = {
   profile: {
-    id: string;
     name: string;
     industry: string;
     description: string;
@@ -173,8 +172,7 @@ type Forecast = {
     is_loan_approval: boolean;
     automatic_product_sale: boolean;
     human_review_required: boolean;
-    profile_persisted?: boolean;
-    synthetic_data_only: boolean;
+    profile_persisted: boolean;
   };
 };
 

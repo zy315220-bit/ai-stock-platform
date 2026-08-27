@@ -214,6 +214,93 @@ function rangeLabel(range?: EstimateRange) {
   return `${range.low}～${range.high}%`;
 }
 
+function round10k(value: number) {
+  return Math.max(0, Math.round(value / 10000) * 10000);
+}
+
+function fallbackMoneyRange(mid: number): EstimateRange {
+  return {
+    low: round10k(mid * 0.65),
+    mid: round10k(mid),
+    high: round10k(mid * 1.35),
+    unit: "TWD",
+  };
+}
+
+function buildFallbackProfile(company: CompanyMatch): CompanyProfile {
+  const capital = Math.min(
+    300000000,
+    Math.max(1000000, company.paid_in_capital ?? company.capital ?? 10000000),
+  );
+  const monthlyInflow = (capital * 3.5) / 12;
+  const fixed = monthlyInflow * 0.55;
+  const payroll = monthlyInflow * 0.18;
+  const cash = monthlyInflow * 0.6;
+  const safety = (fixed + payroll) * 0.45;
+
+  return {
+    official: {
+      business_no: company.business_no,
+      company_name: company.name,
+      status: company.status,
+      capital_stock_amount: company.capital,
+      paid_in_capital_amount: company.paid_in_capital,
+      responsible_name: company.responsible_name,
+      location: company.location,
+      setup_date: "",
+      register_organization: "",
+      business_items: [],
+      source: "MOEA_GCIS_SEARCH",
+    },
+    inferred: {
+      industry: {
+        label: "一般企業",
+        confidence: 0.35,
+        reason: "先用公司登記規模建立保守基準；背景取得營業項目後會再自動精修。",
+      },
+    },
+    estimate: {
+      basis: "registered_capital_fallback_v1",
+      disclaimer:
+        "目前先依官方登記資本額建立保守估算；這不是公司真實財務資料。背景取得更多公開資料後會自動精修。",
+      fields: {
+        current_cash: fallbackMoneyRange(cash),
+        safety_cash_floor: fallbackMoneyRange(safety),
+        avg_monthly_inflow: fallbackMoneyRange(monthlyInflow),
+        monthly_fixed_outflow: fallbackMoneyRange(fixed),
+        monthly_payroll: fallbackMoneyRange(payroll),
+        largest_receivable_amount: fallbackMoneyRange(monthlyInflow * 0.3),
+        largest_receivable_due_days: {
+          low: 18,
+          mid: 30,
+          high: 42,
+          unit: "days",
+        },
+        receivable_delay_mean_days: {
+          low: 4,
+          mid: 10,
+          high: 16,
+          unit: "days",
+        },
+        largest_payable_amount: fallbackMoneyRange(monthlyInflow * 0.25),
+        largest_payable_due_days: {
+          low: 23,
+          mid: 35,
+          high: 47,
+          unit: "days",
+        },
+        fx_receivable_share_percent: {
+          low: 0,
+          mid: 10,
+          high: 22,
+          unit: "percent",
+        },
+        income_volatility: "medium",
+      },
+    },
+  };
+}
+
 async function requestForecast(body: Record<string, unknown>): Promise<Forecast> {
   const response = await fetch("/api/sme-liquidity/forecast", {
     method: "POST",
@@ -298,16 +385,14 @@ export default function LiquidityDemo() {
   async function selectCompany(company: CompanyMatch) {
     setSelectedCompany(company);
     setCompanyMatches([]);
-    setCompanyProfile(null);
     setProfileFailed(false);
     setProfileLoading(true);
     setAdvancedOpen(false);
     setData(null);
-    setForm((current) => ({
-      ...current,
-      company_name: company.name,
-      industry: "",
-    }));
+
+    const fallback = buildFallbackProfile(company);
+    setCompanyProfile(fallback);
+    applyEstimate(fallback);
 
     try {
       const response = await fetch(
@@ -497,13 +582,15 @@ export default function LiquidityDemo() {
           </label>
         </div>
 
-        {profileLoading && (
-          <div className={styles.autoLoading}>正在抓官方資料並建立快速評估資料…</div>
+        {profileLoading && companyProfile && (
+          <div className={styles.autoLoading}>
+            已可快速評估；背景正在抓更多官方資料，自動精修產業與估算…
+          </div>
         )}
 
-        {profileFailed && selectedCompany && (
+        {profileFailed && selectedCompany && companyProfile && (
           <div className={styles.autoWarning}>
-            官方完整資料暫時取不到；你仍可改用快速範例，或稍後重試。
+            完整營業項目暫時取不到，目前已用公司搜尋取得的官方登記資料＋保守估算，不需要你補填。
           </div>
         )}
 

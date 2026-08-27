@@ -5,8 +5,34 @@ import styles from "./sme.module.css";
 export const metadata: Metadata = {
   title: "SME Liquidity Radar｜AI 中小企業資金韌性預警引擎",
   description:
-    "預測 30 / 60 / 90 天資金缺口機率、壓力情境與主要成因，協助銀行提早服務中小企業。",
+    "搜尋企業後自動帶入公開登記資料，預測 30 / 60 / 90 天資金缺口機率、壓力情境、主要成因與可行調整。",
+  applicationName: "SME Liquidity Radar",
+  keywords: [
+    "中小企業",
+    "現金流預測",
+    "資金缺口",
+    "企業金融",
+    "金融科技",
+    "臺灣企銀",
+  ],
+  category: "finance",
+  alternates: { canonical: "/tbb-sme-2026" },
   robots: { index: false, follow: false },
+  openGraph: {
+    type: "website",
+    locale: "zh_TW",
+    url: "/tbb-sme-2026",
+    siteName: "SME Liquidity Radar",
+    title: "SME Liquidity Radar｜AI 中小企業資金韌性預警引擎",
+    description:
+      "先搜尋公司，自動帶公開資料，再做 30 / 60 / 90 天機率式資金壓力預警與調整模擬。",
+  },
+  twitter: {
+    card: "summary",
+    title: "SME Liquidity Radar",
+    description:
+      "企業資金缺口預警、壓力測試與調整建議。",
+  },
 };
 
 const flow = [
@@ -54,7 +80,7 @@ export default function Page() {
           <div><span>90 天後缺口機率</span><strong className={styles.heroRisk}>61%</strong></div>
           <div><span>主要成因</span><strong>應收延遲 + 集中付款</strong></div>
           <div><span>銀行下一步</span><strong>提前聯絡，不等客戶求救</strong></div>
-          <small>示意數字；實際 Demo 使用合成資料即時計算</small>
+          <small>示意數字；正式 Demo 可使用公開公司資料＋估算或快速範例即時計算</small>
         </aside>
       </section>
 
@@ -109,7 +135,7 @@ export default function Page() {
       <footer className={styles.footer}>
         <strong>SME Liquidity Radar</strong>
         <p>
-          競賽 PoC 僅使用合成資料，不執行授信決策、不自動核貸、不自動銷售金融商品。
+          競賽 PoC 使用公開公司登記資料、產業／規模估算與可選的使用者校正資料；不執行授信決策、不自動核貸、不自動銷售金融商品。
         </p>
       </footer>
     </main>

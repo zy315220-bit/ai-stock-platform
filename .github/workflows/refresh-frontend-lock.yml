@@ -1,0 +1,36 @@
+name: Refresh frontend lockfile
+
+on:
+  push:
+    branches:
+      - competition/tbb-2026-sme-liquidity
+    paths:
+      - "frontend/package.json"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Refresh lockfile from package.json
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit lockfile when changed
+        run: |
+          if git diff --quiet -- frontend/package-lock.json; then
+            echo "Lockfile already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package-lock.json
+          git commit -m "chore: refresh frontend lockfile [lock-refresh]"
+          git push origin HEAD:competition/tbb-2026-sme-liquidity

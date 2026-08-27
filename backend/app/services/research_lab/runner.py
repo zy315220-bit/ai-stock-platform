@@ -247,9 +247,58 @@ def run_research_batch(
         )
         for candidate in candidates
     ]
-    return sorted(
+    ranked = sorted(
         results,
-        key=lambda result: result.research_score,
+        key=lambda result: (
+            result.research_score,
+            result.candidate.candidate_id,
+        ),
+        reverse=True,
+    )
+    representative_by_behavior: dict[str, ExperimentResult] = {}
+    annotated: list[ExperimentResult] = []
+
+    for result in ranked:
+        signature = str(
+            result.validation_metrics.get("behavior_signature") or ""
+        ).strip()
+        representative = (
+            representative_by_behavior.get(signature) if signature else None
+        )
+        if representative is None:
+            if signature:
+                representative_by_behavior[signature] = result
+            annotated.append(result)
+            continue
+
+        metrics = dict(result.validation_metrics)
+        metrics["behavioral_duplicate"] = True
+        metrics["behavioral_duplicate_of"] = (
+            representative.candidate.candidate_id
+        )
+        metrics["behavioral_duplicate_basis"] = "exact_behavior_signature"
+        annotated.append(
+            replace(
+                result,
+                validation_metrics=metrics,
+                decision=ExperimentDecision.DISCARD,
+                reasons=tuple(
+                    dict.fromkeys(
+                        (
+                            *result.reasons,
+                            "behavioral_duplicate_of_stronger_candidate",
+                        )
+                    )
+                ),
+            )
+        )
+
+    return sorted(
+        annotated,
+        key=lambda result: (
+            result.decision is not ExperimentDecision.DISCARD,
+            result.research_score,
+        ),
         reverse=True,
     )
 

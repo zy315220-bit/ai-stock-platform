@@ -237,7 +237,7 @@ function parseCustomProfile(value: unknown): Profile | null {
               dueDay: Math.round(value.largest_receivable_due_days as number),
               delayMeanDays: delayMean,
               delayStdDays: Math.max(2, delayMean * 0.6),
-              defaultProbability: 0.015,
+              defaultProbability: 0,
             },
           ]
         : [],
@@ -381,7 +381,31 @@ export async function POST(request: NextRequest) {
 
     const result = (await response.json()) as Record<string, unknown>;
     const engine =
-      isObject(result.engine) ? { ...result.engine, data_mode: dataMode } : null;
+      isObject(result.engine)
+        ? {
+            ...result.engine,
+            data_mode: dataMode,
+            input_mapping_assumptions:
+              dataMode === "user_supplied_or_estimated"
+                ? {
+                    monthly_inflow_to_daily: "divide_by_30_calendar_days",
+                    monthly_fixed_outflow_to_daily: "divide_by_30_calendar_days",
+                    payroll_schedule: "every_30_days",
+                    income_volatility_factor: {
+                      low: 0.15,
+                      medium: 0.35,
+                      high: 0.6,
+                    },
+                    receivable_delay_std:
+                      "max(2_days, delay_mean_days * 0.6)",
+                    receivable_default_probability:
+                      "0_unless_explicit_data_source_is_added",
+                  }
+                : {
+                    source: "fixed_synthetic_demo_profiles",
+                  },
+          }
+        : null;
 
     return NextResponse.json(
       {

@@ -253,3 +253,25 @@ def test_zero_fx_stress_matches_base_with_common_random_numbers() -> None:
 
     assert fx["shortfall_probability"] == base_90["shortfall_probability"]
     assert fx["ending_cash_p50"] == base_90["ending_cash_p50"]
+
+
+def test_breach_probability_is_non_decreasing_with_horizon() -> None:
+    result = forecast_liquidity(sample_profile(), simulations=1500, seed=202)
+
+    p30 = horizon(result, 30)["shortfall_probability"]
+    p60 = horizon(result, 60)["shortfall_probability"]
+    p90 = horizon(result, 90)["shortfall_probability"]
+
+    assert p30 <= p60 <= p90
+
+
+def test_each_adjustment_recommendation_has_measurable_improvement() -> None:
+    result = forecast_liquidity(sample_profile(), simulations=1500, seed=203)
+
+    for item in result["adjustment_recommendations"]:  # type: ignore[index]
+        probability_improved = (
+            item["after_shortfall_probability"]
+            < item["before_shortfall_probability"]
+        )
+        cash_improved = item["ending_cash_p50_change"] > 0
+        assert probability_improved or cash_improved

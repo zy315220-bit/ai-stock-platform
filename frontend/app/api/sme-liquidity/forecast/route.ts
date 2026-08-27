@@ -315,6 +315,24 @@ function metrics(paths: number[][], floor: number, horizon: number) {
   const p10 = quantile(endings, 0.1);
   const p50 = quantile(endings, 0.5);
   const p90 = quantile(endings, 0.9);
+  const minP10 = quantile(minimums, 0.1);
+  const minP50 = quantile(minimums, 0.5);
+  const breaches = firstBreaches.length;
+  const n = paths.length;
+  const shortfallProbability = breaches / n;
+
+  // Wilson 95% interval: prevents "0 / N" from being shown as certain zero risk.
+  const z = 1.959963984540054;
+  const z2 = z * z;
+  const denominator = 1 + z2 / n;
+  const center = (shortfallProbability + z2 / (2 * n)) / denominator;
+  const half =
+    (z *
+      Math.sqrt(
+        (shortfallProbability * (1 - shortfallProbability)) / n +
+          z2 / (4 * n * n),
+      )) /
+    denominator;
 
   return {
     horizon_days: horizon,
@@ -322,15 +340,130 @@ function metrics(paths: number[][], floor: number, horizon: number) {
     ending_cash_p50: Math.round(p50),
     ending_cash_p90: Math.round(p90),
     shortfall_probability:
-      Math.round((firstBreaches.length / paths.length) * 10000) / 10000,
+      Math.round(shortfallProbability * 10000) / 10000,
+    shortfall_breach_count: breaches,
+    simulated_path_count: n,
+    shortfall_probability_ci95_lower:
+      Math.round(Math.max(0, center - half) * 1000000) / 1000000,
+    shortfall_probability_ci95_upper:
+      Math.round(Math.min(1, center + half) * 1000000) / 1000000,
     expected_min_cash: Math.round(
       minimums.reduce((sum, value) => sum + value, 0) / minimums.length,
     ),
+    min_cash_p10: Math.round(minP10),
+    min_cash_p50: Math.round(minP50),
+    p10_buffer_above_floor: Math.round(minP10 - floor),
+    p10_buffer_ratio:
+      floor > 0
+        ? Math.round(((minP10 - floor) / floor) * 10000) / 10000
+        : null,
     cash_flow_at_risk_p50_to_p10: Math.round(p50 - p10),
     median_first_breach_day:
       firstBreaches.length > 0
         ? Math.round(quantile(firstBreaches, 0.5))
         : null,
+  };
+}
+
+
+function buildRiskInterpretation(
+  profile: Profile,
+  horizons: ReturnType<typeof metrics>[],
+  stressTests: Array<{
+    stress: StressName;
+    shortfall_probability: number;
+    ending_cash_p50: number;
+    median_first_breach_day: number | null;
+  }>,
+) {
+  const h90 = horizons.find((item) => item.horizon_days === 90) ?? horizons[horizons.length - 1];
+  const maxStress = stressTests.reduce(
+    (best, item) =>
+      item.shortfall_probability > best.shortfall_probability ? item : best,
+    stressTests[0],
+  );
+
+  const bufferRatio =
+    typeof h90?.p10_buffer_ratio === "number" ? h90.p10_buffer_ratio : null;
+  const base = h90?.shortfall_probability ?? 0;
+  const upper95 = h90?.shortfall_probability_ci95_upper ?? 0;
+  const stress = maxStress?.shortfall_probability ?? 0;
+
+  let status:
+    | "ROBUST"
+    | "WATCH"
+    | "NEAR_THRESHOLD"
+    | "STRESS_SENSITIVE"
+    | "HIGH_RISK" = "ROBUST";
+  let label = "有緩衝";
+  let summary =
+    "目前模擬顯示安全水位有足夠緩衝，但仍應持續更新真實現金流資料。";
+
+  if (base >= 0.5) {
+    status = "HIGH_RISK";
+    label = "高風險";
+    summary = "正常情境下已有大量模擬路徑跌破安全水位，應優先確認真實現金流與短期資金安排。";
+  } else if (base >= 0.1) {
+    status = "WATCH";
+    label = "需注意";
+    summary = "正常情境已出現可觀的跌破機率，建議優先檢查應收、應付與固定支出時點。";
+  } else if (bufferRatio !== null && bufferRatio <= 0.25) {
+    status = "NEAR_THRESHOLD";
+    label = "接近臨界";
+    summary = "目前跌破機率可能仍低，但悲觀路徑的最低現金已接近安全水位，小幅偏差就可能改變結論。";
+  } else if (stress >= 0.2 && stress >= Math.max(0.1, base + 0.15)) {
+    status = "STRESS_SENSITIVE";
+    label = "壓力敏感";
+    summary = "正常情境看起來穩定，但壓力情境會明顯推高資金缺口風險，不能只看基準情境。";
+  } else if (base > 0 || upper95 >= 0.02) {
+    status = "WATCH";
+    label = "低風險但需追蹤";
+    summary = "模擬跌破事件很少，但統計不確定性與資料估算仍存在，建議持續追蹤。";
+  }
+
+  const reasons: string[] = [];
+
+  if ((h90?.shortfall_breach_count ?? 0) === 0) {
+    reasons.push(
+      `2,500 條模擬中未觀察到跌破；這不代表真實風險為 0，95% 信賴上界約為 ${(
+        upper95 * 100
+      ).toFixed(2)}%。`,
+    );
+  } else {
+    reasons.push(
+      `90 天基準情境有 ${h90.shortfall_breach_count} / ${h90.simulated_path_count} 條路徑跌破安全水位。`,
+    );
+  }
+
+  if (bufferRatio !== null) {
+    reasons.push(
+      `90 天悲觀最低現金 P10 約比安全水位多 ${Math.round(
+        h90.p10_buffer_above_floor,
+      ).toLocaleString("zh-TW")} 元（${(bufferRatio * 100).toFixed(0)}% 緩衝）。`,
+    );
+  }
+
+  if (maxStress) {
+    reasons.push(
+      `最敏感壓力情境「${maxStress.stress}」會把 90 天缺口機率推到 ${(
+        maxStress.shortfall_probability * 100
+      ).toFixed(1)}%。`,
+    );
+  }
+
+  return {
+    status,
+    label,
+    summary,
+    reasons,
+    base_90_probability: base,
+    base_90_ci95_upper: upper95,
+    p10_min_cash_90: h90?.min_cash_p10 ?? null,
+    p10_buffer_above_floor_90: h90?.p10_buffer_above_floor ?? null,
+    p10_buffer_ratio_90: bufferRatio,
+    most_sensitive_stress: maxStress?.stress ?? null,
+    most_sensitive_stress_probability: stress,
+    safety_cash_floor: profile.safetyCashFloor,
   };
 }
 
@@ -746,6 +879,16 @@ export async function POST(request: NextRequest) {
   const driverRows = drivers(profile);
   const suggested = actionHint(driverRows[0]?.driver ?? "");
   const adjustment_recommendations = adjustmentRecommendations(profile);
+  const risk_interpretation = buildRiskInterpretation(
+    profile,
+    horizons,
+    stress_tests as Array<{
+      stress: StressName;
+      shortfall_probability: number;
+      ending_cash_p50: number;
+      median_first_breach_day: number | null;
+    }>,
+  );
 
   return NextResponse.json(
     {
@@ -766,6 +909,7 @@ export async function POST(request: NextRequest) {
       },
       horizons,
       stress_tests,
+      risk_interpretation,
       drivers: driverRows,
       rm_next_step: suggested,
       adjustment_recommendations,

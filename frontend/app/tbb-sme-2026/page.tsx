@@ -102,7 +102,7 @@ export default function Page() {
           <article><strong>提早找商機</strong><p>找出可能在 30–90 天內需要週轉協助的企業。</p></article>
           <article><strong>提高 RM 效率</strong><p>讓 RM 先看高優先客戶，而不是人工逐戶翻帳務資料。</p></article>
           <article><strong>更早控風險</strong><p>在逾期之前先看到流動性壓力的形成路徑。</p></article>
-          <article><strong>媒合既有服務</strong><p>依成因導向應收管理、週轉金或外匯避險諮詢。</p></article>
+          <article><strong>媒合既有服務</strong><p>依成因導向應收管理、週轉金或外匯避險諮詢，並比較調整前後的資金缺口風險。</p></article>
         </div>
       </section>
 

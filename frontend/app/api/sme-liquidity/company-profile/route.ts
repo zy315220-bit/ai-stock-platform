@@ -6,6 +6,8 @@ const BASIC_ENDPOINT =
   "https://data.gcis.nat.gov.tw/od/data/api/5F64D864-61CB-4D0D-8AD9-492047CC1EA6";
 const BUSINESS_ENDPOINT =
   "https://data.gcis.nat.gov.tw/od/data/api/236EE382-4942-41A9-BD03-CA0709025E7C";
+const TWSE_PUBLIC_COMPANY_ENDPOINT =
+  "https://openapi.twse.com.tw/v1/opendata/t187ap03_P";
 
 type JsonObject = Record<string, unknown>;
 
@@ -346,15 +348,66 @@ function buildEstimate(
   };
 }
 
+function normalizeBusinessNo(value: unknown) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length === 8 ? digits : "";
+}
+
+function findPublicCompany(payload: unknown, businessNo: string) {
+  if (!Array.isArray(payload)) return null;
+
+  const candidateKeys = [
+    "營利事業統一編號",
+    "統一編號",
+    "Business_Accounting_NO",
+    "business_no",
+  ];
+
+  for (const row of payload) {
+    if (!isObject(row)) continue;
+    const matched = candidateKeys.some(
+      (key) => normalizeBusinessNo(row[key]) === businessNo,
+    );
+    if (!matched) continue;
+
+    return {
+      company_code:
+        stringValue(row["公司代號"]) ||
+        stringValue(row["公司代碼"]) ||
+        stringValue(row["Company_Code"]),
+      company_name:
+        stringValue(row["公司名稱"]) ||
+        stringValue(row["公司簡稱"]) ||
+        stringValue(row["Company_Name"]),
+      industry:
+        stringValue(row["產業別"]) ||
+        stringValue(row["產業類別"]) ||
+        stringValue(row["Industry"]),
+      market_type: "PUBLIC_COMPANY",
+      source: "TWSE_OPENAPI",
+    };
+  }
+
+  return null;
+}
+
 function assessQuickEstimateEligibility(
   paidCapital: number | null,
   stockCapital: number | null,
   industryConfidence: number,
   businessItems: string[],
+  publicCompany: ReturnType<typeof findPublicCompany>,
 ) {
   const capital = paidCapital ?? stockCapital ?? null;
   const reasons: string[] = [];
   let status: "ELIGIBLE" | "CAUTION" | "NOT_RECOMMENDED" = "ELIGIBLE";
+
+  if (publicCompany) {
+    status = "NOT_RECOMMENDED";
+    reasons.push(
+      "已由證交所公開發行公司資料辨識為公開市場公司；不應使用 SME 資本額 heuristic，應改走公開財報模式。",
+    );
+  }
 
   if (capital === null) {
     status = "CAUTION";
@@ -425,6 +478,23 @@ export async function GET(request: NextRequest) {
 
   try {
     const basicPayload = await fetchJson(basicUrl, controller.signal);
+    let publicCompanyPayload: unknown = [];
+    try {
+      const publicResponse = await fetch(TWSE_PUBLIC_COMPANY_ENDPOINT, {
+        signal: controller.signal,
+        headers: {
+          accept: "application/json",
+          "user-agent": "SME-Liquidity-Radar-Competition-PoC/1.0",
+        },
+        next: { revalidate: 86400 },
+      });
+      if (publicResponse.ok) {
+        publicCompanyPayload = await publicResponse.json();
+      }
+    } catch {
+      publicCompanyPayload = [];
+    }
+
     let businessPayload: unknown = [];
     try {
       businessPayload = await fetchJson(businessUrl, controller.signal);
@@ -441,7 +511,13 @@ export async function GET(request: NextRequest) {
     const paidCapital = numberOrNull(basic.Paid_In_Capital_Amount);
     const stockCapital = numberOrNull(basic.Capital_Stock_Amount);
     const businessItems = collectBusinessItems(businessPayload);
-    const industry = inferIndustry(name, businessItems);
+    const publicCompany = findPublicCompany(publicCompanyPayload, businessNo);
+    const industry = inferIndustry(
+      name,
+      publicCompany?.industry
+        ? [publicCompany.industry, ...businessItems]
+        : businessItems,
+    );
     const estimate = buildEstimate(
       paidCapital,
       stockCapital,
@@ -453,6 +529,7 @@ export async function GET(request: NextRequest) {
       stockCapital,
       industry.confidence,
       businessItems,
+      publicCompany,
     );
 
     return NextResponse.json(
@@ -472,6 +549,12 @@ export async function GET(request: NextRequest) {
         },
         inferred: {
           industry,
+        },
+        market: {
+          public_company: publicCompany,
+          recommended_data_route: publicCompany
+            ? "PUBLIC_FINANCIAL_STATEMENTS"
+            : "SME_ESTIMATE_OR_PRIVATE_DATA",
         },
         estimate,
         quick_estimate_eligibility: quickEstimateEligibility,

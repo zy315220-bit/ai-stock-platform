@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from math import erf, exp, log, log1p, sqrt
+from math import log, log1p, sqrt
 from typing import Literal
 
 import numpy as np
@@ -499,20 +499,18 @@ def forecast_liquidity(
     ]
 
     stress_tests: list[dict[str, object]] = []
-    for index, stress in enumerate(
-        (
-            "major_customer_delay_30d",
-            "revenue_down_15pct",
-            "twd_strengthens_5pct",
-            "combined",
-        )
+    for stress in (
+        "major_customer_delay_30d",
+        "revenue_down_15pct",
+        "twd_strengthens_5pct",
+        "combined",
     ):
         stressed = _apply_stress(profile, stress)
         paths = _simulate_paths(
             stressed,
             simulations=simulations,
             days=90,
-            seed=seed + index + 1,
+            seed=seed,
         )
         m = _metrics(
             paths,
@@ -541,6 +539,7 @@ def forecast_liquidity(
                 "receivable_delay_distribution": "truncated_normal_nonnegative",
                 "day0_floor_breach_included": True,
                 "deterministic_seed_for_demo": True,
+                "scenario_comparison_design": "common_random_numbers",
             },
         },
         "profile": {

@@ -579,6 +579,30 @@ export async function GET(request: NextRequest) {
         },
         estimate,
         quick_estimate_eligibility: quickEstimateEligibility,
+        provenance: {
+          retrieved_at: new Date().toISOString(),
+          public_sources: [
+            {
+              id: "MOEA_GCIS",
+              role: "company_registration_and_business_items",
+            },
+            {
+              id: "TWSE_LISTED_COMPANY",
+              role: "listed_company_detection",
+            },
+            {
+              id: "TWSE_PUBLIC_COMPANY",
+              role: "public_company_detection",
+            },
+            {
+              id: "TPEX_OTC_COMPANY",
+              role: "otc_company_detection",
+            },
+          ],
+          estimate_model: estimate.basis,
+          industry_confidence: industry.confidence,
+          public_data_cache_seconds: 86400,
+        },
       },
       {
         headers: {

@@ -11,6 +11,9 @@ function isSameOrigin(request: NextRequest): boolean {
   if (fetchSite === "cross-site") {
     return false;
   }
+  if (fetchSite === "same-origin") {
+    return true;
+  }
 
   const origin = request.headers.get("origin");
   if (!origin) {
@@ -18,7 +21,13 @@ function isSameOrigin(request: NextRequest): boolean {
   }
 
   try {
-    return new URL(origin).host === request.nextUrl.host;
+    const originHost = new URL(origin).host.toLowerCase();
+    const allowedHosts = new Set([request.nextUrl.host.toLowerCase()]);
+    for (const header of ["host", "x-forwarded-host"]) {
+      const value = request.headers.get(header)?.split(",", 1)[0]?.trim();
+      if (value) allowedHosts.add(value.toLowerCase());
+    }
+    return allowedHosts.has(originHost);
   } catch {
     return false;
   }
@@ -48,7 +57,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const rawBody = await request.text();
+  let rawBody: string;
+  try {
+    rawBody = await request.text();
+  } catch {
+    return Response.json(
+      { detail: "無法讀取請求內容。" },
+      { status: 400, headers: { "cache-control": "no-store" } },
+    );
+  }
   if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
     return Response.json(
       { detail: "請求內容過大。" },

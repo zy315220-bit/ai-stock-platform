@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
+from hashlib import sha256
+import json
 from math import log, log1p, sqrt
 from typing import Literal
 
@@ -476,6 +478,27 @@ def _adjustment_recommendations(
     return results[:4]
 
 
+def _profile_fingerprint(
+    profile: LiquidityProfile,
+    *,
+    simulations: int,
+    seed: int,
+) -> str:
+    payload = {
+        "profile": asdict(profile),
+        "simulations": simulations,
+        "seed": seed,
+        "engine_version": ENGINE_VERSION,
+    }
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def forecast_liquidity(
     profile: LiquidityProfile,
     *,
@@ -533,6 +556,12 @@ def forecast_liquidity(
             "version": ENGINE_VERSION,
             "probabilistic": True,
             "simulations": simulations,
+            "seed": seed,
+            "input_fingerprint": _profile_fingerprint(
+                profile,
+                simulations=simulations,
+                seed=seed,
+            ),
             "horizons": list(HORIZONS),
             "assumptions": {
                 "nonnegative_inflow_distribution": "lognormal_mean_std_calibrated",

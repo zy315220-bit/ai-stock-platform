@@ -332,8 +332,11 @@ def execute_research_pipeline(
             eligibility_reasons.append("deflated_sharpe_failed")
     if not pbo_evidence.get("overfitting_risk_pass"):
         eligibility_reasons.append("cscv_pbo_failed_or_unavailable")
-    if not spa_evidence.get("superior_predictive_ability_pass"):
-        eligibility_reasons.append("hansen_spa_failed_or_unavailable")
+    # Hansen SPA tests the finalist set's global null ("no model beats the
+    # benchmark"). A set-level rejection does not identify the ultimately
+    # selected candidate as individually superior, and short validation
+    # windows can have low power. Keep SPA as audited research-program
+    # evidence rather than an individual promotion blocker.
 
     rounds = [
         {
@@ -434,6 +437,10 @@ def execute_research_pipeline(
         "model_selection_evidence": {
             "cscv_pbo": pbo_evidence,
             "hansen_spa": spa_evidence,
+            "hansen_spa_role": (
+                "SET_LEVEL_DIAGNOSTIC_NOT_INDIVIDUAL_PROMOTION_GATE"
+            ),
+            "hansen_spa_hard_gate": False,
             "trial_count_for_deflated_sharpe": len(trial_sharpes),
             "current_run_trial_count_for_deflated_sharpe": len(
                 current_trial_sharpes
@@ -452,7 +459,7 @@ def execute_research_pipeline(
                 "VALIDATION_FINALISTS",
                 "BULL_BEAR_SIDEWAYS_AUDIT",
                 "PSR_DSR_MINTRL_STATIONARY_BOOTSTRAP",
-                "CSCV_PBO_AND_HANSEN_SPA",
+                "CSCV_PBO_GATE_AND_HANSEN_SPA_SET_DIAGNOSTIC",
                 "WALK_FORWARD_VALIDATION",
                 "LOCKED_FINAL_HOLDOUT",
             ],

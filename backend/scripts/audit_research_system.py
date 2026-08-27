@@ -75,13 +75,29 @@ def audit_research_system(
         and training_memory.get("holdout_feedback_used") is False,
         "adaptive memory must be TRAIN_ONLY with validation/holdout feedback disabled",
     )
+    verified_identity_count = int(
+        training_memory.get("verified_data_identity_symbol_count", 0) or 0
+    )
+    migrated_identity_count = int(
+        training_memory.get("migrated_data_identity_symbol_count", 0) or 0
+    )
+    eligible_candidate_count = int(
+        snapshot.get("eligible_candidate_count", 0) or 0
+    )
+    identity_coverage_complete = (
+        verified_identity_count + migrated_identity_count
+        == len(expected_universe)
+    )
+    migration_is_fail_closed = (
+        migrated_identity_count == 0 or eligible_candidate_count == 0
+    )
     check(
         "canonical_train_identity_verified",
-        int(training_memory.get("verified_data_identity_symbol_count", 0) or 0)
-        == len(expected_universe),
+        identity_coverage_complete and migration_is_fail_closed,
         (
-            "verified="
-            f"{training_memory.get('verified_data_identity_symbol_count')}/{len(expected_universe)}"
+            f"verified={verified_identity_count}/{len(expected_universe)} "
+            f"migrated={migrated_identity_count}/{len(expected_universe)} "
+            f"eligible={eligible_candidate_count}"
         ),
     )
     check(

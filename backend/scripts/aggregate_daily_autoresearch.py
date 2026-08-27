@@ -23,7 +23,7 @@ _DECISION_RANK = {
     "KEEP": 1,
     "HOLDOUT_READY": 2,
 }
-_CONFIRMATION_GATE_TOTAL = 7
+_CONFIRMATION_GATE_TOTAL = 6
 
 
 def _number(value: Any) -> float:
@@ -56,7 +56,6 @@ def _confirmation_gate_pass_count(candidate: dict[str, Any]) -> int:
             bool(validation.get("statistical_quality_pass")),
             bool(validation.get("deflated_sharpe_pass")),
             bool(model_selection.get("cscv_pbo_pass")),
-            bool(model_selection.get("hansen_spa_pass")),
         )
     )
 
@@ -186,8 +185,8 @@ def _ranking_key(candidate: dict[str, Any]) -> tuple[Any, ...]:
         bool(candidate.get("regime_robust")),
         bool(candidate.get("walk_forward_sample_sufficient")),
         _number(candidate.get("walk_forward_positive_slice_ratio")),
-        bool(model_selection.get("hansen_spa_pass")),
         bool(model_selection.get("cscv_pbo_pass")),
+        bool(model_selection.get("hansen_spa_pass")),
         bool(validation.get("deflated_sharpe_pass")),
         _number(validation.get("deflated_sharpe_probability_percent")),
         _number(candidate.get("research_score")),
@@ -360,7 +359,7 @@ def aggregate_payloads(
         "ranking_policy": (
             "Paper-guided exploratory evidence hierarchy: promotion eligibility, "
             "validation decision stage, independent confirmation-gate count, regime "
-            "and walk-forward robustness, SPA/PBO/DSR evidence, research score, "
+            "and walk-forward robustness, PBO/DSR gates, SPA diagnostic evidence, research score, "
             "Wilson lower bound, then drawdown. Validation ranking is observation-only "
             "and never feeds TRAIN_ONLY search memory."
         ),

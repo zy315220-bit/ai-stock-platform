@@ -79,10 +79,10 @@ def run_holdout_gate(
         "overfitting_risk_pass"
     ):
         raise ValueError("Candidate must pass the CSCV/PBO gate")
-    if not model_selection_evidence.get("hansen_spa", {}).get(
-        "superior_predictive_ability_pass"
-    ):
-        raise ValueError("Candidate must pass the Hansen SPA gate")
+    # Hansen SPA is a set-level diagnostic: rejecting the global null only
+    # establishes that at least one finalist is superior to the benchmark.
+    # It must not be interpreted as proof that this selected candidate is the
+    # superior model, so SPA is intentionally not an individual hard gate.
 
     candidate = validation_result.candidate
     unknown = set(candidate.parameters) - _ALLOWED_PARAMETERS

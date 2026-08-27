@@ -142,3 +142,33 @@ def test_regime_failure_cannot_touch_holdout():
     else:
         raise AssertionError("expected ValueError")
     assert called is False
+
+
+def test_set_level_spa_failure_does_not_block_selected_candidate_holdout():
+    def fake_backtest(**kwargs):
+        return {
+            "performance_metrics": {
+                "sharpe_ratio": 1.8,
+                "sortino_ratio": 2.5,
+                "calmar_ratio": 1.6,
+            },
+            "total_return_percent": 20,
+            "alpha_percent": 8,
+            "max_drawdown_percent": 10,
+            "total_trades": 20,
+            "winning_trade_count": 12,
+            "win_rate_percent": 60,
+        }
+
+    result = run_holdout_gate(
+        "2330",
+        _split(),
+        _qualified(),
+        regime_robustness=ROBUST,
+        model_selection_evidence={
+            "cscv_pbo": {"overfitting_risk_pass": True},
+            "hansen_spa": {"superior_predictive_ability_pass": False},
+        },
+        backtest_fn=fake_backtest,
+    )
+    assert result.promoted is True

@@ -382,6 +382,7 @@ def _adjustment_recommendations(
         stressed_base.current_cash,
     )
     before = float(base_result["shortfall_probability"])
+    base_p50 = float(base_result["ending_cash_p50"])
 
     scenarios: list[tuple[str, str, str, LiquidityProfile]] = []
 
@@ -459,6 +460,12 @@ def _adjustment_recommendations(
             stressed.current_cash,
         )
         after = float(result["shortfall_probability"])
+        ending_p50_after = float(result["ending_cash_p50"])
+        probability_improvement = before - after
+        cash_improvement = ending_p50_after - base_p50
+        if probability_improvement <= 0 and cash_improvement <= 0:
+            continue
+
         results.append(
             {
                 "code": code,
@@ -466,8 +473,13 @@ def _adjustment_recommendations(
                 "rationale": rationale,
                 "before_shortfall_probability": before,
                 "after_shortfall_probability": after,
-                "improvement_percentage_points": round(max(0.0, before - after) * 100, 2),
-                "ending_cash_p50_after": result["ending_cash_p50"],
+                "improvement_percentage_points": round(
+                    max(0.0, probability_improvement) * 100,
+                    2,
+                ),
+                "ending_cash_p50_before": round(base_p50, 2),
+                "ending_cash_p50_after": round(ending_p50_after, 2),
+                "ending_cash_p50_change": round(cash_improvement, 2),
             }
         )
 

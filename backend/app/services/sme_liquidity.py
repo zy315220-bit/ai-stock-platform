@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass, replace
 from hashlib import sha256
-import json
 from math import log, log1p, sqrt
 from typing import Literal
 
@@ -221,7 +221,7 @@ def _metrics(
         "p10_buffer_ratio": round(buffer / floor, 6) if floor > 0 else None,
         "cash_flow_at_risk_p50_to_p10": round(float(p50 - p10), 2),
         "median_first_breach_day": (
-            int(round(float(np.median(first_breach_days))))
+            round(float(np.median(first_breach_days)))
             if first_breach_days.size
             else None
         ),

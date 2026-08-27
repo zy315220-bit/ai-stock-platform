@@ -76,11 +76,11 @@ export default function Page() {
         </div>
 
         <aside className={styles.heroCard}>
-          <div><span>今天帳上現金</span><strong>420 萬</strong></div>
-          <div><span>90 天後缺口機率</span><strong className={styles.heroRisk}>61%</strong></div>
-          <div><span>主要成因</span><strong>應收延遲 + 集中付款</strong></div>
+          <div><span>輸入</span><strong>搜尋公司即可開始</strong></div>
+          <div><span>輸出</span><strong className={styles.heroRisk}>30 / 60 / 90 天缺口風險</strong></div>
+          <div><span>判讀</span><strong>信賴區間 + 臨界緩衝 + 壓力敏感度</strong></div>
           <div><span>銀行下一步</span><strong>提前聯絡，不等客戶求救</strong></div>
-          <small>示意數字；正式 Demo 可使用公開公司資料＋估算或快速範例即時計算</small>
+          <small>Demo 結果由即時資料與 Python 權威引擎計算，不使用固定風險百分比。</small>
         </aside>
       </section>
 
@@ -104,9 +104,10 @@ export default function Page() {
         <span className={styles.kicker}>METHOD</span>
         <h2>先用能驗證的 baseline 做深，再決定 AI 模型能不能升級。</h2>
         <p className={styles.lead}>
-          第一版採 Monte Carlo 機率式現金流模型。未來 TFT、DeepAR、Chronos
-          等模型必須在 rolling out-of-sample 驗證中真正贏過 baseline，
-          才能進入正式候選；不因為模型名字新就直接採用。
+          第一版正式放行的是可驗證的 Monte Carlo baseline：單一 Python 權威引擎、
+          Wilson 95% 區間、Day 0 breach、common random numbers 壓力比較與極端案例回歸。
+          未來 TFT、DeepAR、Chronos 等 AI 時序模型只有在 rolling out-of-sample
+          明確擊敗 baseline 且通過風險 Gate 後才能升級；不因為模型名字新就直接採用。
         </p>
         <div className={styles.flowGrid}>
           {flow.map(([n, title, body]) => (
@@ -116,6 +117,29 @@ export default function Page() {
               <p>{body}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className={styles.evidence} aria-labelledby="evidence-title">
+        <span className={styles.kicker}>EVIDENCE & GOVERNANCE</span>
+        <h2 id="evidence-title">評審可以追問每一個數字從哪裡來。</h2>
+        <div className={styles.evidenceGrid}>
+          <article>
+            <strong>官方公司資料</strong>
+            <p>經濟部商工行政資料；上市、上櫃與公開發行公司另檢查 TWSE / TPEx 官方資料。</p>
+          </article>
+          <article>
+            <strong>估算不冒充真實值</strong>
+            <p>公開查不到的私有現金流只標示為產業／規模估算；資料不足或公司不適用時直接拒絕放行。</p>
+          </article>
+          <article>
+            <strong>模型可重現</strong>
+            <p>固定模型版本、模擬數、seed 與資料來源；網站所有 forecast 統一走 Python 權威引擎。</p>
+          </article>
+          <article>
+            <strong>AI 有升級門檻</strong>
+            <p>AI 模型必須在樣本外驗證中真正勝過 baseline，否則維持 baseline，不用「AI」名稱掩蓋較差模型。</p>
+          </article>
         </div>
       </section>
 

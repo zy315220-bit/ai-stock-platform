@@ -12,6 +12,7 @@ const TWSE_PUBLIC_COMPANY_ENDPOINT =
   "https://openapi.twse.com.tw/v1/opendata/t187ap03_P";
 const TPEX_OTC_COMPANY_ENDPOINT =
   "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O";
+const SME_PAID_CAPITAL_CRITERION = 100_000_000;
 
 type JsonObject = Record<string, unknown>;
 
@@ -178,7 +179,7 @@ function buildEstimate(
   businessItems: string[],
 ) {
   const capital = Math.min(
-    300_000_000,
+    SME_PAID_CAPITAL_CRITERION,
     Math.max(1_000_000, paidCapital ?? stockCapital ?? 10_000_000),
   );
 
@@ -419,13 +420,17 @@ function assessQuickEstimateEligibility(
 
   if (capital === null) {
     status = "CAUTION";
-    reasons.push("缺少可用的登記／實收資本額，規模估算不確定性較高。");
-  } else if (capital >= 1_000_000_000) {
+    reasons.push("缺少可用的登記／實收資本額，無法由公開資料確認是否符合 SME 資本額判準。");
+  } else if (capital > SME_PAID_CAPITAL_CRITERION) {
     status = "NOT_RECOMMENDED";
-    reasons.push("公司規模明顯超出本 SME 快速估算 baseline 的主要適用範圍。");
-  } else if (capital >= 300_000_000) {
-    status = "CAUTION";
-    reasons.push("公司規模接近或超過快速估算的校準上限，建議使用公開財報或真實企業資料。");
+    reasons.push(
+      "實收／出資額超過 1 億元，無法僅靠資本額確認 SME 身分；依現行標準仍可能因員工未滿 200 人而符合，但快速估算需先取得員工數或真實財務資料。",
+    );
+    reasons.push(
+      "本快速 baseline 僅對 1 億元以下的公開資本額範圍放行，避免對超出校準範圍的公司產生假精準。",
+    );
+  } else {
+    reasons.push("實收／出資額落在現行 SME 資本額判準 1 億元以下。");
   }
 
   if (businessItems.length === 0) {
@@ -601,6 +606,9 @@ export async function GET(request: NextRequest) {
           ],
           estimate_model: estimate.basis,
           industry_confidence: industry.confidence,
+          sme_capital_criterion_twd: SME_PAID_CAPITAL_CRITERION,
+          sme_employee_alternative_criterion: "fewer_than_200_regular_employees",
+          sme_rule_source: "MOEA_STANDARDS_FOR_IDENTIFYING_SMES_2024-11-27",
           public_data_cache_seconds: 86400,
         },
       },

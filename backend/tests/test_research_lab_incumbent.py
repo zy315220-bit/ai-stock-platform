@@ -125,3 +125,29 @@ def test_prior_campaign_is_not_compared() -> None:
     assert updated["top_candidate"]["stock_code"] == "2891"
     assert updated["incumbent_status"]["same_campaign_only"] is True
     assert updated["incumbent_status"]["feeds_train_memory"] is False
+
+
+def test_incumbent_marks_behaviorally_duplicate_challenger() -> None:
+    old = _candidate("2882", "old", gates=4, dsr=89.0, score=78.58)
+    challenger = _candidate("2882", "new", gates=3, dsr=88.5, score=78.58)
+    old["behavior"] = {"behavior_signature": "same-path"}
+    challenger["behavior"] = {"behavior_signature": "same-path"}
+
+    snapshot = {
+        "campaign_id": "2026-Q3",
+        "as_of_date": "2026-08-27",
+        "top_candidate": challenger,
+    }
+    prior = {"campaign_id": "2026-Q3", "candidate": old}
+
+    updated, _ = select_research_incumbent(
+        snapshot,
+        prior_incumbent=prior,
+    )
+
+    assert updated["incumbent_status"]["behavioral_near_duplicate"] is True
+    assert (
+        updated["incumbent_status"]["behavioral_duplicate_basis"]
+        == "exact_behavior_signature"
+    )
+    assert updated["incumbent_status"]["behavioral_duplicate_of"] == "robot-old"

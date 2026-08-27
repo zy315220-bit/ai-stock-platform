@@ -42,6 +42,9 @@ type IncumbentStatus = {
   same_campaign_only?: boolean;
   feeds_train_memory?: boolean;
   opens_final_holdout?: boolean;
+  behavioral_near_duplicate?: boolean;
+  behavioral_duplicate_basis?: string | null;
+  behavioral_duplicate_of?: string | null;
 };
 
 type DailySnapshot = {
@@ -267,6 +270,8 @@ export default function DailyResearchStatus() {
   const challengerDiffers = Boolean(
     incumbent && roundTop && candidateIdentity(incumbent) !== candidateIdentity(roundTop)
   );
+  const challengerIsBehavioralDuplicate =
+    incumbentStatus?.behavioral_near_duplicate === true;
   const memory = snapshot?.training_memory ?? null;
   const audit = status?.system_audit ?? null;
   const certifiedCount = status?.certified_robots?.certified_robot_count ?? 0;
@@ -397,12 +402,28 @@ export default function DailyResearchStatus() {
         />
       ) : null}
 
-      {challengerDiffers && roundTop ? (
+      {challengerDiffers && roundTop && !challengerIsBehavioralDuplicate ? (
         <CandidateEvidenceCard
           candidate={roundTop}
           title="本輪最高證據挑戰者"
           note="這是本次自動研究的最高候選；只有證據階層真正超過同 Campaign 守擂者，才會取代守擂位置。比較結果不回灌 Train。"
         />
+      ) : null}
+
+      {challengerDiffers && roundTop && challengerIsBehavioralDuplicate ? (
+        <div className="daily-top-candidate">
+          <div>
+            <span>本輪挑戰者已判定為行為近似重複</span>
+            <strong>{roundTop.stock_code}・{roundTop.candidate_id}</strong>
+            <small>
+              與守擂候選具有相同交易／報酬行為指紋，不視為獨立策略突破
+            </small>
+          </div>
+          <p>
+            系統保留歷史證據與統計差異，但展示與候選治理會合併解讀；
+            只有行為路徑實質不同的新候選才會作為獨立挑戰者顯示。
+          </p>
+        </div>
       ) : null}
 
       {status?.workflow?.url ? (

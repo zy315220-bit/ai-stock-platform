@@ -129,7 +129,7 @@ type ResearchStatus = {
 
 
 type ServerResearchGate = {
-  source: "server_fetched_immutable_research_snapshot";
+  source: "server_fetched_latest_integrity_checked_snapshot";
   fail_closed: boolean;
   risk_code: string;
   max_research_drawdown_percent: number;
@@ -1051,7 +1051,7 @@ export default function SuitabilityDemo() {
           <p className={styles.bridgeFootnote}>
             {serverGateUnavailable
               ? "雙閘門伺服器證據目前不可用，因此維持全部鎖定。 "
-              : "此表由伺服器直接抓 Research Lab 不可變快照計算，前端不能自行修改候選證據。 "}
+              : "此表由伺服器直接抓 Research Lab 最新且完整性通過的快照計算，前端不能自行修改候選證據。 "}
             對客放行必須依序通過：Research Gate → 客戶風險邊界 → 一次性 Final Holdout
             認證 → 理專人工覆核。這個 PoC 不會把「回測好看」直接變成商品推薦。
           </p>

@@ -134,6 +134,26 @@ jobs:
           ref: research-data
           path: research-data
           fetch-depth: 1
+      - name: Persist TRAIN_ONLY memory before lifecycle audit
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p research-data/daily/memory
+          cp backend/research_artifacts/published/daily/memory/*.json research-data/daily/memory/
+          MEMORY_COUNT="$(find research-data/daily/memory -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')"
+          if [ "$MEMORY_COUNT" -ne 20 ]; then
+            echo "Refusing partial TRAIN_ONLY memory persistence: expected 20, found $MEMORY_COUNT"
+            exit 1
+          fi
+          git -C research-data config user.name "ai-stock-research-bot"
+          git -C research-data config user.email "actions@users.noreply.github.com"
+          git -C research-data add daily/memory
+          if git -C research-data diff --cached --quiet; then
+            echo "TRAIN_ONLY memory unchanged."
+          else
+            git -C research-data commit -m "research: persist train-only memory run ${RUN_ID}"
+            git -C research-data push origin HEAD:research-data
+          fi
       - name: Reserve eligible final holdouts without reading them
         env:
           RUN_ID: ${{ github.run_id }}

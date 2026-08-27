@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from dataclasses import replace
+from hashlib import sha256
+import json
 from typing import Any, Callable, Iterable, Literal
 
 from app.services.backtest.engine import backtest_stock
@@ -27,6 +29,46 @@ _ALLOWED_PARAMETERS = {
     "min_position_fraction",
     "max_position_fraction",
 }
+
+
+def _stable_hash(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return sha256(payload.encode("utf-8")).hexdigest()[:24]
+
+
+def _behavior_signatures(report: dict[str, Any]) -> dict[str, str | int]:
+    trades = list(report.get("trades") or [])
+    research_series = report.get("research_return_series") or {}
+    strategy_returns = [
+        round(float(value), 12)
+        for value in research_series.get("strategy_daily_returns") or []
+        if isinstance(value, (int, float))
+    ]
+    trade_signature = _stable_hash(trades) if trades else ""
+    return_signature = _stable_hash(strategy_returns) if strategy_returns else ""
+    behavior_signature = (
+        _stable_hash(
+            {
+                "trade_path_signature": trade_signature,
+                "return_path_signature": return_signature,
+            }
+        )
+        if trade_signature or return_signature
+        else ""
+    )
+    return {
+        "trade_path_signature": trade_signature,
+        "return_path_signature": return_signature,
+        "behavior_signature": behavior_signature,
+        "behavior_trade_count": len(trades),
+        "behavior_return_observation_count": len(strategy_returns),
+    }
 
 
 def _validation_metrics(report: dict[str, Any]) -> dict[str, Any]:
@@ -90,6 +132,7 @@ def _validation_metrics(report: dict[str, Any]) -> dict[str, Any]:
             "actual_end_date": report.get("actual_end_date"),
         }
     )
+    metrics.update(_behavior_signatures(report))
     research_series = report.get("research_return_series") or {}
     strategy_returns = research_series.get("strategy_daily_returns") or []
     benchmark_returns = research_series.get("benchmark_daily_returns") or []

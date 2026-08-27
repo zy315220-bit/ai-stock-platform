@@ -9,7 +9,15 @@ type Horizon = {
   ending_cash_p50: number;
   ending_cash_p90: number;
   shortfall_probability: number;
+  shortfall_breach_count: number;
+  simulated_path_count: number;
+  shortfall_probability_ci95_lower: number;
+  shortfall_probability_ci95_upper: number;
   expected_min_cash: number;
+  min_cash_p10: number;
+  min_cash_p50: number;
+  p10_buffer_above_floor: number;
+  p10_buffer_ratio: number | null;
   cash_flow_at_risk_p50_to_p10: number;
   median_first_breach_day: number | null;
 };
@@ -107,6 +115,25 @@ type Forecast = {
   };
   horizons: Horizon[];
   stress_tests: Stress[];
+  risk_interpretation: {
+    status:
+      | "ROBUST"
+      | "WATCH"
+      | "NEAR_THRESHOLD"
+      | "STRESS_SENSITIVE"
+      | "HIGH_RISK";
+    label: string;
+    summary: string;
+    reasons: string[];
+    base_90_probability: number;
+    base_90_ci95_upper: number;
+    p10_min_cash_90: number | null;
+    p10_buffer_above_floor_90: number | null;
+    p10_buffer_ratio_90: number | null;
+    most_sensitive_stress: string | null;
+    most_sensitive_stress_probability: number;
+    safety_cash_floor: number;
+  };
   drivers: Array<{ driver: string; exposure_amount: number }>;
   rm_next_step: { route: string; reason: string };
   adjustment_recommendations: AdjustmentRecommendation[];
@@ -201,6 +228,42 @@ function riskLabel(value: number) {
   if (value >= 0.5) return "高風險";
   if (value >= 0.2) return "需注意";
   return "穩定";
+}
+
+function probabilityDisplay(item: Horizon) {
+  if (item.shortfall_breach_count === 0) {
+    return {
+      primary: "本次未觀察到",
+      secondary: `0 / ${item.simulated_path_count.toLocaleString("zh-TW")} 路徑跌破`,
+      uncertainty: `95% 上界約 ${(item.shortfall_probability_ci95_upper * 100).toFixed(2)}%`,
+    };
+  }
+
+  return {
+    primary: prob(item.shortfall_probability),
+    secondary: `${item.shortfall_breach_count.toLocaleString("zh-TW")} / ${item.simulated_path_count.toLocaleString("zh-TW")} 路徑跌破`,
+    uncertainty: `95% CI ${(item.shortfall_probability_ci95_lower * 100).toFixed(2)}%–${(item.shortfall_probability_ci95_upper * 100).toFixed(2)}%`,
+  };
+}
+
+function horizonRiskLabel(item: Horizon, stressMax: number) {
+  if (item.shortfall_probability >= 0.5) return "高風險";
+  if (item.shortfall_probability >= 0.1) return "需注意";
+  if (
+    typeof item.p10_buffer_ratio === "number" &&
+    item.p10_buffer_ratio <= 0.25
+  ) {
+    return "接近臨界";
+  }
+  if (
+    item.horizon_days === 90 &&
+    stressMax >= 0.2 &&
+    stressMax >= item.shortfall_probability + 0.15
+  ) {
+    return "壓力敏感";
+  }
+  if (item.shortfall_breach_count === 0) return "有緩衝";
+  return "低風險";
 }
 
 function rangeLabel(range?: EstimateRange) {
@@ -480,6 +543,11 @@ export default function LiquidityDemo() {
   const maxDriver = useMemo(() => {
     if (!data?.drivers.length) return 1;
     return Math.max(...data.drivers.map((item) => item.exposure_amount), 1);
+  }, [data]);
+
+  const maxStressProbability = useMemo(() => {
+    if (!data?.stress_tests.length) return 0;
+    return Math.max(...data.stress_tests.map((item) => item.shortfall_probability));
   }, [data]);
 
   const estimateFields = companyProfile?.estimate.fields;
@@ -827,41 +895,57 @@ export default function LiquidityDemo() {
           </div>
 
           <div className={styles.horizonGrid}>
-            {data.horizons.map((item) => (
-              <article key={item.horizon_days}>
-                <div className={styles.horizonTop}>
-                  <span>{item.horizon_days} 天</span>
-                  <strong
-                    className={
-                      item.shortfall_probability >= 0.5
-                        ? styles.riskHigh
-                        : item.shortfall_probability >= 0.2
-                          ? styles.riskMid
-                          : styles.riskLow
-                    }
-                  >
-                    {riskLabel(item.shortfall_probability)}
-                  </strong>
-                </div>
-                <h3>{prob(item.shortfall_probability)}</h3>
-                <p>期間內跌破安全現金水位機率</p>
-                <dl>
-                  <div><dt>悲觀 P10</dt><dd>{money(item.ending_cash_p10)}</dd></div>
-                  <div><dt>中位 P50</dt><dd>{money(item.ending_cash_p50)}</dd></div>
-                  <div><dt>樂觀 P90</dt><dd>{money(item.ending_cash_p90)}</dd></div>
-                  <div><dt>Cash-flow-at-Risk</dt><dd>{money(item.cash_flow_at_risk_p50_to_p10)}</dd></div>
-                </dl>
-              </article>
-            ))}
+            {data.horizons.map((item) => {
+              const display = probabilityDisplay(item);
+              const label = horizonRiskLabel(item, maxStressProbability);
+              const riskClass =
+                label === "高風險"
+                  ? styles.riskHigh
+                  : label === "需注意" ||
+                      label === "接近臨界" ||
+                      label === "壓力敏感"
+                    ? styles.riskMid
+                    : styles.riskLow;
+
+              return (
+                <article key={item.horizon_days}>
+                  <div className={styles.horizonTop}>
+                    <span>{item.horizon_days} 天</span>
+                    <strong className={riskClass}>{label}</strong>
+                  </div>
+                  <h3 className={styles.probabilityPrimary}>{display.primary}</h3>
+                  <p>期間內跌破安全現金水位</p>
+                  <div className={styles.probabilityEvidence}>
+                    <span>{display.secondary}</span>
+                    <strong>{display.uncertainty}</strong>
+                  </div>
+                  <dl>
+                    <div><dt>悲觀期末 P10</dt><dd>{money(item.ending_cash_p10)}</dd></div>
+                    <div><dt>悲觀最低現金 P10</dt><dd>{money(item.min_cash_p10)}</dd></div>
+                    <div><dt>安全水位緩衝</dt><dd>{money(item.p10_buffer_above_floor)}</dd></div>
+                    <div><dt>Cash-flow-at-Risk</dt><dd>{money(item.cash_flow_at_risk_p50_to_p10)}</dd></div>
+                  </dl>
+                </article>
+              );
+            })}
           </div>
 
-          <div className={styles.resultMeaning}>
-            <span>怎麼看？</span>
-            <p>
-              「90 天 54%」不是代表一定會缺錢，而是 2,500 條模擬路徑中約 54%
-              曾跌破安全現金水位。銀行可以因此提早聯絡，而不是等逾期才處理。
-            </p>
-          </div>
+          <section
+            className={`${styles.dynamicInterpretation} ${styles[`interpretation_${data.risk_interpretation.status}`] ?? ""}`}
+          >
+            <div className={styles.dynamicInterpretationHead}>
+              <div>
+                <span>動態判讀</span>
+                <h3>{data.risk_interpretation.label}</h3>
+              </div>
+              <p>{data.risk_interpretation.summary}</p>
+            </div>
+            <ul>
+              {data.risk_interpretation.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </section>
 
           <div className={styles.analysisGrid}>
             <section>

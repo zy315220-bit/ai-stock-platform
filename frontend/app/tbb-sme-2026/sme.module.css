@@ -62,3 +62,43 @@
   .resultIntro{padding:24px 18px}
   .resultMeaning{grid-template-columns:1fr;padding:14px 18px}
 }
+
+
+.companySearchField{position:relative;z-index:5}
+.companySearchBox{position:relative}
+.companySearchState{position:absolute;right:10px;top:50%;transform:translateY(-50%);padding:3px 5px;background:var(--surface);color:var(--muted)}
+.companySuggestions{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:30;max-height:330px;overflow:auto;border:1px solid var(--ink);background:var(--surface);box-shadow:0 16px 34px rgba(16,39,51,.18)}
+.companySuggestions button{display:grid;width:100%;gap:4px;padding:13px 14px;border:0;border-bottom:1px solid var(--line);background:var(--surface);color:var(--ink);text-align:left;cursor:pointer}
+.companySuggestions button:last-child{border-bottom:0}
+.companySuggestions button:hover{background:#ede7dc}
+.companySuggestions strong{font-size:11px}
+.companySuggestions span,.companySuggestions small{color:var(--muted);font-size:8px;line-height:1.4}
+.companySelected{color:var(--teal)!important;font-weight:800}
+.adjustmentPanel{border-top:1px solid var(--ink);background:#f5f1e8}
+.adjustmentHead{padding:30px 32px;border-bottom:1px solid var(--line)}
+.adjustmentHead h3{margin:8px 0 0;font-size:26px;letter-spacing:-.025em}
+.adjustmentHead p{max-width:850px;margin:8px 0 0;color:var(--muted);font-size:9px;line-height:1.6}
+.adjustmentGrid{display:grid;grid-template-columns:repeat(4,1fr)}
+.adjustmentGrid article{min-height:250px;padding:22px;border-right:1px solid var(--line)}
+.adjustmentGrid article:last-child{border-right:0}
+.adjustmentRank{color:var(--accent);font:900 9px ui-monospace,SFMono-Regular,Menlo,monospace}
+.adjustmentGrid h4{margin:32px 0 8px;font-size:15px;line-height:1.4}
+.adjustmentGrid p{min-height:48px;margin:0;color:var(--muted);font-size:9px;line-height:1.55}
+.adjustmentImpact{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
+.adjustmentImpact>div{display:grid;gap:4px}
+.adjustmentImpact>div:last-child{text-align:right}
+.adjustmentImpact span{color:var(--muted);font-size:8px}
+.adjustmentImpact strong{font:900 18px ui-monospace,SFMono-Regular,Menlo,monospace}
+.adjustmentImpact>span{color:var(--accent);font-size:16px}
+.adjustmentBenefit{margin-top:12px;padding:8px;background:#dfeae5;color:var(--teal);font-size:9px;font-weight:900;text-align:center}
+
+@media(max-width:900px){
+ .adjustmentGrid{grid-template-columns:1fr 1fr}
+ .adjustmentGrid article{border-bottom:1px solid var(--line)}
+ .adjustmentGrid article:nth-child(even){border-right:0}
+}
+@media(max-width:620px){
+ .adjustmentGrid{grid-template-columns:1fr}
+ .adjustmentGrid article{border-right:0}
+ .companySearchField{z-index:10}
+}

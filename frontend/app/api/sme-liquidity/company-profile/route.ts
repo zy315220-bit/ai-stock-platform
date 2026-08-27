@@ -346,6 +346,49 @@ function buildEstimate(
   };
 }
 
+function assessQuickEstimateEligibility(
+  paidCapital: number | null,
+  stockCapital: number | null,
+  industryConfidence: number,
+  businessItems: string[],
+) {
+  const capital = paidCapital ?? stockCapital ?? null;
+  const reasons: string[] = [];
+  let status: "ELIGIBLE" | "CAUTION" | "NOT_RECOMMENDED" = "ELIGIBLE";
+
+  if (capital === null) {
+    status = "CAUTION";
+    reasons.push("缺少可用的登記／實收資本額，規模估算不確定性較高。");
+  } else if (capital >= 1_000_000_000) {
+    status = "NOT_RECOMMENDED";
+    reasons.push("公司規模明顯超出本 SME 快速估算 baseline 的主要適用範圍。");
+  } else if (capital >= 300_000_000) {
+    status = "CAUTION";
+    reasons.push("公司規模接近或超過快速估算的校準上限，建議使用公開財報或真實企業資料。");
+  }
+
+  if (businessItems.length === 0) {
+    if (status === "ELIGIBLE") status = "CAUTION";
+    reasons.push("官方營業項目未取得，產業分類只能採較保守推測。");
+  }
+
+  if (industryConfidence < 0.6) {
+    if (status === "ELIGIBLE") status = "CAUTION";
+    reasons.push("產業辨識信心偏低，產業參數可能不適合直接套用。");
+  }
+
+  if (!reasons.length) {
+    reasons.push("目前公開資料完整度與公司規模適合先做競賽版快速估算。");
+  }
+
+  return {
+    status,
+    can_run_quick_estimate: status !== "NOT_RECOMMENDED",
+    requires_human_confirmation: status !== "ELIGIBLE",
+    reasons,
+  };
+}
+
 async function fetchJson(url: URL, signal: AbortSignal) {
   const response = await fetch(url, {
     signal,
@@ -405,6 +448,12 @@ export async function GET(request: NextRequest) {
       industry.label,
       businessItems,
     );
+    const quickEstimateEligibility = assessQuickEstimateEligibility(
+      paidCapital,
+      stockCapital,
+      industry.confidence,
+      businessItems,
+    );
 
     return NextResponse.json(
       {
@@ -425,6 +474,7 @@ export async function GET(request: NextRequest) {
           industry,
         },
         estimate,
+        quick_estimate_eligibility: quickEstimateEligibility,
       },
       {
         headers: {

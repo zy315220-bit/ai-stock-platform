@@ -1422,6 +1422,173 @@
   line-height: 1.65;
 }
 
+
+.profileResearchBridge {
+  border-top: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.bridgeHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: clamp(34px, 6vw, 84px);
+  align-items: end;
+  padding: clamp(34px, 5vw, 64px);
+  border-bottom: 1px solid var(--ink);
+}
+
+.bridgeHeader h2 {
+  margin: 11px 0 0;
+  font-size: clamp(28px, 4vw, 50px);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.bridgeHeader p {
+  max-width: 760px;
+  margin: 15px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.bridgePolicy {
+  display: grid;
+  gap: 7px;
+  padding: 20px;
+  border: 1px solid var(--ink);
+  background: var(--copper-soft);
+}
+
+.bridgePolicy span,
+.bridgePolicy small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.bridgePolicy strong {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.bridgeStats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--ink);
+}
+
+.bridgeStats > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 20px;
+  border-right: 1px solid var(--line);
+}
+
+.bridgeStats > div:last-child {
+  border-right: 0;
+}
+
+.bridgeStats span,
+.bridgeStats small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.bridgeStats strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 24px;
+}
+
+.bridgeTableWrap {
+  overflow-x: auto;
+  padding: clamp(26px, 4vw, 48px);
+}
+
+.bridgeTable {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  border-top: 1px solid var(--ink);
+}
+
+.bridgeTable th,
+.bridgeTable td {
+  padding: 15px 13px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.bridgeTable th {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+
+.bridgeTable td {
+  font-size: 10px;
+}
+
+.bridgeTable td:first-child {
+  min-width: 210px;
+}
+
+.bridgeTable td:first-child strong,
+.bridgeTable td:first-child small {
+  display: block;
+}
+
+.bridgeTable td:first-child strong {
+  font-size: 10px;
+  text-transform: none;
+}
+
+.bridgeTable td:first-child small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+}
+
+.bridgePass,
+.bridgeHold,
+.bridgeBlock {
+  display: inline-grid;
+  min-height: 24px;
+  place-items: center;
+  padding: 0 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.bridgePass {
+  background: var(--teal-soft);
+  color: var(--teal);
+}
+
+.bridgeHold {
+  background: var(--copper-soft);
+  color: var(--copper);
+}
+
+.bridgeBlock {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.bridgeFootnote {
+  margin: 0;
+  padding: 0 clamp(26px, 4vw, 48px) clamp(30px, 4vw, 48px);
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.65;
+}
+
 .architectureFlow {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1792,15 +1959,18 @@
     border-top: 1px solid var(--line);
   }
 
-  .researchStatusBar {
+  .researchStatusBar,
+  .bridgeStats {
     grid-template-columns: 1fr 1fr;
   }
 
-  .researchStatusBar > div:nth-child(2) {
+  .researchStatusBar > div:nth-child(2),
+  .bridgeStats > div:nth-child(2) {
     border-right: 0;
   }
 
-  .researchStatusBar > div:nth-child(-n + 2) {
+  .researchStatusBar > div:nth-child(-n + 2),
+  .bridgeStats > div:nth-child(-n + 2) {
     border-bottom: 1px solid var(--line);
   }
 }
@@ -1817,6 +1987,7 @@
   .sectionIntro,
   .demoHeader,
   .researchIntro,
+  .bridgeHeader,
   .researchGrid,
   .methodsPanel,
   .footer {
@@ -2065,18 +2236,30 @@
     border-right: 0;
   }
 
-  .researchStatusBar {
+  .researchStatusBar,
+  .bridgeStats {
     grid-template-columns: 1fr;
   }
 
   .researchStatusBar > div,
-  .researchStatusBar > div:nth-child(2) {
+  .researchStatusBar > div:nth-child(2),
+  .bridgeStats > div,
+  .bridgeStats > div:nth-child(2) {
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
-  .researchStatusBar > div:last-child {
+  .researchStatusBar > div:last-child,
+  .bridgeStats > div:last-child {
     border-bottom: 0;
+  }
+
+  .bridgeTableWrap {
+    padding: 24px 18px;
+  }
+
+  .bridgeFootnote {
+    padding: 0 18px 28px;
   }
 
   .failClosedNotice {

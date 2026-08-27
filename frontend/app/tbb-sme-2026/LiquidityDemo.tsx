@@ -85,6 +85,12 @@ type CompanyProfile = {
       income_volatility: "low" | "medium" | "high";
     };
   };
+  quick_estimate_eligibility: {
+    status: "ELIGIBLE" | "CAUTION" | "NOT_RECOMMENDED";
+    can_run_quick_estimate: boolean;
+    requires_human_confirmation: boolean;
+    reasons: string[];
+  };
 };
 
 type AdjustmentRecommendation = {
@@ -360,6 +366,14 @@ function buildFallbackProfile(company: CompanyMatch): CompanyProfile {
         },
         income_volatility: "medium",
       },
+    },
+    quick_estimate_eligibility: {
+      status: "CAUTION",
+      can_run_quick_estimate: true,
+      requires_human_confirmation: true,
+      reasons: [
+        "目前只取得公司搜尋層級的官方資料，先以保守估算提供快速評估。",
+      ],
     },
   };
 }
@@ -746,6 +760,26 @@ export default function LiquidityDemo() {
                 </div>
               </div>
 
+              <div
+                className={`${styles.eligibilityGate} ${styles[`eligibility_${companyProfile.quick_estimate_eligibility.status}`] ?? ""}`}
+              >
+                <div>
+                  <span>快速估算適用性</span>
+                  <strong>
+                    {companyProfile.quick_estimate_eligibility.status === "ELIGIBLE"
+                      ? "可先使用"
+                      : companyProfile.quick_estimate_eligibility.status === "CAUTION"
+                        ? "可用，但需注意"
+                        : "不建議直接使用"}
+                  </strong>
+                </div>
+                <ul>
+                  {companyProfile.quick_estimate_eligibility.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+
               <div className={styles.quickActionBar}>
                 <div>
                   <span>最快路徑</span>
@@ -754,9 +788,16 @@ export default function LiquidityDemo() {
                 <button
                   type="button"
                   onClick={() => void runCustomForecast()}
-                  disabled={loading}
+                  disabled={
+                    loading ||
+                    companyProfile.quick_estimate_eligibility.can_run_quick_estimate === false
+                  }
                 >
-                  {loading ? "正在評估…" : "立即快速評估"}
+                  {loading
+                    ? "正在評估…"
+                    : companyProfile.quick_estimate_eligibility.can_run_quick_estimate
+                      ? "立即快速評估"
+                      : "此公司不適合快速估算"}
                 </button>
               </div>
             </section>

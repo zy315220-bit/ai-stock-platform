@@ -227,3 +227,16 @@
   .engineSeal span,.engineSeal small,.stressList small,.panelLabel span,
   .adjustmentGrid p,.adjustmentBenefit{font-size:10px}
 }
+
+.boundaries{width:min(1360px,100%);margin:auto;padding:82px max(5vw,28px);border-top:1px solid var(--line);background:#eee8dd}
+.boundaries h2{margin:14px 0 0;max-width:950px;font-size:clamp(30px,4vw,54px);letter-spacing:-.045em;line-height:1.05}
+.boundaryGrid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:30px;border:1px solid var(--ink);background:var(--surface)}
+.boundaryGrid article{min-height:190px;padding:22px;border-right:1px solid var(--line)}
+.boundaryGrid article:last-child{border-right:0}
+.boundaryGrid strong{font-size:13px}
+.boundaryGrid p{margin:28px 0 0;color:var(--muted);font-size:9px;line-height:1.7}
+.sourceLinks{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;padding:18px 0 0}
+.sourceLinks span{color:var(--muted);font:900 8px ui-monospace,SFMono-Regular,Menlo,monospace}
+.sourceLinks a{color:var(--ink);font-size:9px;font-weight:800;text-underline-offset:3px}
+@media(max-width:900px){.boundaryGrid{grid-template-columns:1fr 1fr}.boundaryGrid article:nth-child(2){border-right:0}.boundaryGrid article:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+@media(max-width:620px){.boundaryGrid{grid-template-columns:1fr}.boundaryGrid article{min-height:0;border-right:0;border-bottom:1px solid var(--line)}.boundaryGrid article:last-child{border-bottom:0}.boundaryGrid p,.sourceLinks a{font-size:10px}}

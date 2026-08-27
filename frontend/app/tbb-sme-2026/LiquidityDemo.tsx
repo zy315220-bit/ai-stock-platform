@@ -230,12 +230,6 @@ function prob(value: number) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function riskLabel(value: number) {
-  if (value >= 0.5) return "高風險";
-  if (value >= 0.2) return "需注意";
-  return "穩定";
-}
-
 function probabilityDisplay(item: Horizon) {
   if (item.shortfall_breach_count === 0) {
     return {
@@ -408,8 +402,6 @@ export default function LiquidityDemo() {
   useEffect(() => {
     const query = form.company_name.trim();
     if (!query || selectedCompany?.name === query) {
-      setCompanyMatches([]);
-      setCompanySearching(false);
       return;
     }
 
@@ -462,6 +454,7 @@ export default function LiquidityDemo() {
   async function selectCompany(company: CompanyMatch) {
     setSelectedCompany(company);
     setCompanyMatches([]);
+    setCompanySearching(false);
     setProfileFailed(false);
     setProfileLoading(true);
     setAdvancedOpen(false);
@@ -627,10 +620,12 @@ export default function LiquidityDemo() {
                   setProfileFailed(false);
                   setAdvancedOpen(false);
                   setData(null);
-                  setForm((current) => ({
+                  setCompanyMatches([]);
+                  setCompanySearching(false);
+                  setForm({
                     ...emptyInput,
                     company_name: event.target.value,
-                  }));
+                  });
                 }}
                 required
               />

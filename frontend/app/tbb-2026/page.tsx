@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import SuitabilityDemo from "./SuitabilityDemo";
 import styles from "./tbb.module.css";
+
+export const metadata: Metadata = {
+  title: "AI Wealth Research Copilot｜2026 臺灣企銀智慧理財競賽版",
+  description: "面向高資產與企業主財管場景的可稽核 AI 研究副駕駛：先建立風險邊界，再經 Research Gate、人工覆核與完整證據追溯。",
+  alternates: { canonical: "/tbb-2026" },
+  robots: { index: false, follow: false },
+};
 
 const workflow = [
   ["01", "建立風險邊界", "只收最小必要的風險偏好，不要求姓名、身分證或帳號。"],

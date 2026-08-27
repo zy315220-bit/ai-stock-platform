@@ -24,6 +24,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+      - run: pip install pip-audit ruff
+      - run: pip-audit -r requirements.txt
+      - run: ruff check app/services/sme_liquidity.py app/api/sme_liquidity.py tests/test_sme_liquidity.py
       - run: PYTHONPATH=. pytest -q tests/test_sme_liquidity.py
 
   frontend:

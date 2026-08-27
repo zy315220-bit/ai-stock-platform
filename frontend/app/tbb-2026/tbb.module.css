@@ -1869,6 +1869,63 @@
   line-height: 1.6;
 }
 
+
+.sourceSection {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.3fr);
+  gap: clamp(36px, 7vw, 92px);
+  width: min(1400px, 100%);
+  margin: 0 auto;
+  padding: 72px max(5vw, 28px);
+  border-top: 1px solid var(--ink);
+}
+
+.sourceSection h2 {
+  margin: 12px 0 0;
+  font-size: clamp(28px, 3.5vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.sourceSection p {
+  max-width: 520px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.sourceLinks {
+  border-top: 1px solid var(--ink);
+}
+
+.sourceLinks a {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.42fr) minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.sourceLinks a:hover strong,
+.sourceLinks a:focus-visible strong {
+  color: var(--copper);
+}
+
+.sourceLinks span {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+}
+
+.sourceLinks strong {
+  font-size: 11px;
+  line-height: 1.5;
+  transition: color 150ms ease;
+}
+
 .footer {
   display: grid;
   grid-template-columns: 1fr minmax(320px, 0.8fr);
@@ -1990,6 +2047,7 @@
   .bridgeHeader,
   .researchGrid,
   .methodsPanel,
+  .sourceSection,
   .footer {
     grid-template-columns: 1fr;
   }
@@ -2284,6 +2342,15 @@
   .methodGrid article,
   .methodGrid article:nth-child(even) {
     border-right: 0;
+  }
+
+  .sourceSection {
+    padding: 58px 20px;
+  }
+
+  .sourceLinks a {
+    grid-template-columns: 1fr;
+    gap: 7px;
   }
 
   .footer {

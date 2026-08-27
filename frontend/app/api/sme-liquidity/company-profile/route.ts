@@ -368,19 +368,26 @@ export async function GET(request: NextRequest) {
   const basicUrl = new URL(BASIC_ENDPOINT);
   basicUrl.searchParams.set("$format", "json");
   basicUrl.searchParams.set("$filter", `Business_Accounting_NO eq ${businessNo}`);
+  basicUrl.searchParams.set("$skip", "0");
+  basicUrl.searchParams.set("$top", "50");
 
   const businessUrl = new URL(BUSINESS_ENDPOINT);
   businessUrl.searchParams.set("$format", "json");
   businessUrl.searchParams.set("$filter", `Business_Accounting_NO eq ${businessNo}`);
+  businessUrl.searchParams.set("$skip", "0");
+  businessUrl.searchParams.set("$top", "50");
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
 
   try {
-    const [basicPayload, businessPayload] = await Promise.all([
-      fetchJson(basicUrl, controller.signal),
-      fetchJson(businessUrl, controller.signal),
-    ]);
+    const basicPayload = await fetchJson(basicUrl, controller.signal);
+    let businessPayload: unknown = [];
+    try {
+      businessPayload = await fetchJson(businessUrl, controller.signal);
+    } catch {
+      businessPayload = [];
+    }
 
     const basic = firstObject(basicPayload);
     if (!basic) {

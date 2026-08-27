@@ -69,6 +69,10 @@ type Decision = {
 };
 
 type ResearchCandidate = {
+  stock_code?: string;
+  candidate_id?: string;
+  strategy_family?: string;
+  gate_reasons?: string[];
   confirmation_gate_pass_count?: number;
   confirmation_gate_total?: number;
   eligible_for_one_shot_holdout?: boolean;
@@ -78,6 +82,8 @@ type ResearchCandidate = {
   validation?: {
     statistical_quality_pass?: boolean;
     deflated_sharpe_pass?: boolean;
+    max_drawdown_percent?: number;
+    completed_trades?: number;
   };
   model_selection?: {
     cscv_pbo_pass?: boolean;
@@ -96,6 +102,7 @@ type ResearchStatus = {
     generated_at_utc?: string;
     universe_size?: number;
     completed_symbol_count?: number;
+    candidate_count?: number;
     eligible_candidate_count?: number;
     holdout_opened?: boolean;
     integrity_status?: string;
@@ -107,6 +114,7 @@ type ResearchStatus = {
       holdout_feedback_used?: boolean;
     };
     top_candidate?: ResearchCandidate | null;
+    candidates?: ResearchCandidate[];
   } | null;
   system_audit?: {
     system_status?: "OPERATIONAL" | "FAIL_CLOSED";
@@ -387,6 +395,30 @@ export default function SuitabilityDemo() {
   const evidenceReleaseBlocked =
     !snapshot || (snapshot.eligible_candidate_count ?? 0) === 0 || certifiedCount === 0;
   const gateRows = researchGateRows(researchStatus);
+  const profileFilteredCandidates = (snapshot?.candidates ?? []).map((item) => {
+    const drawdown = item.validation?.max_drawdown_percent;
+    const profileBoundaryPass = Boolean(
+      decision &&
+        typeof drawdown === "number" &&
+        Number.isFinite(drawdown) &&
+        drawdown <= decision.max_research_drawdown_percent,
+    );
+    const researchGatePass = Boolean(item.eligible_for_one_shot_holdout);
+    return {
+      item,
+      drawdown,
+      profileBoundaryPass,
+      researchGatePass,
+      combinedPass: profileBoundaryPass && researchGatePass,
+    };
+  });
+  const profileBoundaryPassCount = profileFilteredCandidates.filter(
+    (row) => row.profileBoundaryPass,
+  ).length;
+  const combinedPassCount = profileFilteredCandidates.filter(
+    (row) => row.combinedPass,
+  ).length;
+  const visibleProfileCandidates = profileFilteredCandidates.slice(0, 5);
 
   return (
     <section className={styles.demoShell} id="demo" aria-labelledby="demo-title">
@@ -819,6 +851,133 @@ export default function SuitabilityDemo() {
             </p>
           </aside>
         </div>
+
+        <section
+          className={styles.profileResearchBridge}
+          aria-labelledby="profile-research-title"
+        >
+          <div className={styles.bridgeHeader}>
+            <div>
+              <span className={styles.kicker}>04 · 客戶 × 研究雙閘門</span>
+              <h2 id="profile-research-title">同一個研究候選，不該適合所有企業主。</h2>
+              <p>
+                先看候選本身是否通過 Research Gate，再檢查它的歷史最大回撤是否落在
+                目前企業主輪廓的研究邊界內。任一層不通過，就不能進理專證據包。
+              </p>
+            </div>
+            <div className={styles.bridgePolicy}>
+              <span>目前客戶邊界</span>
+              <strong>
+                {decision
+                  ? `${decision.risk_code} · 最大回撤 ${decision.max_research_drawdown_percent}%`
+                  : "尚未建立"}
+              </strong>
+              <small>切換上方三種情境，這裡會即時重算。</small>
+            </div>
+          </div>
+
+          <div className={styles.bridgeStats}>
+            <div>
+              <span>研究候選</span>
+              <strong>{snapshot?.candidate_count ?? 0}</strong>
+              <small>最新完整快照</small>
+            </div>
+            <div>
+              <span>符合客戶回撤邊界</span>
+              <strong>{profileBoundaryPassCount}</strong>
+              <small>只代表風險邊界通過</small>
+            </div>
+            <div>
+              <span>研究 Gate + 客戶 Gate</span>
+              <strong>{combinedPassCount}</strong>
+              <small>仍未等於可對客</small>
+            </div>
+            <div>
+              <span>Final Holdout 正式認證</span>
+              <strong>{certifiedCount}</strong>
+              <small>最後仍需理專覆核</small>
+            </div>
+          </div>
+
+          <div className={styles.bridgeTableWrap}>
+            <table className={styles.bridgeTable}>
+              <thead>
+                <tr>
+                  <th>候選</th>
+                  <th>Research Gate</th>
+                  <th>歷史最大回撤</th>
+                  <th>客戶風險 Gate</th>
+                  <th>目前狀態</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleProfileCandidates.length > 0 ? (
+                  visibleProfileCandidates.map(
+                    ({ item, drawdown, profileBoundaryPass, researchGatePass }) => {
+                      const label =
+                        item.stock_code && item.strategy_family
+                          ? `${item.stock_code} · ${item.strategy_family.replaceAll("_", " ")}`
+                          : item.stock_code ?? item.candidate_id ?? "未知候選";
+                      const gateCount = `${item.confirmation_gate_pass_count ?? 0}/${item.confirmation_gate_total ?? 7}`;
+
+                      return (
+                        <tr key={item.candidate_id ?? label}>
+                          <td>
+                            <strong>{label}</strong>
+                            <small>{item.candidate_id ?? "—"}</small>
+                          </td>
+                          <td>
+                            <span
+                              className={
+                                researchGatePass ? styles.bridgePass : styles.bridgeHold
+                              }
+                            >
+                              {researchGatePass ? "HOLDOUT-READY" : `HOLD · ${gateCount}`}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>
+                              {typeof drawdown === "number" ? `${drawdown}%` : "—"}
+                            </strong>
+                          </td>
+                          <td>
+                            <span
+                              className={
+                                profileBoundaryPass
+                                  ? styles.bridgePass
+                                  : styles.bridgeBlock
+                              }
+                            >
+                              {profileBoundaryPass ? "PASS" : "BLOCK"}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>
+                              {!researchGatePass
+                                ? "研究證據不足"
+                                : !profileBoundaryPass
+                                  ? "超出客戶邊界"
+                                  : "可進人工覆核"}
+                            </strong>
+                          </td>
+                        </tr>
+                      );
+                    },
+                  )
+                ) : (
+                  <tr>
+                    <td colSpan={5}>目前沒有可列示的完整研究候選，系統維持鎖定。</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <p className={styles.bridgeFootnote}>
+            對客放行必須依序通過：Research Gate → 客戶風險邊界 → 一次性 Final Holdout
+            認證 → 理專人工覆核。這個 PoC 不會把「回測好看」直接變成商品推薦。
+          </p>
+        </section>
       </section>
     </section>
   );

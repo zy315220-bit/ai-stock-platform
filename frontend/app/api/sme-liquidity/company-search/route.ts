@@ -19,7 +19,7 @@ function cleanQuery(value: string) {
   return value
     .normalize("NFKC")
     .trim()
-    .replace(/[^p{L}p{N}s·・-（）()股份有限公司企業商行]/gu, "")
+    .replace(/[^\p{L}\p{N}\s·・\-（）()股份有限公司企業商行]/gu, "")
     .slice(0, 24);
 }
 

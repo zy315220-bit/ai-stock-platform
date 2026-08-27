@@ -12,7 +12,7 @@ from app.services.research_history import (
 
 
 class ResearchHistoryTests(unittest.TestCase):
-    def test_loader_requests_sixty_official_months(self) -> None:
+    def test_loader_requests_one_hundred_twenty_official_months(self) -> None:
         calls: list[tuple[str, dict]] = []
 
         def downloader(code: str, **kwargs) -> pd.DataFrame:
@@ -38,7 +38,7 @@ class ResearchHistoryTests(unittest.TestCase):
         for _, kwargs in calls:
             self.assertTrue(kwargs["prefer_official"])
             self.assertFalse(kwargs["update_with_intraday"])
-            self.assertEqual(kwargs["official_months"], 60)
+            self.assertEqual(kwargs["official_months"], 120)
 
         self.assertTrue(coverage["0050"]["long_horizon_qualified"])
 

@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from app.services.scanner_service import SCANNER_UNIVERSE
+from app.services.research_universe import DAILY_RESEARCH_UNIVERSE
 from app.services.research_lab.evolution import SEARCH_SPACE_SCHEMA
 from app.services.research_lab.training_memory import (
     TRAIN_DATA_IDENTITY_SCHEMA,
@@ -201,7 +201,7 @@ def aggregate_payloads(
     payloads: Iterable[dict[str, Any]],
     *,
     as_of_date: date,
-    expected_universe: tuple[str, ...] = SCANNER_UNIVERSE,
+    expected_universe: tuple[str, ...] = DAILY_RESEARCH_UNIVERSE,
 ) -> dict[str, Any]:
     rows = list(payloads)
     by_symbol = {str(row.get("stock_code") or "").upper(): row for row in rows}

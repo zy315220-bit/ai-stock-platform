@@ -198,6 +198,13 @@ const cases: Case[] = [
 ];
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "not found" },
+      { status: 404, headers: { "cache-control": "no-store" } },
+    );
+  }
+
   const base = new URL("/api/sme-liquidity/forecast", request.url);
   const results: Array<Record<string, unknown>> = [];
 

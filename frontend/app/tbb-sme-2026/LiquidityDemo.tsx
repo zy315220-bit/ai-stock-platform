@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import styles from "./sme.module.css";
 
 type Horizon = {
@@ -19,6 +19,26 @@ type Stress = {
   shortfall_probability: number;
   ending_cash_p50: number;
   median_first_breach_day: number | null;
+};
+
+type CompanyMatch = {
+  business_no: string;
+  name: string;
+  status: string;
+  capital: number | null;
+  paid_in_capital: number | null;
+  location: string;
+  responsible_name: string;
+};
+
+type AdjustmentRecommendation = {
+  code: string;
+  title: string;
+  rationale: string;
+  before_shortfall_probability: number;
+  after_shortfall_probability: number;
+  improvement_percentage_points: number;
+  ending_cash_p50_after: number;
 };
 
 type Forecast = {
@@ -41,6 +61,7 @@ type Forecast = {
   stress_tests: Stress[];
   drivers: Array<{ driver: string; exposure_amount: number }>;
   rm_next_step: { route: string; reason: string };
+  adjustment_recommendations: AdjustmentRecommendation[];
   guardrails: {
     is_credit_decision: boolean;
     is_loan_approval: boolean;
@@ -155,6 +176,42 @@ export default function LiquidityDemo() {
   const [data, setData] = useState<Forecast | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [companyMatches, setCompanyMatches] = useState<CompanyMatch[]>([]);
+  const [companySearching, setCompanySearching] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<CompanyMatch | null>(null);
+
+  useEffect(() => {
+    const query = form.company_name.trim();
+    if (!query || selectedCompany?.name === query) {
+      setCompanyMatches([]);
+      setCompanySearching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setCompanySearching(true);
+      try {
+        const response = await fetch(
+          `/api/sme-liquidity/company-search?q=${encodeURIComponent(query)}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        if (!response.ok) throw new Error("company search unavailable");
+        const payload = (await response.json()) as { results?: CompanyMatch[] };
+        setCompanyMatches(payload.results ?? []);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setCompanyMatches([]);
+      } finally {
+        setCompanySearching(false);
+      }
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [form.company_name, selectedCompany]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -269,24 +326,89 @@ export default function LiquidityDemo() {
         </div>
 
         <div className={styles.inputGrid}>
-          {inputFields.map((field) => (
-            <label key={field.key} className={styles.inputField}>
-              <span>{field.label}</span>
-              <input
-                type={field.type ?? "number"}
-                min={field.type === "number" ? "0" : undefined}
-                value={form[field.key]}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    [field.key]: event.target.value,
-                  }))
-                }
-                required
-              />
-              <small>{field.hint}</small>
-            </label>
-          ))}
+          {inputFields.map((field) =>
+            field.key === "company_name" ? (
+              <label
+                key={field.key}
+                className={`${styles.inputField} ${styles.companySearchField}`}
+              >
+                <span>公司名稱搜尋</span>
+                <div className={styles.companySearchBox}>
+                  <input
+                    type="text"
+                    value={form.company_name}
+                    autoComplete="off"
+                    placeholder="打一個字，例如：台"
+                    onChange={(event) => {
+                      setSelectedCompany(null);
+                      setForm((current) => ({
+                        ...current,
+                        company_name: event.target.value,
+                      }));
+                    }}
+                    required
+                  />
+                  {companySearching && (
+                    <small className={styles.companySearchState}>搜尋中…</small>
+                  )}
+                  {!companySearching && companyMatches.length > 0 && (
+                    <div className={styles.companySuggestions} role="listbox">
+                      {companyMatches.map((company) => (
+                        <button
+                          key={`${company.business_no}-${company.name}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCompany(company);
+                            setCompanyMatches([]);
+                            setForm((current) => ({
+                              ...current,
+                              company_name: company.name,
+                            }));
+                          }}
+                        >
+                          <strong>{company.name}</strong>
+                          <span>
+                            統編 {company.business_no}
+                            {company.capital
+                              ? ` · 資本額 ${money(company.capital)}`
+                              : ""}
+                          </span>
+                          {company.location && <small>{company.location}</small>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedCompany ? (
+                  <small className={styles.companySelected}>
+                    已選取官方公司資料 · 統編 {selectedCompany.business_no}
+                    {selectedCompany.status ? ` · ${selectedCompany.status}` : ""}
+                  </small>
+                ) : (
+                  <small>
+                    輸入 1 個字後顯示官方登記候選；也可以自行輸入 Demo 名稱
+                  </small>
+                )}
+              </label>
+            ) : (
+              <label key={field.key} className={styles.inputField}>
+                <span>{field.label}</span>
+                <input
+                  type={field.type ?? "number"}
+                  min={field.type === "number" ? "0" : undefined}
+                  value={form[field.key]}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      [field.key]: event.target.value,
+                    }))
+                  }
+                  required
+                />
+                <small>{field.hint}</small>
+              </label>
+            ),
+          )}
           <label className={styles.inputField}>
             <span>收入波動程度</span>
             <select
@@ -459,9 +581,47 @@ export default function LiquidityDemo() {
             </section>
           </div>
 
+          {data.adjustment_recommendations?.length > 0 && (
+            <section className={styles.adjustmentPanel}>
+              <div className={styles.adjustmentHead}>
+                <div>
+                  <span className={styles.kicker}>STEP 6 · 可以怎麼調整？</span>
+                  <h3>不是只告訴你有風險，系統會重跑「如果這樣做」的結果。</h3>
+                  <p>
+                    以下比較的是同一組「大客戶延遲＋營收下降＋台幣升值」複合壓力，
+                    使用相同隨機種子做反事實測試。是模型估計，不是保證效果。
+                  </p>
+                </div>
+              </div>
+              <div className={styles.adjustmentGrid}>
+                {data.adjustment_recommendations.map((item, index) => (
+                  <article key={item.code}>
+                    <div className={styles.adjustmentRank}>0{index + 1}</div>
+                    <h4>{item.title}</h4>
+                    <p>{item.rationale}</p>
+                    <div className={styles.adjustmentImpact}>
+                      <div>
+                        <span>調整前</span>
+                        <strong>{prob(item.before_shortfall_probability)}</strong>
+                      </div>
+                      <span aria-hidden="true">→</span>
+                      <div>
+                        <span>調整後</span>
+                        <strong>{prob(item.after_shortfall_probability)}</strong>
+                      </div>
+                    </div>
+                    <div className={styles.adjustmentBenefit}>
+                      估計降低 {item.improvement_percentage_points.toFixed(1)} 個百分點
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className={styles.rmPanel}>
             <div>
-              <span>STEP 6 · 銀行端會拿到什麼</span>
+              <span>STEP 7 · 銀行端會拿到什麼</span>
               <h3>{data.rm_next_step.route}</h3>
               <p>{data.rm_next_step.reason}</p>
             </div>

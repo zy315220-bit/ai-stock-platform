@@ -1,0 +1,43 @@
+name: TBB SME Liquidity CI
+
+on:
+  push:
+    branches:
+      - competition/tbb-2026-sme-liquidity
+  pull_request:
+    paths:
+      - "backend/app/services/sme_liquidity.py"
+      - "backend/app/api/sme_liquidity.py"
+      - "backend/tests/test_sme_liquidity.py"
+      - "frontend/app/tbb-sme-2026/**"
+      - "frontend/app/api/sme-liquidity/**"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest -q tests/test_sme_liquidity.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build

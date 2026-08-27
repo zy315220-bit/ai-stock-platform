@@ -1,21 +1,20 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import SuitabilityDemo from "./SuitabilityDemo";
+import TrustResearchDemo from "./TrustResearchDemo";
 import styles from "./tbb.module.css";
 
 export const metadata: Metadata = {
-  title: "企富雙衡｜企業主智慧理財風險副駕駛",
+  title: "TrustInvest AI｜AI 投資研究可信度驗證平台",
   description:
-    "把企業與家庭風險一起納入的智慧理財 PoC：雙軸適合度、壓力情境、AI Research Gate 與理專人工覆核。",
-  applicationName: "企富雙衡 BizWealth Guard",
+    "把 AI 投資研究從黑箱推薦升級成可驗證、可拒絕、可稽核的智慧理財研究流程。",
+  applicationName: "TrustInvest AI",
   keywords: [
     "2026 臺灣企銀校園金融科技創意挑戰賽",
     "智慧理財",
-    "企業主財富管理",
     "AI 投資研究",
-    "適合度",
-    "金融安全",
+    "可信 AI",
+    "回測過擬合",
+    "投資研究驗證",
   ],
   alternates: { canonical: "/tbb-2026" },
   robots: { index: false, follow: false },
@@ -23,116 +22,65 @@ export const metadata: Metadata = {
     type: "website",
     locale: "zh_TW",
     url: "/tbb-2026",
-    siteName: "企富雙衡 BizWealth Guard",
-    title: "企富雙衡｜企業主智慧理財風險副駕駛",
+    siteName: "TrustInvest AI",
+    title: "TrustInvest AI｜會拒絕錯誤推薦的智慧理財研究平台",
     description:
-      "企業主不是只有一張風險問卷。先合併企業與家庭風險，再讓 AI 研究證據接受嚴格 Gate。",
+      "不是讓 AI 產生更多投資建議，而是先驗證這個研究值不值得相信。",
   },
   twitter: {
     card: "summary",
-    title: "企富雙衡｜企業主智慧理財風險副駕駛",
-    description: "雙帳本風險邊界 × AI Research Gate × 理專人工覆核。",
+    title: "TrustInvest AI",
+    description: "AI 研究 → 7 Gates → Final Holdout → 可信度結論。",
   },
 };
 
-const officialPainPoints = [
-  ["01", "客戶輪廓不完整", "一般風險問卷看不到企業現金流與家庭資產的連動。"],
-  ["02", "個人化建議不足", "同樣說要成長，企業主與受薪族能承擔的風險完全不同。"],
-  ["03", "服務成本與效率拉扯", "理專要跨資料、找證據、做說明，流程難以一致重現。"],
-  ["04", "不當推介與詐騙風險", "生成式 AI 若直接對客推薦，會把錯誤放大成金融傷害。"],
+const painPoints = [
+  ["01", "回測漂亮 ≠ 真實可靠", "高報酬、高勝率可能只是小樣本、單一行情或參數剛好配到歷史。"],
+  ["02", "一般客戶看不懂統計陷阱", "使用者往往只看到推薦結果，看不到模型曾經嘗試多少次、失敗多少次。"],
+  ["03", "AI 很會生成，卻不會自己踩煞車", "若沒有獨立驗證層，錯誤研究很容易被包裝成有自信的投資結論。"],
+  ["04", "銀行需要可追溯的研究流程", "研究來源、驗證狀態、淘汰理由與最終放行依據都必須可以被覆核。"],
 ];
 
-const workflow = [
-  {
-    number: "01",
-    title: "雙帳本輪廓",
-    body: "家庭端看意願、期限與流動性；企業端看收入依賴與財富集中。",
-    tag: "RULE ENGINE",
-  },
-  {
-    number: "02",
-    title: "硬性風險邊界",
-    body: "最終等級取意願與能力較低者；高流動性壓力等條件直接限縮研究權限。",
-    tag: "DETERMINISTIC",
-  },
-  {
-    number: "03",
-    title: "AI 研究證據",
-    body: "沿用既有 Research Lab 自動產生候選，執行 Walk-forward、DSR、PBO、SPA。",
-    tag: "OPEN METHODS",
-  },
-  {
-    number: "04",
-    title: "理專覆核與稽核",
-    body: "只有通過 Gate 的研究能進入證據包；對客內容仍由理專決定並留下指紋。",
-    tag: "HUMAN CONTROL",
-  },
+const flow = [
+  ["01", "AI 產生研究候選", "沿用既有 Research Lab，每日自動搜尋不同策略與參數。"],
+  ["02", "獨立驗證", "Validation、Walk-forward、牛熊盤整，不讓 Train 結果直接當答案。"],
+  ["03", "統計可信度 Gate", "DSR、PBO、SPA、Wilson 等方法檢查多重嘗試與過擬合。"],
+  ["04", "Final Holdout", "最後一次、不能反覆偷看的測試；沒資格就不開。"],
+  ["05", "簡化成客戶看得懂的結論", "可進一步研究／證據不足／鎖定，並列出原因。"],
 ];
 
-const architecture = [
-  {
-    step: "銀行通路",
-    title: "網銀／分行／理專端",
-    body: "以既有 KYC 為底，只補問企業依賴、集中區間與目標；不重複索取身分資料。",
-  },
-  {
-    step: "風險決策層",
-    title: "企富雙衡 Guard",
-    body: "規則化雙軸評分、硬上限、三種壓力情境與可重現的決策指紋。",
-  },
-  {
-    step: "研究證據層",
-    title: "既有 AI Research Lab",
-    body: "Train 搜尋與 Validation／Final Holdout 隔離；任何不完整狀態都禁止發布。",
-  },
-  {
-    step: "服務工作台",
-    title: "理專證據包",
-    body: "呈現衝突、資金桶區間、淘汰理由與後續動作，不把候選偷換成商品推薦。",
-  },
-];
-
-const valueRows = [
-  ["客戶保護", "輪廓衝突解決率、BLOCK 案人工處理完成率", "未解決衝突不得進入商品討論"],
-  ["理專效率", "從輪廓完成到證據包可覆核的中位時間", "比較現行流程與 PoC；不先捏造節省比例"],
-  ["研究品質", "Gate 淘汰率、證據完整率、錯誤發布數", "未認證研究對客發布 = 0"],
-  ["資安合規", "額外欄位拒絕率、權限繞過、稽核指紋覆蓋率", "測試攻擊必須被拒絕且不留敏感資料"],
-  ["經營價值", "後續諮詢完成率、資產盤點完成率、留存率", "先做企業主小規模 A/B 先導，不宣稱未驗證營收"],
-];
-
-const auditRows = [
-  ["資料最小化", "PoC 僅收 8 個粗粒度選項；姓名、帳號、身分證、精確資產皆不需要", "MINIMIZED"],
-  ["輸入防護", "固定 schema、數值 1–4、額外欄位拒絕、JSON 限 2 KB、後端 8 秒逾時", "ENFORCED"],
-  ["瀏覽器邊界", "跨站瀏覽器請求拒絕、API no-store、安全標頭與頁面 CSP", "HARDENED"],
-  ["交易權限", "原型沒有下單、付款、資金移轉或憑證能力", "NONE"],
-  ["研究隔離", "Train 不讀 Validation／Holdout 回饋，Final Holdout 在搜尋期間鎖定", "LOCKED"],
-  ["失敗策略", "研究、稽核或服務不可用就停止；保留上一份完整快照，不補假答案", "FAIL-CLOSED"],
-  ["人工責任", "AI 只做研究與證據整理；正式商品適合度與對客內容仍須理專覆核", "REQUIRED"],
+const bankValues = [
+  ["研究品質", "把『漂亮回測』和『可信研究』分開", "降低把偶然績效當能力的風險"],
+  ["理專效率", "把複雜驗證結果翻成一頁式證據", "不用逐一閱讀大量回測報告"],
+  ["客戶保護", "證據不足時系統主動拒絕放行", "不是每個 AI 結論都要變成推薦"],
+  ["稽核治理", "保留 run ID、資料指紋、Gate 與淘汰理由", "能回答『為什麼當時會出現這個研究』"],
 ];
 
 const methods = [
-  ["Walk-forward", "跨時間切片檢查策略是否只記住單一行情。"],
-  ["Deflated Sharpe Ratio", "修正大量嘗試後偶然出現的漂亮績效。"],
-  ["CSCV / PBO", "估計選到過擬合策略的機率，而非只看冠軍。"],
-  ["Hansen SPA", "檢查候選是否真的優於基準，不把運氣當能力。"],
+  ["Walk-forward", "換不同時間區段重跑，檢查策略是不是只記住某一段行情。"],
+  ["Wilson lower bound", "交易樣本少時，不讓 100% 勝率看起來比它實際更可靠。"],
+  ["Deflated Sharpe Ratio", "修正大量嘗試後，偶然挑到漂亮 Sharpe 的問題。"],
+  ["CSCV / PBO", "估計模型選擇過程挑到過擬合策略的機率。"],
+  ["Hansen SPA", "檢查候選是否真的有足夠證據優於基準。"],
+  ["Final Holdout", "最後一次保留測試；搜尋過程不能拿它反覆調參。"],
 ];
 
 export default function Tbb2026Page() {
   return (
     <main className={styles.page}>
       <nav className={styles.nav} aria-label="主要導覽">
-        <a className={styles.brand} href="#top" aria-label="企富雙衡首頁">
-          <span className={styles.brandMark}>企富</span>
+        <a className={styles.brand} href="#top" aria-label="TrustInvest AI 首頁">
+          <span className={styles.brandMark}>TI</span>
           <span>
-            企富雙衡
-            <small>BIZWEALTH GUARD</small>
+            TrustInvest AI
+            <small>TRUSTED RESEARCH LAYER</small>
           </span>
         </a>
         <div className={styles.navLinks}>
-          <a href="#thesis">命題</a>
+          <a href="#problem">痛點</a>
           <a href="#demo">操作 Demo</a>
-          <a href="#architecture">落地架構</a>
-          <a href="#security">安全治理</a>
+          <a href="#flow">流程</a>
+          <a href="#bank-value">銀行價值</a>
         </div>
         <a
           className={styles.briefLink}
@@ -151,78 +99,54 @@ export default function Tbb2026Page() {
             <span>情境四 · 智慧理財</span>
           </div>
           <h1>
-            別把企業主，
+            AI 很會推薦。
             <br />
-            當成只有一張
+            但它的研究，
             <br />
-            <em>風險問卷</em>的投資人。
+            <em>真的可信嗎？</em>
           </h1>
           <p className={styles.heroLead}>
-            <strong>企富雙衡</strong>把企業現金流依賴與家庭理財需求放進同一個風險邊界，
-            再讓 AI 研究接受嚴格驗證。不是替客戶挑明牌，而是幫理專先發現「不能推薦的理由」。
+            <strong>TrustInvest AI</strong>
+            不是再做一個選股機器人，而是替 AI 投資研究加上一層
+            <strong>可信度驗證</strong>：回測再漂亮，只要證據不足，就不放行。
           </p>
           <div className={styles.heroActions}>
             <a className={styles.primaryLink} href="#demo">
-              操作三種企業主情境
+              直接驗一個真實候選
             </a>
-            <a className={styles.secondaryLink} href="#thesis">
-              看核心解法
+            <a className={styles.secondaryLink} href="#flow">
+              看它怎麼驗
             </a>
           </div>
           <p className={styles.prototypeNotice}>
-            獨立競賽 PoC · 非臺灣企銀官方服務 · 不收真實個資 · 不具交易權限
+            獨立競賽 PoC · 使用既有真實 Research Lab 快照 · 不保證獲利 · 不具自動下單權限
           </p>
         </div>
 
-        <aside className={styles.heroLedger} aria-label="企富雙衡決策示意">
+        <aside className={styles.heroLedger} aria-label="TrustInvest AI 核心判斷流程">
           <div className={styles.ledgerHead}>
-            <span>DUAL-LEDGER / 企業主輪廓</span>
-            <strong>LIVE POC</strong>
+            <span>AI RESEARCH / TRUST LAYER</span>
+            <strong>LIVE</strong>
           </div>
-          <div className={styles.ledgerColumns}>
-            <div>
-              <span>家庭帳</span>
-              <strong>投資意願</strong>
-              <ul>
-                <li>虧損承受</li>
-                <li>投資期限</li>
-                <li>流動需求</li>
-              </ul>
-            </div>
-            <div>
-              <span>企業帳</span>
-              <strong>實際能力</strong>
-              <ul>
-                <li>收入依賴</li>
-                <li>財富集中</li>
-                <li>雙重壓力</li>
-              </ul>
-            </div>
+          <div className={styles.heroCase}>
+            <span>表面看起來</span>
+            <strong>+47% 報酬 / 100% 勝率</strong>
+            <small>一般使用者很容易停在這裡</small>
           </div>
-          <div className={styles.ledgerRule}>
-            <span>決策規則</span>
-            <strong>取較低者，再套硬上限</strong>
+          <div className={styles.heroArrow}>↓</div>
+          <div className={styles.heroGateMini}>
+            <span>TRUST CHECK</span>
+            <strong>Validation · Walk-forward · DSR · PBO · SPA · Holdout</strong>
           </div>
-          <div className={styles.ledgerFlow}>
-            <div>
-              <span>AI RESEARCH</span>
-              <strong>候選證據</strong>
-            </div>
-            <span aria-hidden="true">→</span>
-            <div>
-              <span>7 GATES</span>
-              <strong>不合格就鎖住</strong>
-            </div>
-          </div>
-          <div className={styles.ledgerFoot}>
-            <span className={styles.pulse} aria-hidden="true" />
-            HUMAN REVIEW ALWAYS REQUIRED
+          <div className={styles.heroVerdict}>
+            <span>最後不是「買／賣」</span>
+            <strong>而是「這份研究值不值得信」</strong>
           </div>
         </aside>
       </section>
 
-      <section className={styles.problemStrip} aria-label="智慧理財官方痛點">
-        {officialPainPoints.map(([number, title, body]) => (
+      <section className={styles.problemStrip} id="problem" aria-label="核心痛點">
+        {painPoints.map(([number, title, body]) => (
           <article key={number}>
             <span>{number}</span>
             <strong>{title}</strong>
@@ -231,126 +155,114 @@ export default function Tbb2026Page() {
         ))}
       </section>
 
-      <section className={styles.section} id="thesis">
+      <section className={styles.section}>
         <div className={styles.sectionIntro}>
           <div>
             <span className={styles.kicker}>ONE PRECISE PROBLEM</span>
-            <h2>投資意願高，<br />不等於承受能力高。</h2>
+            <h2>
+              現在缺的不是更多推薦，
+              <br />
+              是推薦前的「驗證層」。
+            </h2>
           </div>
           <div className={styles.introBody}>
             <p>
-              企業主常同時面對營運週轉、股權集中、家庭開支與傳承需求。
-              一張只問投資經驗與虧損意願的問卷，可能把「敢承擔」誤判成「能承擔」。
+              AI 可以快速產生上百個策略、參數與投資結論，但一般客戶和理專很難知道：
+              這個結果是穩定能力，還是資料探勘後碰巧留下來的漂亮冠軍。
             </p>
             <p>
-              因此我們把受監管的風險邊界交給可重現規則，把 AI 放在它真正擅長的位置：
-              搜尋、驗證、整理研究證據；兩者不能互相越權。
+              TrustInvest AI 把這個黑箱拆成可檢查的流程。
+              <strong>沒有足夠證據就顯示失敗，而不是想辦法說服使用者。</strong>
             </p>
           </div>
         </div>
 
-        <div className={styles.thesisGrid}>
-          <article className={styles.thesisCard}>
-            <span>銀行優勢</span>
-            <strong>既有企業往來關係</strong>
-            <p>把企業金融理解延伸到企業主家庭財管，而非從零猜測客戶輪廓。</p>
-          </article>
-          <article className={styles.thesisCard}>
-            <span>產品差異</span>
-            <strong>先找衝突，再找機會</strong>
-            <p>成長目標、流動性與集中風險互相矛盾時，系統先停在人工覆核。</p>
-          </article>
-          <article className={styles.thesisCard}>
-            <span>技術原則</span>
-            <strong>AI 研究，規則守門</strong>
-            <p>生成式能力不直接決定風險等級；所有限制都能被說明、測試與稽核。</p>
-          </article>
-        </div>
-
-        <div className={styles.workflow} aria-label="企富雙衡流程">
-          {workflow.map((step) => (
-            <article className={styles.step} key={step.number}>
-              <div>
-                <span className={styles.stepNumber}>{step.number}</span>
-                <span className={styles.stepTag}>{step.tag}</span>
-              </div>
-              <h3>{step.title}</h3>
-              <p>{step.body}</p>
-            </article>
-          ))}
+        <div className={styles.whatYouGet}>
+          <div>
+            <span>使用者操作</span>
+            <strong>選一個 AI 研究候選</strong>
+          </div>
+          <div>
+            <span>系統評估</span>
+            <strong>7 個可信度 Gate + 統計證據</strong>
+          </div>
+          <div>
+            <span>最後得到</span>
+            <strong>可研究／證據不足／鎖定 + 原因</strong>
+          </div>
+          <div>
+            <span>交付方式</span>
+            <strong>目前直接顯示於頁面，不寄 Email</strong>
+          </div>
         </div>
       </section>
 
       <section className={styles.demoSection}>
-        <SuitabilityDemo />
+        <TrustResearchDemo />
       </section>
 
-      <section className={styles.section} id="architecture">
+      <section className={styles.section} id="flow">
         <div className={styles.sectionIntro}>
           <div>
-            <span className={styles.kicker}>BANK-READY PATH</span>
-            <h2>從 PoC 到銀行通路，<br />每一層都能替換。</h2>
+            <span className={styles.kicker}>TRUST PIPELINE</span>
+            <h2>
+              AI 可以找答案，
+              <br />
+              但不能自己決定自己是對的。
+            </h2>
           </div>
           <div className={styles.introBody}>
             <p>
-              目前可操作版本已完成匿名輪廓、決策 API 與真實研究快照；正式導入時，
-              再以銀行身分驗證、既有 KYC 與權限系統替換 PoC 輸入層。
-            </p>
-            <p>
-              核心判斷不依賴特定大模型，也不需要把客戶資料送到公開模型；
-              敏感資料可以留在銀行信任邊界內。
+              搜尋、驗證與最後考試分開。Train 階段不能讀取 Final Holdout，
+              Validation 的結果也不能拿回去偷偷優化同一輪搜尋。
             </p>
           </div>
         </div>
 
-        <div className={styles.architectureFlow}>
-          {architecture.map((item, index) => (
-            <article key={item.step}>
-              <div className={styles.architectureTopline}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <small>{item.step}</small>
-              </div>
-              <h3>{item.title}</h3>
-              <p>{item.body}</p>
+        <div className={styles.flowGrid}>
+          {flow.map(([number, title, body]) => (
+            <article key={number}>
+              <span>{number}</span>
+              <h3>{title}</h3>
+              <p>{body}</p>
             </article>
           ))}
         </div>
 
-        <div className={styles.scopeGrid}>
+        <div className={styles.methodsPanel}>
           <div>
-            <span className={styles.scopeLabel}>THIS POC · 已實作</span>
-            <ul>
-              <li>8 欄匿名、粗粒度企業主輪廓</li>
-              <li>雙軸決策、硬上限、配置討論框</li>
-              <li>3 種壓力情境與理專處理路由</li>
-              <li>串接既有 Research Lab 最新完整快照</li>
-              <li>輸入拒絕、no-store、fail-closed</li>
-            </ul>
+            <span className={styles.kicker}>OPEN METHODS</span>
+            <h3>不是自創一個「AI 信心分數」。</h3>
+            <p>
+              核心驗證建立在可公開查證的統計與模型選擇方法上，
+              再把結果翻譯成一般使用者看得懂的結論。
+            </p>
           </div>
-          <div>
-            <span className={styles.scopeLabel}>BANK PILOT · 需共同導入</span>
-            <ul>
-              <li>銀行 SSO、RBAC 與理專個案權限</li>
-              <li>以代碼化客戶鍵串接既有 KYC／CRM</li>
-              <li>法遵核定問卷、商品白名單與版控</li>
-              <li>不可竄改稽核軌跡與保存年限政策</li>
-              <li>紅隊測試、模型風險管理與人工申訴</li>
-            </ul>
+          <div className={styles.methodGrid}>
+            {methods.map(([title, body]) => (
+              <article key={title}>
+                <strong>{title}</strong>
+                <p>{body}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className={styles.valueSection} id="value">
+      <section className={styles.valueSection} id="bank-value">
         <div className={styles.sectionIntro}>
           <div>
-            <span className={styles.kicker}>MEASURABLE, NOT MADE-UP</span>
-            <h2>先定義驗收，<br />再談商業價值。</h2>
+            <span className={styles.kicker}>WHY A BANK CARES</span>
+            <h2>
+              對銀行來說，
+              <br />
+              「拒絕錯誤研究」本身就是價值。
+            </h2>
           </div>
           <div className={styles.introBody}>
             <p>
-              競賽 PoC 不拿假報酬、假用戶數或假節省比例包裝成果。
-              建議以既有企業金融往來且有財管需求的企業主做小規模先導，
-              同時衡量保護效果、理專效率與後續服務轉換。
+              這不是另一個和銀行搶著做推薦的工具，而是一個可以放在 AI 研究與理專／客戶之間的
+              <strong>治理與可信度中介層</strong>。
             </p>
           </div>
         </div>
@@ -359,131 +271,71 @@ export default function Tbb2026Page() {
           <table className={styles.valueTable}>
             <thead>
               <tr>
-                <th>價值面</th>
-                <th>PoC 實測指標</th>
-                <th>驗收原則</th>
+                <th>價值</th>
+                <th>TrustInvest AI 做什麼</th>
+                <th>銀行得到什麼</th>
               </tr>
             </thead>
             <tbody>
-              {valueRows.map(([dimension, metric, rule]) => (
-                <tr key={dimension}>
-                  <td>{dimension}</td>
-                  <td>{metric}</td>
-                  <td>{rule}</td>
+              {bankValues.map(([value, action, benefit]) => (
+                <tr key={value}>
+                  <td>{value}</td>
+                  <td>{action}</td>
+                  <td>{benefit}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        <div className={styles.pilotPath} aria-label="導入路徑">
-          <div><span>01</span><strong>影子模式</strong><small>不影響真實建議，與現行流程平行比較</small></div>
-          <div><span>02</span><strong>理專先導</strong><small>限定企業主客群，所有輸出人工確認</small></div>
-          <div><span>03</span><strong>受控擴大</strong><small>指標與資安驗收通過後才增加通路</small></div>
-        </div>
       </section>
 
-      <section className={styles.section} id="security">
+      <section className={styles.section}>
         <div className={styles.sectionIntro}>
           <div>
-            <span className={styles.kicker}>SECURITY & GOVERNANCE</span>
-            <h2>安全不是附錄，<br />是產品邏輯。</h2>
+            <span className={styles.kicker}>BOUNDARY</span>
+            <h2>我們很清楚它不是什麼。</h2>
           </div>
           <div className={styles.introBody}>
             <p>
-              對金融服務而言，「知道何時不能回答」和答案本身同樣重要。
-              本原型把資料最小化、最小權限、研究隔離與人工責任直接寫進流程。
+              TrustInvest AI 目前是<strong>投資研究可信度驗證 PoC</strong>。
+              它不保證報酬、不自動下單，也不把「通過研究驗證」等同於適合每一位客戶的個別商品建議。
             </p>
           </div>
         </div>
 
-        <div className={styles.auditTableWrap}>
-          <table className={styles.auditTable}>
-            <thead>
-              <tr>
-                <th>控制項</th>
-                <th>目前原型設計</th>
-                <th>狀態</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditRows.map(([control, design, status]) => (
-                <tr key={control}>
-                  <td>{control}</td>
-                  <td>{design}</td>
-                  <td className={styles.auditStatus}>{status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className={styles.methodsPanel}>
+        <div className={styles.scopeGrid}>
           <div>
-            <span className={styles.kicker}>OPEN RESEARCH BASIS</span>
-            <h3>不是自創術語，方法可公開查證。</h3>
-            <p>
-              既有 Research Lab 把常見的回測偏誤轉成程式 Gate；頁面公開顯示失敗，
-              沒有通過者就維持零認證。
-            </p>
-            <Link href="/research-lab" prefetch={false}>查看完整研究引擎 →</Link>
+            <span>已經有</span>
+            <ul>
+              <li>真實台股研究候選</li>
+              <li>每日自主研究</li>
+              <li>Validation / Walk-forward</li>
+              <li>DSR / PBO / SPA</li>
+              <li>Final Holdout 隔離</li>
+              <li>淘汰理由與研究指紋</li>
+            </ul>
           </div>
-          <div className={styles.methodGrid}>
-            {methods.map(([name, body]) => (
-              <article key={name}>
-                <strong>{name}</strong>
-                <p>{body}</p>
-              </article>
-            ))}
+          <div>
+            <span>銀行導入後可再接</span>
+            <ul>
+              <li>銀行內部投研模型</li>
+              <li>理專工作台</li>
+              <li>商品白名單與適合度規則</li>
+              <li>權限與稽核保存政策</li>
+              <li>正式對客報告</li>
+            </ul>
           </div>
-        </div>
-      </section>
-
-      <section className={styles.sourceSection} aria-labelledby="official-basis">
-        <div>
-          <span className={styles.kicker}>OFFICIAL BASIS</span>
-          <h2 id="official-basis">需求不是假設，來源可查。</h2>
-          <p>
-            競賽命題與產品邏輯優先採用臺灣企銀及主管機關公開資料；
-            PoC 不把未驗證的市場數字包裝成既成效益。
-          </p>
-        </div>
-        <div className={styles.sourceLinks}>
-          <a
-            href="https://www.tbb.com.tw/zh-tw/about/information/announcement/news/press-announcements/1150618"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span>臺灣企銀 · 2026/06/18</span>
-            <strong>開辦高資產業務，從商品銷售走向全方位資產管理 ↗</strong>
-          </a>
-          <a
-            href="https://www.tbb.com.tw/zh-tw/about/information/announcement/news/press-announcements/20260424"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span>臺灣企銀 · 2026/04/24</span>
-            <strong>跨部門整合與數位工具，擴大財富管理服務量能 ↗</strong>
-          </a>
-          <a
-            href="https://law.fsc.gov.tw/LawContent.aspx?id=GL003920"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span>金融監督管理委員會</span>
-            <strong>金融業運用人工智慧（AI）指引 ↗</strong>
-          </a>
         </div>
       </section>
 
       <footer className={styles.footer}>
         <div>
-          <strong>企富雙衡 · BIZWEALTH GUARD</strong>
-          <span>2026 臺灣企銀校園金融科技創意挑戰賽｜智慧理財情境競賽原型</span>
+          <strong>TrustInvest AI</strong>
+          <span>AI 投資研究可信度驗證平台｜2026 臺灣企銀智慧理財競賽 PoC</span>
         </div>
         <p>
-          本頁非臺灣企銀官方服務，不構成投資建議，不保證獲利，也不能下單或移轉資金。
-          正式金融服務須另經銀行法遵、資安、適合度與人工覆核程序。
+          本頁非臺灣企銀官方服務，不構成投資建議，不保證獲利。
+          競賽版本維持在獨立分支與預覽網址，不修改原始正式站。
         </p>
       </footer>
     </main>

@@ -53,7 +53,7 @@ class LiquidityForecastRequest(BaseModel):
     seed: int = Field(default=20260827, ge=0, le=2_147_483_647)
 
     @model_validator(mode="after")
-    def validate_profile(self) -> "LiquidityForecastRequest":
+    def validate_profile(self) -> LiquidityForecastRequest:
         if self.safety_cash_floor > 100_000_000_000:
             raise ValueError("safety cash floor out of range")
         if self.baseline_daily_inflow == 0 and self.daily_inflow_volatility > 0:

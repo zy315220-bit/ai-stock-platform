@@ -332,8 +332,7 @@ export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = JSON.parse(raw);
-  } catch (error) {
-    logGatewayFailure(error);
+  } catch {
     return NextResponse.json(
       { error: "invalid JSON" },
       { status: 400, headers: { "cache-control": "no-store" } },
@@ -371,7 +370,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(renderBrief(output, evidence, "AI_GATEWAY"), {
       headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" },
     });
-  } catch {
+  } catch (error) {
+    logGatewayFailure(error);
     return NextResponse.json(
       {
         ...renderBrief(fallback, evidence, "DETERMINISTIC_FALLBACK"),

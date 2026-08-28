@@ -262,6 +262,32 @@ const stressLabels: Record<StressName, string> = {
   combined: "三項同時發生",
 };
 
+const rmActionMap: Record<
+  AdjustmentCode,
+  { verify: string; conversation: string; boundary: string }
+> = {
+  accelerate_receivable: {
+    verify: "確認最大筆應收的付款人、到期日、爭議狀態與過去延遲紀錄。",
+    conversation: "應收管理、短期週轉與收款節奏調整的需求訪談。",
+    boundary: "先確認真實帳款與資金缺口，再由 RM 依既有流程評估可行服務。",
+  },
+  reschedule_payable: {
+    verify: "確認近期大額應付款的到期日、不可延後項目與供應商協商空間。",
+    conversation: "付款排程、週轉資金與供應鏈現金流的需求訪談。",
+    boundary: "模型只指出現金流時點壓力，不自動判斷授信額度或產品適配。",
+  },
+  reduce_fixed_cost: {
+    verify: "確認薪資、租金與固定營運支出中，哪些是短期不可延後的集中付款。",
+    conversation: "營運週轉、付款排程與短期資金緩衝的需求訪談。",
+    boundary: "成本調整是假設情境，不代表要求企業實際削減人事或營運支出。",
+  },
+  reduce_fx_exposure: {
+    verify: "確認外幣應收幣別、預計收款日、自然避險部位與現有避險比例。",
+    conversation: "匯率曝險盤點與避險需求訪談。",
+    boundary: "僅辨識曝險方向，不自動建議特定外匯商品、部位或交易。",
+  },
+};
+
 const privateFields: Array<{
   key: keyof InputState;
   label: string;
@@ -510,6 +536,12 @@ function buildAuditSnapshot(data: Forecast, aiBrief: AiBrief | null) {
       improvement_percentage_points: item.improvement_percentage_points,
       reference_stress: item.reference_stress,
       comparison_seed: item.comparison_seed,
+    })),
+    rm_handoff: data.adjustment_recommendations.slice(0, 2).map((item) => ({
+      adjustment_code: item.code,
+      verify: rmActionMap[item.code].verify,
+      conversation: rmActionMap[item.code].conversation,
+      boundary: rmActionMap[item.code].boundary,
     })),
     guardrails: data.guardrails,
     ai_brief: aiBrief
@@ -1363,6 +1395,44 @@ export default function LiquidityDemo() {
                     </div>
                   </article>
                 ))}
+              </div>
+            </section>
+          )}
+
+          {data.adjustment_recommendations?.length > 0 && (
+            <section className={styles.handoffPanel} aria-labelledby="rm-handoff-title">
+              <div className={styles.handoffHead}>
+                <span className={styles.kicker}>RM HANDOFF</span>
+                <h3 id="rm-handoff-title">把模型訊號翻成 RM 下一通電話要確認的事。</h3>
+                <p>
+                  這裡不是自動賣商品，而是把「風險 → 查核 → 需求訪談」接到既有企業金融流程，
+                  讓模型輸出能被銀行人員真正使用。
+                </p>
+              </div>
+              <div className={styles.handoffGrid}>
+                {data.adjustment_recommendations.slice(0, 2).map((item, index) => {
+                  const handoff = rmActionMap[item.code];
+                  return (
+                    <article key={item.code}>
+                      <span>PRIORITY 0{index + 1}</span>
+                      <h4>{item.title}</h4>
+                      <dl>
+                        <div>
+                          <dt>先確認</dt>
+                          <dd>{handoff.verify}</dd>
+                        </div>
+                        <div>
+                          <dt>服務對話</dt>
+                          <dd>{handoff.conversation}</dd>
+                        </div>
+                        <div>
+                          <dt>邊界</dt>
+                          <dd>{handoff.boundary}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           )}

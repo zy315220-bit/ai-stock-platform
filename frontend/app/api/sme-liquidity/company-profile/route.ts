@@ -31,9 +31,9 @@ function firstObject(payload: unknown): JsonObject | null {
   if (!Array.isArray(payload)) return isObject(payload) ? payload : null;
   return payload.find(isObject) ?? null;
 }
-function numberOrNull(value: unknown) {
+function positiveNumberOrNull(value: unknown) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -224,6 +224,11 @@ function parseCsv(text: string): JsonObject[] {
 
 function assessQuickEstimateEligibility(paidCapital: number | null, stockCapital: number | null, industryConfidence: number, businessItems: string[], publicCompany: PublicCompanyMatch | null) {
   const capital = paidCapital ?? stockCapital ?? null;
+  const capitalBasis = paidCapital !== null
+    ? "PAID_IN_CAPITAL"
+    : stockCapital !== null
+      ? "REGISTERED_CAPITAL_PROXY"
+      : "UNAVAILABLE";
   const reasons: string[] = [];
   let status: "CAUTION" | "NOT_RECOMMENDED" = "CAUTION";
   if (publicCompany) {
@@ -231,18 +236,31 @@ function assessQuickEstimateEligibility(paidCapital: number | null, stockCapital
     reasons.push("已由官方市場資料辨識為公開市場／公開發行公司；此競賽版不套用 SME 快速 scenario prior，完整產品應改接公開財報後另行建模。");
   }
   if (capital === null) {
-    reasons.push("缺少可用的登記／實收資本額，無法由公開資料確認是否符合 SME 資本額判準。");
+    reasons.push("缺少大於零的實收或登記資本額，無法由公開資料確認是否符合 SME 資本額判準。");
   } else if (capital > SME_PAID_CAPITAL_CRITERION) {
     status = "NOT_RECOMMENDED";
-    reasons.push("實收／出資額超過 1 億元，無法僅靠資本額確認 SME 身分；依現行標準仍可能因經常僱用員工未滿 200 人而符合，但需先取得員工數或真實財務資料。");
+    reasons.push(capitalBasis === "PAID_IN_CAPITAL"
+      ? "官方實收資本額超過 1 億元，無法僅靠資本額確認 SME 身分；依現行標準仍可能因經常僱用員工未滿 200 人而符合，但需先取得員工數或真實財務資料。"
+      : "目前只取得登記資本額，且高於 1 億元；登記資本不是實收資本，不能據此直接判定 SME 身分，需先取得實收資本或員工數。"
+    );
     reasons.push("本快速 baseline 不對超出 1 億元資本額判準的公司直接放行，避免假精準。");
   } else {
-    reasons.push("實收／出資額落在現行 SME 資本額判準 1 億元以下。");
+    reasons.push(capitalBasis === "PAID_IN_CAPITAL"
+      ? "官方實收資本額落在現行 SME 資本額判準 1 億元以下。"
+      : "官方資料只提供登記資本額；目前僅將它作為情境估算 proxy，不冒充實收資本或 SME 身分定論。"
+    );
   }
   reasons.push("快速模式的私有財務欄位屬 scenario prior，未以該公司的真實帳務資料校準，因此只能做第一輪情境篩檢。");
   if (businessItems.length === 0) reasons.push("官方營業項目未取得，產業分類只能採較保守推測。");
   if (industryConfidence < 0.6) reasons.push("產業辨識信心偏低，產業參數可能不適合直接套用。");
-  return { status, can_run_quick_estimate: status !== "NOT_RECOMMENDED", requires_human_confirmation: true, reasons };
+  return {
+    status,
+    can_run_quick_estimate: status !== "NOT_RECOMMENDED",
+    requires_human_confirmation: true,
+    capital_basis: capitalBasis,
+    capital_basis_amount: capital,
+    reasons,
+  };
 }
 
 async function fetchJson(url: URL, signal: AbortSignal) {
@@ -311,8 +329,8 @@ export async function GET(request: NextRequest) {
     if (!basic) return NextResponse.json({ error: "company not found" }, { status: 404 });
 
     const name = stringValue(basic.Company_Name);
-    const paidCapital = numberOrNull(basic.Paid_In_Capital_Amount);
-    const stockCapital = numberOrNull(basic.Capital_Stock_Amount);
+    const paidCapital = positiveNumberOrNull(basic.Paid_In_Capital_Amount);
+    const stockCapital = positiveNumberOrNull(basic.Capital_Stock_Amount);
     const businessItems = collectBusinessItems(businessPayload);
 
     let publicCompany = [listedPayload, publicPayload, otcPayload]

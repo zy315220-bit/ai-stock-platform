@@ -9,7 +9,7 @@ from typing import Literal
 import numpy as np
 
 HORIZONS = (30, 60, 90)
-ENGINE_VERSION = "sme-liquidity-monte-carlo-v2"
+ENGINE_VERSION = "sme-liquidity-monte-carlo-v2.1"
 Z_95 = 1.959963984540054
 
 
@@ -366,8 +366,8 @@ def _adjustment_recommendations(
     profile: LiquidityProfile,
     *,
     simulations: int,
+    seed: int,
 ) -> list[dict[str, object]]:
-    seed = 20260917
     stressed_base = _apply_stress(profile, "combined")
     base_paths = _simulate_paths(
         stressed_base,
@@ -480,6 +480,8 @@ def _adjustment_recommendations(
                 "ending_cash_p50_before": round(base_p50, 2),
                 "ending_cash_p50_after": round(ending_p50_after, 2),
                 "ending_cash_p50_change": round(cash_improvement, 2),
+                "reference_stress": "combined",
+                "comparison_seed": seed,
             }
         )
 
@@ -604,6 +606,7 @@ def forecast_liquidity(
         "adjustment_recommendations": _adjustment_recommendations(
             profile,
             simulations=simulations,
+            seed=seed,
         ),
         "guardrails": {
             "is_credit_decision": False,

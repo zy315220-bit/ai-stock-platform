@@ -35,7 +35,7 @@ function resolveSearchQuery(q: string) {
 
 function num(value: unknown) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 export async function GET(request: NextRequest) {

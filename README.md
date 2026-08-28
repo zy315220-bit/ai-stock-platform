@@ -167,3 +167,14 @@ Train 結果用於跨日演化；Validation 與 Final Holdout 都不得寫回自
 ## 9. 重要提醒
 
 平台目前是「量化投資決策支援」，不是保證獲利的預測器，也不會自動下單。回測結果必須與同期持有比較，過去績效不代表未來結果。
+
+## 10. SME Liquidity Radar 競賽 PoC
+
+互動入口位於 `/tbb-sme-2026`。此分支的企業資金韌性 Demo 採兩層架構：
+
+1. Python Monte Carlo v2.1 是唯一數值權威，負責 30／60／90 天缺口機率、Wilson 95% 區間、壓力測試與 common-random-numbers 反事實比較。
+2. AI RM Evidence Router 經 Vercel AI Gateway 呼叫 Gemini，只能在 Zod schema 的固定證據、優先序與訪談問題 ID 中選擇；不得產生或修改風險數字。
+
+公開公司搜尋會區分登記資本與實收資本，零值視為缺值；只取得登記資本時會明示它只是 scenario prior 的 proxy。AI 摘要必須由使用者另外勾選同意，送出的 payload 不含公司名稱、統編或原始財務金額，並設定禁止 prompt training。Gateway 不可用時會顯示規則備援模式，不冒充 AI。
+
+風險引擎與 AI route 都採同源、JSON-only、欄位白名單、body 上限與 `no-store`。完整的目前資料流、保存邊界和正式銀行版待辦列在 `/tbb-sme-2026/privacy`。前端因 AI SDK 7 需使用 Node.js 22 以上。

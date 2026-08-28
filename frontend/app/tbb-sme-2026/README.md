@@ -25,13 +25,13 @@ A bank pilot should replace scenario priors with consented / bank-held transacti
 - TPEx OpenAPI: https://www.tpex.org.tw/openapi/
 - MOF industry classification / profit standards (reference only; **not treated as company actuals**): https://service.mof.gov.tw/public/Data/statistic/std/zhtw/index.html
 
-The current SME gate recognises the statutory capital criterion of NTD 100 million or less, while explicitly noting the alternative criterion of fewer than 200 regular employees. If capital exceeds NTD 100 million and employee count is unavailable, the quick mode does not assert non-SME status; it refuses the quick baseline until more evidence is available.
+The current SME gate recognises the statutory capital criterion of NTD 100 million or less, while explicitly noting the alternative criterion of fewer than 200 regular employees. Paid-in capital and registered capital are kept separate; a zero value is treated as missing, and registered capital is labelled only as a proxy when paid-in capital is unavailable. If the applicable amount exceeds NTD 100 million and employee count is unavailable, the quick mode does not assert non-SME status; it refuses the quick baseline until more evidence is available.
 
 ## Authoritative calculation engine
 
 All production demo forecasts are routed to one Python engine:
 
-- engine: `sme-liquidity-monte-carlo-v2`
+- engine: `sme-liquidity-monte-carlo-v2.1`
 - horizons: 30 / 60 / 90 days
 - default simulation count: 2,500 paths
 - deterministic seed for reproducibility
@@ -44,7 +44,7 @@ All production demo forecasts are routed to one Python engine:
 - Wilson 95% interval for breach probability
 - stress cases: customer delay, revenue decline, TWD appreciation, combined stress
 - common random numbers for scenario comparison
-- counterfactual adjustments are only surfaced when they improve breach probability or 90-day P50 cash
+- counterfactual adjustments use the same seed and displayed combined-stress baseline; they are only surfaced when they improve breach probability or 90-day P50 cash
 
 The Next.js API validates and maps inputs but does **not** implement a second Monte Carlo engine.
 
@@ -60,9 +60,11 @@ Base and stress scenarios use common random numbers. This reduces comparison noi
 
 Reference background: standard common-random-number / variance-reduction practice in Monte Carlo simulation (e.g. Glasserman, *Monte Carlo Methods in Financial Engineering*).
 
-## AI upgrade gate
+## AI RM evidence router and upgrade gate
 
-The current released baseline is intentionally simpler and auditable. Candidate sequence models such as:
+The opt-in RM brief uses Vercel AI Gateway with Gemini and structured output. It receives only de-identified derived indicators: risk status, probabilities, buffer ratio, stress/driver enums, adjustment code and engine fingerprint. Company name, business number and raw financial amounts are excluded. The model can select only allowlisted priority, evidence and RM-question IDs; server code renders the numerical statements from authoritative engine values. If the Gateway is unavailable, the response is explicitly labelled deterministic fallback rather than AI output.
+
+The numerical baseline remains intentionally simpler and auditable. Candidate sequence models such as:
 
 - DeepAR
 - Temporal Fusion Transformer (TFT)
@@ -88,6 +90,9 @@ Known simplifications are disclosed in the site:
 
 - user-entered profile is not persisted by the prototype;
 - private forecast responses are `no-store`;
+- AI brief requires separate explicit consent and excludes identity / raw financial amounts;
+- AI Gateway requests disallow prompt training; the public demo does not claim enterprise Zero Data Retention;
+- AI brief uses JSON-only allowlists, a body-size cap, timeout and best-effort rate limit;
 - unused responsible-person names are not returned to the frontend;
 - no automated loan approval;
 - no automated financial-product sale;

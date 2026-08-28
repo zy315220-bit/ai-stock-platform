@@ -73,7 +73,7 @@ def test_engine_contract_and_horizons() -> None:
     result = forecast_liquidity(sample_profile(), simulations=1000, seed=7)
 
     engine = result["engine"]
-    assert engine["version"] == "sme-liquidity-monte-carlo-v2"  # type: ignore[index]
+    assert engine["version"] == "sme-liquidity-monte-carlo-v2.1"  # type: ignore[index]
     assert engine["assumptions"]["day0_floor_breach_included"] is True  # type: ignore[index]
     assert (
         engine["assumptions"]["nonnegative_inflow_distribution"]  # type: ignore[index]
@@ -216,6 +216,25 @@ def test_adjustment_recommendations_do_not_claim_negative_improvement() -> None:
     assert recommendations
     assert all(
         row["improvement_percentage_points"] >= 0
+        for row in recommendations  # type: ignore[union-attr]
+    )
+
+
+def test_adjustment_baseline_matches_displayed_combined_stress() -> None:
+    seed = 2718
+    result = forecast_liquidity(sample_profile(), simulations=2000, seed=seed)
+    combined = stress(result, "combined")
+    recommendations = result["adjustment_recommendations"]
+
+    assert recommendations
+    assert all(
+        row["before_shortfall_probability"]
+        == combined["shortfall_probability"]
+        for row in recommendations  # type: ignore[union-attr]
+    )
+    assert all(
+        row["reference_stress"] == "combined"
+        and row["comparison_seed"] == seed
         for row in recommendations  # type: ignore[union-attr]
     )
 

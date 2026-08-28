@@ -40,7 +40,7 @@ const flow = [
   ["02", "機率式預測", "不是預測單一數字，而是估計未來現金分布與跌破安全水位的機率。"],
   ["03", "壓力測試", "測試客戶延遲付款、營收下降、匯率衝擊，以及多項風險同時發生。"],
   ["04", "找出主要成因", "把現金壓力拆回應收、固定支出、外幣曝險等可行動因素。"],
-  ["05", "RM 下一步", "把風險訊號轉成待聯絡清單與可評估服務，最終仍由銀行人員決策。"],
+  ["05", "AI RM 證據路由", "AI 只在固定選項中排序證據與訪談問題，不重算數字，最終仍由銀行人員決策。"],
 ];
 
 export default function Page() {
@@ -55,6 +55,7 @@ export default function Page() {
           <a href="#demo">Demo</a>
           <a href="#method">方法</a>
           <a href="#value">銀行價值</a>
+          <a href="/tbb-sme-2026/privacy">資料治理</a>
         </div>
       </nav>
 
@@ -80,7 +81,7 @@ export default function Page() {
           <div><span>輸出</span><strong className={styles.heroRisk}>30 / 60 / 90 天缺口風險</strong></div>
           <div><span>判讀</span><strong>信賴區間 + 臨界緩衝 + 壓力敏感度</strong></div>
           <div><span>銀行下一步</span><strong>提前聯絡，不等客戶求救</strong></div>
-          <small>Demo 結果由即時資料與 Python 權威引擎計算，不使用固定風險百分比。</small>
+          <small>風險數字由 Python 權威引擎即時計算；AI 只做受控的證據與問題排序。</small>
         </aside>
       </section>
 
@@ -102,12 +103,12 @@ export default function Page() {
 
       <section className={styles.section} id="method">
         <span className={styles.kicker}>METHOD</span>
-        <h2>先用能驗證的 baseline 做深，再決定 AI 模型能不能升級。</h2>
+        <h2>可重現的風險引擎負責數字，受控 AI 負責把證據交到 RM 手上。</h2>
         <p className={styles.lead}>
-          第一版正式放行的是可驗證的 Monte Carlo baseline：單一 Python 權威引擎、
-          Wilson 95% 區間、Day 0 breach、common random numbers 壓力比較與極端案例回歸。
-          未來 TFT、DeepAR、Chronos 等 AI 時序模型只有在 rolling out-of-sample
-          明確擊敗 baseline 且通過風險 Gate 後才能升級；不因為模型名字新就直接採用。
+          第一層是可驗證的 Monte Carlo baseline：單一 Python 權威引擎、Wilson 95% 區間、
+          Day 0 breach、common random numbers 壓力比較與極端案例回歸。第二層由 Gemini
+          在結構化 schema 內選擇查核證據、聯絡優先序與 RM 問題；它看不到公司身分或原始金額，
+          也不能產生或修改風險百分比。未來時序 AI 仍須在 rolling out-of-sample 明確擊敗 baseline 才能升級。
         </p>
         <div className={styles.flowGrid}>
           {flow.map(([n, title, body]) => (
@@ -137,8 +138,8 @@ export default function Page() {
             <p>固定模型版本、模擬數、seed 與資料來源；網站所有 forecast 統一走 Python 權威引擎。</p>
           </article>
           <article>
-            <strong>AI 有升級門檻</strong>
-            <p>AI 模型必須在樣本外驗證中真正勝過 baseline，否則維持 baseline，不用「AI」名稱掩蓋較差模型。</p>
+            <strong>AI 被限制在可稽核範圍</strong>
+            <p>Gemini 只選固定證據與問題 ID；伺服器再用權威引擎數字組裝文字。AI 失效時明示規則備援，不冒充 AI。</p>
           </article>
         </div>
       </section>
@@ -220,11 +221,29 @@ export default function Page() {
         </div>
       </section>
 
+      <section className={styles.measurement} aria-labelledby="measurement-title">
+        <div>
+          <span className={styles.kicker}>PILOT SCORECARD</span>
+          <h2 id="measurement-title">商業價值不靠口號：銀行 pilot 用同一張表驗收。</h2>
+          <p>
+            下列是待 pilot 實測的驗收指標，不是 Demo 已完成的成效宣稱。先凍結 baseline 與門檻，再以時間切片資料比較。
+          </p>
+        </div>
+        <div className={styles.measurementGrid}>
+          <article><span>預警效能</span><strong>Precision · Recall · Calibration</strong><p>分 30／60／90 天與風險門檻檢查命中、漏報及機率校準。</p></article>
+          <article><span>提前量</span><strong>首次警示 → 資金壓力日</strong><p>量測模型是否真的比既有事件訊號更早給 RM 可行動時間。</p></article>
+          <article><span>RM 效率</span><strong>每戶審閱時間 · 覆核率</strong><p>比較現行流程與排序後名單，並記錄人工推翻原因。</p></article>
+          <article><span>客戶價值</span><strong>聯絡 · 需求確認 · 問題解決</strong><p>追蹤是否確認真實週轉需求，不把商品成交當成唯一成功標準。</p></article>
+          <article><span>模型安全</span><strong>誤報 · 漂移 · 分群差異</strong><p>監測錯誤成本、資料漂移及不同產業／規模的表現差異，達 Gate 才擴大。</p></article>
+        </div>
+      </section>
+
       <footer className={styles.footer}>
         <strong>SME Liquidity Radar</strong>
         <p>
           競賽 PoC 使用公開公司登記資料、產業／規模估算與可選的使用者校正資料；不執行授信決策、不自動核貸、不自動銷售金融商品。
         </p>
+        <a href="/tbb-sme-2026/privacy">資料治理與隱私說明</a>
       </footer>
     </main>
   );

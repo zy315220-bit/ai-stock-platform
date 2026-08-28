@@ -3,6 +3,29 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import styles from "./sme.module.css";
 
+type StressName =
+  | "major_customer_delay_30d"
+  | "revenue_down_15pct"
+  | "twd_strengthens_5pct"
+  | "combined";
+type DriverName =
+  | "應收帳款延遲／違約暴露"
+  | "已知應付款"
+  | "薪資固定負擔"
+  | "日常營運支出"
+  | "外幣應收曝險";
+type AdjustmentCode =
+  | "accelerate_receivable"
+  | "reschedule_payable"
+  | "reduce_fixed_cost"
+  | "reduce_fx_exposure";
+type RiskStatus =
+  | "ROBUST"
+  | "WATCH"
+  | "NEAR_THRESHOLD"
+  | "STRESS_SENSITIVE"
+  | "HIGH_RISK";
+
 type Horizon = {
   horizon_days: number;
   ending_cash_p10: number;
@@ -23,7 +46,7 @@ type Horizon = {
 };
 
 type Stress = {
-  stress: string;
+  stress: StressName;
   shortfall_probability: number;
   ending_cash_p50: number;
   median_first_breach_day: number | null;
@@ -108,12 +131,14 @@ type CompanyProfile = {
     status: "ELIGIBLE" | "CAUTION" | "NOT_RECOMMENDED";
     can_run_quick_estimate: boolean;
     requires_human_confirmation: boolean;
+    capital_basis?: "PAID_IN_CAPITAL" | "REGISTERED_CAPITAL_PROXY" | "UNAVAILABLE";
+    capital_basis_amount?: number | null;
     reasons: string[];
   };
 };
 
 type AdjustmentRecommendation = {
-  code: string;
+  code: AdjustmentCode;
   title: string;
   rationale: string;
   before_shortfall_probability: number;
@@ -122,6 +147,8 @@ type AdjustmentRecommendation = {
   ending_cash_p50_before: number;
   ending_cash_p50_after: number;
   ending_cash_p50_change: number;
+  reference_stress: "combined";
+  comparison_seed: number;
 };
 
 type Forecast = {
@@ -139,17 +166,12 @@ type Forecast = {
     seed: number;
     input_fingerprint: string;
     horizons: number[];
-    data_mode: string;
+    data_mode: "synthetic_demo" | "user_supplied_or_estimated";
   };
   horizons: Horizon[];
   stress_tests: Stress[];
   risk_interpretation: {
-    status:
-      | "ROBUST"
-      | "WATCH"
-      | "NEAR_THRESHOLD"
-      | "STRESS_SENSITIVE"
-      | "HIGH_RISK";
+    status: RiskStatus;
     label: string;
     summary: string;
     reasons: string[];
@@ -158,11 +180,11 @@ type Forecast = {
     p10_min_cash_90: number | null;
     p10_buffer_above_floor_90: number | null;
     p10_buffer_ratio_90: number | null;
-    most_sensitive_stress: string | null;
+    most_sensitive_stress: StressName;
     most_sensitive_stress_probability: number;
     safety_cash_floor: number;
   };
-  drivers: Array<{ driver: string; exposure_amount: number }>;
+  drivers: Array<{ driver: DriverName; exposure_amount: number }>;
   rm_next_step: { route: string; reason: string };
   adjustment_recommendations: AdjustmentRecommendation[];
   guardrails: {
@@ -172,6 +194,25 @@ type Forecast = {
     human_review_required: boolean;
     profile_persisted: boolean;
   };
+};
+
+type AiBrief = {
+  mode: "AI_GATEWAY" | "DETERMINISTIC_FALLBACK";
+  model: string | null;
+  priority: "MONITOR" | "CONTACT_WITHIN_7_DAYS" | "CONTACT_WITHIN_48_HOURS";
+  priority_label: string;
+  headline: string;
+  evidence: Array<{ id: string; text: string }>;
+  rm_questions: Array<{ id: string; text: string }>;
+  governance: {
+    numbers_generated_by_ai: false;
+    raw_financial_fields_sent: false;
+    company_identity_sent: false;
+    prompt_training_disallowed: boolean;
+    human_review_required: true;
+    engine_fingerprint: string;
+  };
+  fallback_reason?: "AI_UNAVAILABLE";
 };
 
 type InputState = {
@@ -214,7 +255,7 @@ const profiles = [
   { id: "service", label: "快速範例 C", meta: "企業服務｜人事成本高" },
 ];
 
-const stressLabels: Record<string, string> = {
+const stressLabels: Record<StressName, string> = {
   major_customer_delay_30d: "最大客戶延遲 30 天",
   revenue_down_15pct: "營收下降 15%",
   twd_strengthens_5pct: "台幣升值 5%",
@@ -385,6 +426,12 @@ function buildFallbackProfile(company: CompanyMatch): CompanyProfile {
       status: "CAUTION",
       can_run_quick_estimate: false,
       requires_human_confirmation: true,
+      capital_basis: company.paid_in_capital
+        ? "PAID_IN_CAPITAL"
+        : company.capital
+          ? "REGISTERED_CAPITAL_PROXY"
+          : "UNAVAILABLE",
+      capital_basis_amount: company.paid_in_capital ?? company.capital,
       reasons: [
         "正在完成公司類型、公開市場身分與資料完整性檢查；完成前不放行快速估算。",
       ],
@@ -418,6 +465,17 @@ export default function LiquidityDemo() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileFailed, setProfileFailed] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [aiConsent, setAiConsent] = useState(false);
+  const [aiBrief, setAiBrief] = useState<AiBrief | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(false);
+
+  function clearAiBrief() {
+    setAiConsent(false);
+    setAiBrief(null);
+    setAiLoading(false);
+    setAiError(false);
+  }
 
   useEffect(() => {
     const query = form.company_name.trim();
@@ -479,6 +537,7 @@ export default function LiquidityDemo() {
     setProfileLoading(true);
     setAdvancedOpen(false);
     setData(null);
+    clearAiBrief();
 
     const fallback = buildFallbackProfile(company);
     setCompanyProfile(fallback);
@@ -523,6 +582,7 @@ export default function LiquidityDemo() {
     setLoading(true);
     setFailed(false);
     setData(null);
+    clearAiBrief();
     try {
       setData(await requestForecast({ custom_profile: payloadFromForm() }));
       requestAnimationFrame(() =>
@@ -547,6 +607,7 @@ export default function LiquidityDemo() {
     setLoading(true);
     setFailed(false);
     setData(null);
+    clearAiBrief();
     try {
       setData(await requestForecast({ profile_id: profileId }));
       requestAnimationFrame(() =>
@@ -562,10 +623,60 @@ export default function LiquidityDemo() {
     }
   }
 
-  const h90 = useMemo(
-    () => data?.horizons.find((item) => item.horizon_days === 90) ?? null,
-    [data],
-  );
+  async function runAiBrief() {
+    if (!data || !h90 || !aiConsent || data.drivers.length === 0) return;
+    const mostSensitive = data.stress_tests.reduce((best, item) =>
+      item.shortfall_probability > best.shortfall_probability ? item : best,
+    );
+    const bestAdjustment = data.adjustment_recommendations[0] ?? null;
+
+    setAiLoading(true);
+    setAiError(false);
+    setAiBrief(null);
+    try {
+      const response = await fetch("/api/sme-liquidity/ai-brief", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          consent: true,
+          evidence: {
+            data_mode: data.engine.data_mode,
+            risk_status: data.risk_interpretation.status,
+            base_probability: h90.shortfall_probability,
+            base_ci95_upper: h90.shortfall_probability_ci95_upper,
+            buffer_ratio: h90.p10_buffer_ratio,
+            most_sensitive_stress: mostSensitive.stress,
+            most_sensitive_probability: mostSensitive.shortfall_probability,
+            top_driver: data.drivers[0].driver,
+            best_adjustment: bestAdjustment
+              ? {
+                  code: bestAdjustment.code,
+                  improvement_percentage_points:
+                    bestAdjustment.improvement_percentage_points,
+                }
+              : null,
+            engine_fingerprint: data.engine.input_fingerprint,
+          },
+        }),
+      });
+      if (!response.ok) throw new Error("AI brief unavailable");
+      const brief = (await response.json()) as AiBrief;
+      if (!brief.headline || !Array.isArray(brief.evidence) || !Array.isArray(brief.rm_questions)) {
+        throw new Error("AI brief invalid");
+      }
+      setAiBrief(brief);
+    } catch {
+      setAiError(true);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  const h90 = data?.horizons.find((item) => item.horizon_days === 90) ?? null;
 
   const maxDriver = useMemo(() => {
     if (!data?.drivers.length) return 1;
@@ -663,7 +774,7 @@ export default function LiquidityDemo() {
                       <strong>{company.name}</strong>
                       <span>
                         統編 {company.business_no}
-                        {company.capital ? ` · 資本額 ${money(company.capital)}` : ""}
+                        {company.capital ? ` · 登記資本 ${money(company.capital)}` : ""}
                       </span>
                       {company.location && <small>{company.location}</small>}
                     </button>
@@ -717,15 +828,17 @@ export default function LiquidityDemo() {
                   <small>{companyProfile.inferred.industry.reason}</small>
                 </div>
                 <div>
-                  <span>登記／實收資本</span>
+                  <span>登記資本額</span>
                   <strong>
-                    {money(
-                      companyProfile.official.paid_in_capital_amount ??
-                        companyProfile.official.capital_stock_amount ??
-                        0,
-                    )}
+                    {companyProfile.official.capital_stock_amount
+                      ? money(companyProfile.official.capital_stock_amount)
+                      : "未提供"}
                   </strong>
-                  <small>官方登記資料</small>
+                  <small>
+                    {companyProfile.official.paid_in_capital_amount
+                      ? `實收資本額 ${money(companyProfile.official.paid_in_capital_amount)}`
+                      : "實收資本額未提供；估算僅採登記資本 proxy"}
+                  </small>
                 </div>
                 <div>
                   <span>公司所在地</span>
@@ -860,7 +973,9 @@ export default function LiquidityDemo() {
                     <strong>只有公開查不到的資料才需要你確認。</strong>
                     <p>
                       下方已先填入產業／公司規模估算。若你知道真實數字，直接覆蓋即可；
-                      不知道就保留估算值。
+                      不知道就保留估算值。財務輸入只送往同站模型 API、回應不快取且不寫入資料庫；
+                      AI RM 摘要是另外選擇加入，且不傳公司身分或原始金額。詳見
+                      <a href="/tbb-sme-2026/privacy">資料治理說明</a>。
                     </p>
                   </div>
 
@@ -928,6 +1043,16 @@ export default function LiquidityDemo() {
         )}
       </form>
 
+      {loading && (
+        <div className={styles.loadingPanel} role="status" aria-live="polite">
+          <span className={styles.loadingPulse} aria-hidden="true" />
+          <div>
+            <strong>正在跑 2,500 條資金路徑與四組壓力情境…</strong>
+            <p>完成後會自動捲到 30／60／90 天風險、反事實調整與 RM 下一步。</p>
+          </div>
+        </div>
+      )}
+
       {failed && (
         <div className={styles.statePanel}>
           資料未通過檢查或模型暫時不可用。請稍後重試，或展開精準模式確認數字。
@@ -947,7 +1072,10 @@ export default function LiquidityDemo() {
           <div className={styles.resultIntro}>
             <div>
               <span className={styles.kicker}>你的情境篩檢結果</span>
-              <h2>{data.profile.name} 的 90 天資金壓力報告</h2>
+              <h2>
+                <span className={styles.resultCompanyName}>{data.profile.name}</span>
+                <span className={styles.resultTitleSuffix}>的 90 天資金壓力報告</span>
+              </h2>
               <p>
                 這不是核貸結果，而是未來資金壓力情境篩檢。快速模式使用公開資料＋scenario prior；
                 若補入企業真實私有數據，可進一步提高準確度。
@@ -1093,7 +1221,8 @@ export default function LiquidityDemo() {
                   <span className={styles.kicker}>可以怎麼調整？</span>
                   <h3>不只告訴你有風險，直接重跑「如果這樣做」的結果。</h3>
                   <p>
-                    以下使用相同隨機種子做反事實壓力測試，是模型估計，不是保證效果。
+                    以下以畫面同一個綜合壓力情境、相同 seed 做 common-random-numbers
+                    反事實比較；是模型估計，不是保證效果。
                   </p>
                 </div>
               </div>
@@ -1103,6 +1232,9 @@ export default function LiquidityDemo() {
                     <div className={styles.adjustmentRank}>0{index + 1}</div>
                     <h4>{item.title}</h4>
                     <p>{item.rationale}</p>
+                    <small className={styles.adjustmentAudit}>
+                      基準：{stressLabels[item.reference_stress]} · seed {item.comparison_seed}
+                    </small>
                     <div className={styles.adjustmentImpact}>
                       <div>
                         <span>調整前</span>
@@ -1124,6 +1256,94 @@ export default function LiquidityDemo() {
               </div>
             </section>
           )}
+
+          <section className={styles.aiPanel} aria-labelledby="ai-brief-title">
+            <div className={styles.aiPanelHead}>
+              <div>
+                <span className={styles.kicker}>AI RM EVIDENCE ROUTER</span>
+                <h3 id="ai-brief-title">讓 AI 排證據與訪談問題，但不准改模型數字。</h3>
+                <p>
+                  AI 只收到去識別化衍生指標與列舉值；公司名稱、統編、現金、應收、應付等原始金額不會送出。
+                  數值仍完全來自上方 Python 引擎，RM 保留最終判斷。
+                </p>
+              </div>
+              <div className={styles.aiGovernanceBadges} aria-label="AI 資料治理">
+                <span>不傳公司身分</span>
+                <span>不傳原始金額</span>
+                <span>結構化輸出</span>
+                <span>人工覆核</span>
+              </div>
+            </div>
+
+            {!aiBrief && (
+              <div className={styles.aiConsentRow}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={aiConsent}
+                    onChange={(event) => setAiConsent(event.target.checked)}
+                  />
+                  <span>我同意送出去識別化衍生風險指標，產生一次 AI RM 摘要。</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void runAiBrief()}
+                  disabled={!aiConsent || aiLoading || data.drivers.length === 0}
+                >
+                  {aiLoading ? "AI 正在整理證據…" : "產生 AI RM 摘要"}
+                </button>
+              </div>
+            )}
+
+            {aiError && (
+              <div className={styles.aiError} role="alert">
+                摘要服務暫時無法使用；上方權威引擎結果不受影響，請稍後再試。
+              </div>
+            )}
+
+            {aiBrief && (
+              <div className={styles.aiBriefResult}>
+                <div className={styles.aiBriefSummary}>
+                  <span>{aiBrief.priority_label}</span>
+                  <h4>{aiBrief.headline}</h4>
+                  <p>
+                    {aiBrief.mode === "AI_GATEWAY"
+                      ? `AI Gateway · ${aiBrief.model}`
+                      : "規則備援模式 · 本次 AI 服務未成功，因此未冒充 AI 產出"}
+                    {` · 引擎指紋 ${aiBrief.governance.engine_fingerprint}`}
+                  </p>
+                </div>
+                <div className={styles.aiBriefColumns}>
+                  <div>
+                    <strong>AI 排序後的查核證據</strong>
+                    <ul>
+                      {aiBrief.evidence.map((item) => (
+                        <li key={item.id}>{item.text}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <strong>建議 RM 先問</strong>
+                    <ol>
+                      {aiBrief.rm_questions.map((item) => (
+                        <li key={item.id}>{item.text}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+                <div className={styles.aiBriefFoot}>
+                  <span>AI 未產生任何風險數字 · 未送公司身分 · 未送原始財務欄位</span>
+                  <button type="button" onClick={() => void runAiBrief()} disabled={aiLoading}>
+                    {aiLoading ? "重新整理中…" : "重新產生"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <a className={styles.aiPrivacyLink} href="/tbb-sme-2026/privacy">
+              查看完整資料流、保存政策與模型治理
+            </a>
+          </section>
 
           <section className={styles.rmPanel}>
             <div>

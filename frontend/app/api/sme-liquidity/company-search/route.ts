@@ -5,6 +5,13 @@ export const dynamic = "force-dynamic";
 const ENDPOINT =
   "https://data.gcis.nat.gov.tw/od/data/api/6BBA2268-1367-4B42-9CCA-BC17499EBE8C";
 
+const COMPANY_ALIASES: Record<string, string> = {
+  台積電: "台灣積體電路製造",
+  tsmc: "台灣積體電路製造",
+  鴻海: "鴻海精密工業",
+  聯發科: "聯發科技",
+};
+
 type GcisCompany = {
   Business_Accounting_NO?: string | number;
   Company_Name?: string;
@@ -20,6 +27,10 @@ function cleanQuery(value: string) {
     .trim()
     .replace(/[^\p{L}\p{N}\s·・\-（）()股份有限公司企業商行]/gu, "")
     .slice(0, 24);
+}
+
+function resolveSearchQuery(q: string) {
+  return COMPANY_ALIASES[q.toLowerCase()] ?? q;
 }
 
 function num(value: unknown) {
@@ -38,11 +49,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const resolvedQuery = resolveSearchQuery(q);
   const url = new URL(ENDPOINT);
   url.searchParams.set("$format", "json");
   url.searchParams.set(
     "$filter",
-    `Company_Name like ${q} and Company_Status eq 01`,
+    `Company_Name like ${resolvedQuery} and Company_Status eq 01`,
   );
   url.searchParams.set("$skip", "0");
   url.searchParams.set("$top", "8");
@@ -64,6 +76,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           query: q,
+          resolved_query: resolvedQuery,
           results: [],
           source: "MOEA_GCIS",
           degraded: true,
@@ -114,6 +127,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         query: q,
+        resolved_query: resolvedQuery,
         results,
         source: "MOEA_GCIS",
         attribution: "資料來源：經濟部商業發展署商工行政資料開放平臺",
@@ -130,6 +144,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         query: q,
+        resolved_query: resolvedQuery,
         results: [],
         source: "MOEA_GCIS",
         degraded: true,

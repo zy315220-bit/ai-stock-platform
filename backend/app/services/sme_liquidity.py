@@ -54,6 +54,85 @@ StressName = Literal[
 ]
 
 
+_STRESS_LABELS = {
+    "major_customer_delay_30d": "最大客戶延遲 30 天",
+    "revenue_down_15pct": "營收下降 15%",
+    "twd_strengthens_5pct": "台幣升值 5%",
+    "combined": "三項壓力同時發生",
+}
+
+_DRIVER_TO_RM_ACTION = {
+    "應收帳款延遲／違約暴露": "accelerate_receivable",
+    "已知應付款": "reschedule_payable",
+    "薪資固定負擔": "reduce_fixed_cost",
+    "日常營運支出": "reduce_fixed_cost",
+    "外幣應收曝險": "reduce_fx_exposure",
+}
+
+_RM_ACTION_LIBRARY: dict[str, dict[str, object]] = {
+    "accelerate_receivable": {
+        "title": "核對最大筆應收與收款節奏",
+        "verify_checks": [
+            {"id": "AR_COUNTERPARTY", "label": "付款人與交易關係"},
+            {"id": "AR_DUE_DATE", "label": "發票／合約到期日"},
+            {"id": "AR_DISPUTE_STATUS", "label": "驗收、折讓或爭議狀態"},
+            {"id": "AR_DELAY_HISTORY", "label": "近 6 個月實際延遲紀錄"},
+        ],
+        "conversation": "先做應收管理、短期週轉與收款節奏的需求訪談。",
+        "boundary": "確認真實帳款與資金缺口後，才由 RM 依既有流程評估可行服務；系統不自動推薦產品。",
+        "completion_rule": "四項證據至少核對到期日與爭議狀態，並以實際資料重跑一次預測。",
+    },
+    "reschedule_payable": {
+        "title": "核對近期大額付款與資金來源",
+        "verify_checks": [
+            {"id": "AP_DUE_DATE", "label": "付款對象、金額與到期日"},
+            {"id": "AP_NON_DEFERRABLE", "label": "不可延後的必要付款"},
+            {"id": "AP_DISPUTE_STATUS", "label": "驗收或請款爭議"},
+            {"id": "AP_FUNDING_SOURCE", "label": "已安排的付款資金來源"},
+        ],
+        "conversation": "先做付款排程、供應鏈現金流與短期資金緩衝的需求訪談。",
+        "boundary": "模型只辨識現金流時點壓力，不判斷授信額度、核准結果或產品適配。",
+        "completion_rule": "確認不可延後項目與既有資金來源，更新付款日後重跑壓力測試。",
+    },
+    "reduce_fixed_cost": {
+        "title": "核對固定支出集中日與必要性",
+        "verify_checks": [
+            {"id": "FIXED_PAYROLL", "label": "薪資與勞健保付款日"},
+            {"id": "FIXED_RENT", "label": "租金與固定合約支出"},
+            {"id": "FIXED_ESSENTIAL", "label": "短期不可延後營運支出"},
+            {"id": "FIXED_BUFFER_POLICY", "label": "企業內部安全水位依據"},
+        ],
+        "conversation": "先做固定付款排程、營運週轉與安全緩衝的需求訪談。",
+        "boundary": "降低支出只是反事實情境，不代表要求企業裁員或削減必要營運。",
+        "completion_rule": "區分必要與可調整支出，確認安全水位依據後以更新值重跑。",
+    },
+    "reduce_fx_exposure": {
+        "title": "核對外幣收付款與自然避險",
+        "verify_checks": [
+            {"id": "FX_CURRENCY", "label": "外幣應收幣別與金額"},
+            {"id": "FX_COLLECTION_DATE", "label": "預計收款日"},
+            {"id": "FX_NATURAL_HEDGE", "label": "同幣別應付與自然避險部位"},
+            {"id": "FX_EXISTING_HEDGE", "label": "既有避險比例與到期日"},
+        ],
+        "conversation": "先做幣別、收付款時點與現有避險部位的需求訪談。",
+        "boundary": "系統只辨識曝險方向，不推薦特定外匯商品、交易部位或進出場時點。",
+        "completion_rule": "完成幣別與時點對帳，再由合格人員依銀行流程評估是否需要後續服務。",
+    },
+    "refresh_cash_baseline": {
+        "title": "更新實際現金流基準",
+        "verify_checks": [
+            {"id": "CASH_AS_OF", "label": "可動用現金的資料日期"},
+            {"id": "CASH_RESTRICTED", "label": "受限制或不可動用資金"},
+            {"id": "CASH_FLOOR", "label": "安全水位與設定依據"},
+            {"id": "CASH_NEXT_EVENTS", "label": "未來 30 天已知大額收付款"},
+        ],
+        "conversation": "先確認最新可動用現金、安全水位與近期重大收付款。",
+        "boundary": "資料未完整前只保留監控狀態，不產生授信或產品結論。",
+        "completion_rule": "四項基準資料完成覆核後，重新產生 30／60／90 天預測。",
+    },
+}
+
+
 def _apply_stress(profile: LiquidityProfile, stress: StressName) -> LiquidityProfile:
     if stress == "base":
         return profile
@@ -264,22 +343,22 @@ def _drivers(profile: LiquidityProfile) -> list[dict[str, float | str]]:
 def _action_hint(top_driver: str) -> dict[str, str]:
     if "應收帳款" in top_driver:
         return {
-            "route": "應收帳款管理／承購諮詢",
-            "reason": "先確認最大客戶付款週期與可承作應收帳款，再由 RM 評估合適方案。",
+            "route": "應收帳款與收款節奏查核",
+            "reason": "先確認最大客戶付款週期、爭議與實際延遲紀錄，再由 RM 依既有流程處理。",
         }
     if "外幣" in top_driver:
         return {
-            "route": "外匯避險諮詢",
-            "reason": "先盤點收付款幣別與時點，再由 RM／專責人員評估避險工具。",
+            "route": "外幣收付款時點查核",
+            "reason": "先盤點幣別、收付款時點、自然避險與現有部位，再由合格人員依既有流程處理。",
         }
     if "薪資" in top_driver or "營運" in top_driver:
         return {
-            "route": "營運週轉金檢視",
-            "reason": "固定支出對安全水位影響較高，建議 RM 優先了解短期週轉需求。",
+            "route": "固定支出與安全水位查核",
+            "reason": "固定支出對安全水位影響較高，RM 應先確認付款集中日與短期必要支出。",
         }
     return {
-        "route": "現金流盤點",
-        "reason": "由 RM 先確認大額付款時點與資金來源，再決定是否進一步媒合金融服務。",
+        "route": "大額付款時點查核",
+        "reason": "由 RM 先確認大額付款時點、不可延後項目與既有資金來源。",
     }
 
 
@@ -492,6 +571,185 @@ def _adjustment_recommendations(
     return results[:4]
 
 
+def _rm_priority(
+    risk_interpretation: dict[str, object],
+    horizons: list[dict[str, object]],
+) -> dict[str, object]:
+    h90 = next((row for row in horizons if row["horizon_days"] == 90), horizons[-1])
+    base_probability = float(risk_interpretation["base_90_probability"])
+    stress_probability = float(
+        risk_interpretation["most_sensitive_stress_probability"]
+    )
+    risk_status = str(risk_interpretation["status"])
+    first_breach_raw = h90["median_first_breach_day"]
+    first_breach_day = (
+        int(first_breach_raw)
+        if isinstance(first_breach_raw, (int, float))
+        else None
+    )
+
+    if (
+        risk_status == "HIGH_RISK"
+        or base_probability >= 0.5
+        or (
+            first_breach_day is not None
+            and first_breach_day <= 30
+            and base_probability >= 0.1
+        )
+    ):
+        return {
+            "priority": "CONTACT_WITHIN_48_HOURS",
+            "priority_label": "優先聯絡",
+            "contact_window_days": 2,
+            "contact_window_label": "48 小時內由 RM 覆核並聯絡",
+            "rationale": "正常情境或近 30 天已出現明確資金水位壓力，應先核對資料與近期付款事件。",
+        }
+
+    if risk_status in {"WATCH", "NEAR_THRESHOLD", "STRESS_SENSITIVE"} or stress_probability >= 0.2:
+        return {
+            "priority": "CONTACT_WITHIN_7_DAYS",
+            "priority_label": "本週覆核",
+            "contact_window_days": 7,
+            "contact_window_label": "7 天內完成資料覆核與需求訪談",
+            "rationale": "基準、緩衝或壓力情境已有需要追蹤的訊號，應在下一個收付款週期前確認。",
+        }
+
+    return {
+        "priority": "MONITOR",
+        "priority_label": "持續監控",
+        "contact_window_days": 30,
+        "contact_window_label": "30 天內更新資料；異常事件立即重跑",
+        "rationale": "目前仍有現金緩衝，先維持監控並在資料或重大收付款改變時重新估算。",
+    }
+
+
+def _rm_handoff(
+    profile: LiquidityProfile,
+    *,
+    risk_interpretation: dict[str, object],
+    horizons: list[dict[str, object]],
+    drivers: list[dict[str, float | str]],
+    adjustments: list[dict[str, object]],
+    engine_fingerprint: str,
+) -> dict[str, object]:
+    priority = _rm_priority(risk_interpretation, horizons)
+    top_driver = str(drivers[0]["driver"]) if drivers else "尚無可排序曝險"
+    stress_name = str(risk_interpretation["most_sensitive_stress"])
+    stress_label = _STRESS_LABELS.get(stress_name, stress_name)
+
+    ordered_codes: list[str] = []
+    adjustment_by_code: dict[str, dict[str, object]] = {}
+    for item in adjustments:
+        code = str(item["code"])
+        adjustment_by_code[code] = item
+        if code in _RM_ACTION_LIBRARY and code not in ordered_codes:
+            ordered_codes.append(code)
+
+    for driver in drivers:
+        code = _DRIVER_TO_RM_ACTION.get(str(driver["driver"]))
+        if code and code not in ordered_codes:
+            ordered_codes.append(code)
+
+    if not ordered_codes:
+        ordered_codes.append("refresh_cash_baseline")
+
+    actions: list[dict[str, object]] = []
+    for code in ordered_codes[:2]:
+        template = _RM_ACTION_LIBRARY[code]
+        modeled = adjustment_by_code.get(code)
+        actions.append(
+            {
+                "rank": len(actions) + 1,
+                "action_code": code,
+                "source_adjustment_code": code if modeled else None,
+                "title": template["title"],
+                "verify_checks": template["verify_checks"],
+                "conversation": template["conversation"],
+                "boundary": template["boundary"],
+                "completion_rule": template["completion_rule"],
+                "modeled_effect": (
+                    {
+                        "improvement_percentage_points": modeled[
+                            "improvement_percentage_points"
+                        ],
+                        "ending_cash_p50_change": modeled[
+                            "ending_cash_p50_change"
+                        ],
+                        "reference_stress": modeled["reference_stress"],
+                        "comparison_seed": modeled["comparison_seed"],
+                    }
+                    if modeled
+                    else None
+                ),
+            }
+        )
+
+    review_triggers = [
+        {
+            "code": "ACTUAL_CASH_UPDATED",
+            "label": "可動用現金或安全水位更新時立即重跑",
+        },
+        {
+            "code": "INPUTS_STALE_30_DAYS",
+            "label": "距上次資料覆核 30 天時重新確認，不沿用舊結論",
+        },
+    ]
+    if profile.receivables:
+        review_triggers.insert(
+            1,
+            {
+                "code": "RECEIVABLE_STATUS_CHANGED",
+                "label": "主要應收到期、延遲、爭議或收款狀態改變",
+            },
+        )
+    if profile.payables:
+        review_triggers.insert(
+            1,
+            {
+                "code": "PAYABLE_SCHEDULE_CHANGED",
+                "label": "大額應付的到期日或不可延後狀態改變",
+            },
+        )
+    if profile.fx_receivable_share > 0.05:
+        review_triggers.insert(
+            1,
+            {
+                "code": "FX_EXPOSURE_CHANGED",
+                "label": "外幣收付款時點或自然避險部位改變",
+            },
+        )
+
+    return {
+        "schema_version": "sme-rm-handoff-v1",
+        **priority,
+        "case_basis": [
+            {
+                "code": "RISK_STATUS",
+                "label": f"模型狀態：{risk_interpretation['label']}",
+            },
+            {"code": "TOP_DRIVER", "label": f"首要曝險：{top_driver}"},
+            {
+                "code": "MOST_SENSITIVE_STRESS",
+                "label": f"最敏感情境：{stress_label}",
+            },
+        ],
+        "actions": actions,
+        "review_triggers": review_triggers,
+        "decision_boundary": "此交接只建立查核與訪談順序，不是信用評分、核貸決定、額度建議或自動商品銷售。",
+        "source": {
+            "engine_version": ENGINE_VERSION,
+            "engine_fingerprint": engine_fingerprint,
+        },
+        "governance": {
+            "crm_write_performed": False,
+            "customer_contact_performed": False,
+            "is_credit_decision": False,
+            "automatic_product_sale": False,
+            "human_review_required": True,
+        },
+    }
+
+
 def _profile_fingerprint(
     profile: LiquidityProfile,
     *,
@@ -565,17 +823,28 @@ def forecast_liquidity(
         )
 
     drivers = _drivers(profile)
+    fingerprint = _profile_fingerprint(
+        profile,
+        simulations=simulations,
+        seed=seed,
+    )
+    risk_interpretation = _risk_interpretation(
+        profile,
+        horizons,
+        stress_tests,
+    )
+    adjustments = _adjustment_recommendations(
+        profile,
+        simulations=simulations,
+        seed=seed,
+    )
     return {
         "engine": {
             "version": ENGINE_VERSION,
             "probabilistic": True,
             "simulations": simulations,
             "seed": seed,
-            "input_fingerprint": _profile_fingerprint(
-                profile,
-                simulations=simulations,
-                seed=seed,
-            ),
+            "input_fingerprint": fingerprint,
             "horizons": list(HORIZONS),
             "assumptions": {
                 "nonnegative_inflow_distribution": "lognormal_mean_std_calibrated",
@@ -594,19 +863,19 @@ def forecast_liquidity(
         },
         "horizons": horizons,
         "stress_tests": stress_tests,
-        "risk_interpretation": _risk_interpretation(
-            profile,
-            horizons,
-            stress_tests,
-        ),
+        "risk_interpretation": risk_interpretation,
         "drivers": drivers,
         "rm_next_step": _action_hint(
             str(drivers[0]["driver"]) if drivers else ""
         ),
-        "adjustment_recommendations": _adjustment_recommendations(
+        "adjustment_recommendations": adjustments,
+        "rm_handoff": _rm_handoff(
             profile,
-            simulations=simulations,
-            seed=seed,
+            risk_interpretation=risk_interpretation,
+            horizons=horizons,
+            drivers=drivers,
+            adjustments=adjustments,
+            engine_fingerprint=fingerprint,
         ),
         "guardrails": {
             "is_credit_decision": False,

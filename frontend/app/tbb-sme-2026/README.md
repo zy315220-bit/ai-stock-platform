@@ -62,7 +62,11 @@ Reference background: standard common-random-number / variance-reduction practic
 
 ## AI RM evidence router and upgrade gate
 
-The opt-in RM brief uses Vercel AI Gateway with Gemini and structured output. It receives only de-identified derived indicators: risk status, probabilities, buffer ratio, stress/driver enums, adjustment code and engine fingerprint. Company name, business number and raw financial amounts are excluded. The model can select only allowlisted priority, evidence and RM-question IDs; server code renders the numerical statements from authoritative engine values. If the Gateway is unavailable, the response is explicitly labelled deterministic fallback rather than AI output.
+The opt-in RM brief uses Vercel AI Gateway with Gemini and structured output. It receives only de-identified derived indicators: the authoritative contact priority, risk status, probabilities, buffer ratio, stress/driver enums, adjustment code and engine fingerprint. Company name, business number and raw financial amounts are excluded. The model can rank only allowlisted evidence and RM-question IDs; it must echo the server priority, which is enforced again after generation. Server code renders the numerical statements from authoritative engine values. If the Gateway is unavailable, the response is explicitly labelled deterministic fallback rather than AI output.
+
+Before the optional AI layer, the Python engine now emits an authoritative `sme-rm-handoff-v1` contract. It contains a deterministic contact window, the evidence that an RM must verify, completion rules, re-run triggers and explicit decision boundaries. The frontend no longer invents this workflow with static copy. Every work card is bound to the same input fingerprint as the forecast, and the browser-generated audit export carries only de-identified handoff codes, evidence IDs and governance flags.
+
+The handoff does not write to CRM, contact a customer, score credit, approve a loan, suggest an amount or sell a product. It prepares a human-review work card only. A bank pilot can map the stable action/evidence codes to existing CRM tasks after access control, retention, maker-checker and audit-log requirements are agreed.
 
 The numerical baseline remains intentionally simpler and auditable. Candidate sequence models such as:
 

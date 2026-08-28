@@ -151,6 +151,52 @@ type AdjustmentRecommendation = {
   comparison_seed: number;
 };
 
+type RmPriority =
+  | "MONITOR"
+  | "CONTACT_WITHIN_7_DAYS"
+  | "CONTACT_WITHIN_48_HOURS";
+
+type RmAction = {
+  rank: number;
+  action_code: string;
+  source_adjustment_code: AdjustmentCode | null;
+  title: string;
+  verify_checks: Array<{ id: string; label: string }>;
+  conversation: string;
+  boundary: string;
+  completion_rule: string;
+  modeled_effect: {
+    improvement_percentage_points: number;
+    ending_cash_p50_change: number;
+    reference_stress: "combined";
+    comparison_seed: number;
+  } | null;
+};
+
+type RmHandoff = {
+  schema_version: "sme-rm-handoff-v1";
+  priority: RmPriority;
+  priority_label: string;
+  contact_window_days: 2 | 7 | 30;
+  contact_window_label: string;
+  rationale: string;
+  case_basis: Array<{ code: string; label: string }>;
+  actions: RmAction[];
+  review_triggers: Array<{ code: string; label: string }>;
+  decision_boundary: string;
+  source: {
+    engine_version: string;
+    engine_fingerprint: string;
+  };
+  governance: {
+    crm_write_performed: false;
+    customer_contact_performed: false;
+    is_credit_decision: false;
+    automatic_product_sale: false;
+    human_review_required: true;
+  };
+};
+
 type Forecast = {
   profile: {
     name: string;
@@ -187,6 +233,7 @@ type Forecast = {
   drivers: Array<{ driver: DriverName; exposure_amount: number }>;
   rm_next_step: { route: string; reason: string };
   adjustment_recommendations: AdjustmentRecommendation[];
+  rm_handoff: RmHandoff;
   guardrails: {
     is_credit_decision: boolean;
     is_loan_approval: boolean;
@@ -206,6 +253,7 @@ type AiBrief = {
   rm_questions: Array<{ id: string; text: string }>;
   governance: {
     numbers_generated_by_ai: false;
+    priority_generated_by_ai: false;
     raw_financial_fields_sent: false;
     company_identity_sent: false;
     prompt_training_disallowed: boolean;
@@ -260,32 +308,6 @@ const stressLabels: Record<StressName, string> = {
   revenue_down_15pct: "營收下降 15%",
   twd_strengthens_5pct: "台幣升值 5%",
   combined: "三項同時發生",
-};
-
-const rmActionMap: Record<
-  AdjustmentCode,
-  { verify: string; conversation: string; boundary: string }
-> = {
-  accelerate_receivable: {
-    verify: "確認最大筆應收的付款人、到期日、爭議狀態與過去延遲紀錄。",
-    conversation: "應收管理、短期週轉與收款節奏調整的需求訪談。",
-    boundary: "先確認真實帳款與資金缺口，再由 RM 依既有流程評估可行服務。",
-  },
-  reschedule_payable: {
-    verify: "確認近期大額應付款的到期日、不可延後項目與供應商協商空間。",
-    conversation: "付款排程、週轉資金與供應鏈現金流的需求訪談。",
-    boundary: "模型只指出現金流時點壓力，不自動判斷授信額度或產品適配。",
-  },
-  reduce_fixed_cost: {
-    verify: "確認薪資、租金與固定營運支出中，哪些是短期不可延後的集中付款。",
-    conversation: "營運週轉、付款排程與短期資金緩衝的需求訪談。",
-    boundary: "成本調整是假設情境，不代表要求企業實際削減人事或營運支出。",
-  },
-  reduce_fx_exposure: {
-    verify: "確認外幣應收幣別、預計收款日、自然避險部位與現有避險比例。",
-    conversation: "匯率曝險盤點與避險需求訪談。",
-    boundary: "僅辨識曝險方向，不自動建議特定外匯商品、部位或交易。",
-  },
 };
 
 const privateFields: Array<{
@@ -488,7 +510,7 @@ function buildAuditSnapshot(data: Forecast, aiBrief: AiBrief | null) {
   );
 
   return {
-    schema_version: "sme-liquidity-audit-v1",
+    schema_version: "sme-liquidity-audit-v2",
     generated_at: new Date().toISOString(),
     privacy: {
       company_identity_included: false,
@@ -537,12 +559,30 @@ function buildAuditSnapshot(data: Forecast, aiBrief: AiBrief | null) {
       reference_stress: item.reference_stress,
       comparison_seed: item.comparison_seed,
     })),
-    rm_handoff: data.adjustment_recommendations.slice(0, 2).map((item) => ({
-      adjustment_code: item.code,
-      verify: rmActionMap[item.code].verify,
-      conversation: rmActionMap[item.code].conversation,
-      boundary: rmActionMap[item.code].boundary,
-    })),
+    rm_handoff: {
+      schema_version: data.rm_handoff.schema_version,
+      priority: data.rm_handoff.priority,
+      contact_window_days: data.rm_handoff.contact_window_days,
+      case_basis_codes: data.rm_handoff.case_basis.map((item) => item.code),
+      actions: data.rm_handoff.actions.map((item) => ({
+        rank: item.rank,
+        action_code: item.action_code,
+        source_adjustment_code: item.source_adjustment_code,
+        verify_check_ids: item.verify_checks.map((check) => check.id),
+        improvement_percentage_points:
+          item.modeled_effect?.improvement_percentage_points ?? null,
+        reference_stress: item.modeled_effect?.reference_stress ?? null,
+        comparison_seed: item.modeled_effect?.comparison_seed ?? null,
+        completion_rule: item.completion_rule,
+        boundary: item.boundary,
+      })),
+      review_trigger_codes: data.rm_handoff.review_triggers.map(
+        (item) => item.code,
+      ),
+      decision_boundary: data.rm_handoff.decision_boundary,
+      source: data.rm_handoff.source,
+      governance: data.rm_handoff.governance,
+    },
     guardrails: data.guardrails,
     ai_brief: aiBrief
       ? {
@@ -765,6 +805,7 @@ export default function LiquidityDemo() {
           consent: true,
           evidence: {
             data_mode: data.engine.data_mode,
+            authoritative_priority: data.rm_handoff.priority,
             risk_status: data.risk_interpretation.status,
             base_probability: h90.shortfall_probability,
             base_ci95_upper: h90.shortfall_probability_ci95_upper,
@@ -1399,40 +1440,83 @@ export default function LiquidityDemo() {
             </section>
           )}
 
-          {data.adjustment_recommendations?.length > 0 && (
-            <section className={styles.handoffPanel} aria-labelledby="rm-handoff-title">
+          {data.rm_handoff.actions.length > 0 && (
+            <section
+              className={`${styles.handoffPanel} ${styles[`handoff_${data.rm_handoff.priority}`]}`}
+              aria-labelledby="rm-handoff-title"
+            >
               <div className={styles.handoffHead}>
-                <span className={styles.kicker}>RM HANDOFF</span>
-                <h3 id="rm-handoff-title">把模型訊號翻成 RM 下一通電話要確認的事。</h3>
-                <p>
-                  這裡不是自動賣商品，而是把「風險 → 查核 → 需求訪談」接到既有企業金融流程，
-                  讓模型輸出能被銀行人員真正使用。
-                </p>
+                <div>
+                  <span className={styles.kicker}>RM HANDOFF · SERVER AUTHORIZED</span>
+                  <h3 id="rm-handoff-title">把模型訊號變成可覆核、可結案的 RM 工作卡。</h3>
+                </div>
+                <div className={styles.handoffPriority}>
+                  <span>{data.rm_handoff.priority_label}</span>
+                  <strong>{data.rm_handoff.contact_window_label}</strong>
+                  <p>{data.rm_handoff.rationale}</p>
+                </div>
               </div>
+
+              <div className={styles.handoffBasis} aria-label="RM 交接依據">
+                {data.rm_handoff.case_basis.map((item) => (
+                  <span key={item.code}>{item.label}</span>
+                ))}
+              </div>
+
               <div className={styles.handoffGrid}>
-                {data.adjustment_recommendations.slice(0, 2).map((item, index) => {
-                  const handoff = rmActionMap[item.code];
-                  return (
-                    <article key={item.code}>
-                      <span>PRIORITY 0{index + 1}</span>
-                      <h4>{item.title}</h4>
-                      <dl>
-                        <div>
-                          <dt>先確認</dt>
-                          <dd>{handoff.verify}</dd>
-                        </div>
-                        <div>
-                          <dt>服務對話</dt>
-                          <dd>{handoff.conversation}</dd>
-                        </div>
-                        <div>
-                          <dt>邊界</dt>
-                          <dd>{handoff.boundary}</dd>
-                        </div>
-                      </dl>
-                    </article>
-                  );
-                })}
+                {data.rm_handoff.actions.map((item) => (
+                  <article key={item.action_code}>
+                    <span>WORK CARD {String(item.rank).padStart(2, "0")}</span>
+                    <h4>{item.title}</h4>
+                    {item.modeled_effect && (
+                      <small className={styles.handoffEffect}>
+                        {item.modeled_effect.improvement_percentage_points > 0
+                          ? `同一綜合壓力下，缺口機率估計改善 ${item.modeled_effect.improvement_percentage_points.toFixed(1)} 個百分點`
+                          : `同一綜合壓力下，90 天 P50 現金估計增加 ${money(item.modeled_effect.ending_cash_p50_change)}`}
+                      </small>
+                    )}
+                    <div className={styles.handoffChecks}>
+                      <strong>先核對這些證據</strong>
+                      <ul>
+                        {item.verify_checks.map((check) => (
+                          <li key={check.id}>{check.label}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>需求訪談</dt>
+                        <dd>{item.conversation}</dd>
+                      </div>
+                      <div>
+                        <dt>完成標準</dt>
+                        <dd>{item.completion_rule}</dd>
+                      </div>
+                      <div>
+                        <dt>不可越界</dt>
+                        <dd>{item.boundary}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+
+              <div className={styles.handoffReview}>
+                <div>
+                  <strong>哪些事件要立即重跑？</strong>
+                  <ul>
+                    {data.rm_handoff.review_triggers.map((item) => (
+                      <li key={item.code}>{item.label}</li>
+                    ))}
+                  </ul>
+                </div>
+                <p>
+                  <strong>決策邊界</strong>
+                  {data.rm_handoff.decision_boundary}
+                  <small>
+                    {data.rm_handoff.source.engine_version} · evidence {data.rm_handoff.source.engine_fingerprint.slice(0, 12)}
+                  </small>
+                </p>
               </div>
             </section>
           )}
@@ -1450,6 +1534,8 @@ export default function LiquidityDemo() {
               <div className={styles.aiGovernanceBadges} aria-label="AI 資料治理">
                 <span>不傳公司身分</span>
                 <span>不傳原始金額</span>
+                <span>不改模型數字</span>
+                <span>不改聯絡級別</span>
                 <span>結構化輸出</span>
                 <span>人工覆核</span>
               </div>

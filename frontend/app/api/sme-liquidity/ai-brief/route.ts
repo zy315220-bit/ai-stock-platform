@@ -65,6 +65,7 @@ const RequestSchema = z.object({
   consent: z.literal(true),
   evidence: z.object({
     data_mode: z.enum(["synthetic_demo", "user_supplied_or_estimated"]),
+    authoritative_priority: PrioritySchema,
     risk_status: RiskStatusSchema,
     base_probability: z.number().finite().min(0).max(1),
     base_ci95_upper: z.number().finite().min(0).max(1),
@@ -178,14 +179,6 @@ function availableEvidence(evidence: Evidence): Record<EvidenceId, string | null
 }
 
 function deterministicSelection(evidence: Evidence): Selection {
-  const priority: Selection["priority"] =
-    evidence.risk_status === "HIGH_RISK" || evidence.base_probability >= 0.5
-      ? "CONTACT_WITHIN_48_HOURS"
-      : evidence.risk_status === "WATCH" ||
-          evidence.risk_status === "NEAR_THRESHOLD" ||
-          evidence.risk_status === "STRESS_SENSITIVE"
-        ? "CONTACT_WITHIN_7_DAYS"
-        : "MONITOR";
   const evidenceIds: EvidenceId[] = ["BASE_RISK", "UPPER_BOUND", "STRESS", "DRIVER"];
   if (evidence.best_adjustment) evidenceIds[3] = "ADJUSTMENT";
 
@@ -197,7 +190,7 @@ function deterministicSelection(evidence: Evidence): Selection {
     外幣應收曝險: "REVIEW_FX",
   };
   return {
-    priority,
+    priority: evidence.authoritative_priority,
     evidence_ids: evidenceIds,
     question_ids: [
       "CONFIRM_CASH_FLOWS",
@@ -269,14 +262,7 @@ function renderBrief(
     if (selectedQuestions.length >= 3) break;
   }
 
-  const priorityRank: Record<Selection["priority"], number> = {
-    MONITOR: 0,
-    CONTACT_WITHIN_7_DAYS: 1,
-    CONTACT_WITHIN_48_HOURS: 2,
-  };
-  const priority = priorityRank[selection.priority] >= priorityRank[fallback.priority]
-    ? selection.priority
-    : fallback.priority;
+  const priority = fallback.priority;
 
   return {
     mode,
@@ -288,6 +274,7 @@ function renderBrief(
     rm_questions: selectedQuestions.slice(0, 4),
     governance: {
       numbers_generated_by_ai: false,
+      priority_generated_by_ai: false,
       raw_financial_fields_sent: false,
       company_identity_sent: false,
       prompt_training_disallowed: mode === "AI_GATEWAY",
@@ -353,7 +340,7 @@ export async function POST(request: NextRequest) {
       model: MODEL_ID,
       output: Output.object({ schema: SelectionSchema }),
       instructions:
-        "你是銀行 RM 的風險證據路由器。只能從 schema 的列舉值選擇優先級、三到四個證據 ID 與三到四個問題 ID。不得新增數字、公司事實、授信結論或金融商品推薦。基準引擎是唯一數值權威，所有結果均需人工覆核。",
+        "你是銀行 RM 的風險證據路由器。priority 必須原樣回傳 authoritative_priority；你只能排序三到四個證據 ID 與三到四個問題 ID。不得新增數字、公司事實、授信結論或金融商品推薦。Python 基準引擎與 RM handoff 是唯一數值及聯絡優先級權威，所有結果均需人工覆核。",
       prompt: JSON.stringify(evidence),
       temperature: 0,
       maxOutputTokens: 250,

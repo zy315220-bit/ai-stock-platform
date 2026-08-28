@@ -377,17 +377,36 @@
 @media(max-width:620px){.auditPanel{padding:18px}.auditPanel h3{font-size:18px}.auditPanel p,.auditActions small{font-size:10px}.auditActions button{width:100%;min-height:48px}}
 
 .handoffPanel{padding:30px 32px;border-bottom:1px solid var(--ink);background:#f7f3eb}
-.handoffHead{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(260px,.8fr);gap:26px;align-items:end}
-.handoffHead h3{margin:7px 0 0;font-size:24px}
-.handoffHead p{margin:0;color:var(--muted);font-size:9px;line-height:1.65}
-.handoffGrid{display:grid;grid-template-columns:1fr 1fr;margin-top:22px;border:1px solid var(--ink);background:var(--surface)}
+.handoff_MONITOR{background:#edf2ef}
+.handoff_CONTACT_WITHIN_7_DAYS{background:#f4ead8}
+.handoff_CONTACT_WITHIN_48_HOURS{background:#f2dddd}
+.handoffHead{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:28px;align-items:end}
+.handoffHead h3{margin:7px 0 0;font-size:24px;line-height:1.25}
+.handoffPriority{display:grid;gap:6px;padding:16px 18px;border:1px solid var(--ink);background:rgba(255,255,255,.58)}
+.handoffPriority span{color:var(--accent);font:900 8px ui-monospace,SFMono-Regular,Menlo,monospace}
+.handoffPriority strong{font-size:14px}
+.handoffPriority p{margin:0;color:var(--muted);font-size:9px;line-height:1.6}
+.handoffBasis{display:flex;flex-wrap:wrap;gap:7px;margin-top:18px}
+.handoffBasis span{padding:7px 9px;border:1px solid var(--ink);background:rgba(255,255,255,.62);font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace}
+.handoffGrid{display:grid;grid-template-columns:1fr 1fr;margin-top:18px;border:1px solid var(--ink);background:var(--surface)}
 .handoffGrid article{padding:22px 24px;border-right:1px solid var(--ink)}
 .handoffGrid article:last-child{border-right:0}
 .handoffGrid>article>span{color:var(--accent);font:900 8px ui-monospace,SFMono-Regular,Menlo,monospace}
-.handoffGrid h4{margin:8px 0 16px;font-size:17px}
-.handoffGrid dl{margin:0}
+.handoffGrid h4{margin:8px 0 10px;font-size:17px}
+.handoffEffect{display:block;margin-bottom:16px;color:var(--teal);font-size:8px;font-weight:900;line-height:1.5}
+.handoffChecks{padding:14px 15px;border:1px solid var(--line);background:#f5f1e8}
+.handoffChecks strong{font-size:9px}
+.handoffChecks ul{display:grid;grid-template-columns:1fr 1fr;gap:7px 18px;margin:10px 0 0;padding-left:17px;color:var(--muted);font-size:9px;line-height:1.45}
+.handoffGrid dl{margin:12px 0 0}
 .handoffGrid dl div{display:grid;grid-template-columns:72px 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
 .handoffGrid dt{color:var(--muted);font-size:8px;font-weight:900}
 .handoffGrid dd{margin:0;font-size:9px;line-height:1.55}
-@media(max-width:900px){.handoffHead,.handoffGrid{grid-template-columns:1fr}.handoffGrid article{border-right:0;border-bottom:1px solid var(--ink)}.handoffGrid article:last-child{border-bottom:0}}
-@media(max-width:620px){.handoffPanel{padding:20px 18px}.handoffHead h3{font-size:20px}.handoffHead p,.handoffGrid dd{font-size:10px}.handoffGrid dl div{grid-template-columns:64px 1fr}}
+.handoffReview{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--ink);border-top:0;background:rgba(255,255,255,.68)}
+.handoffReview>div,.handoffReview>p{margin:0;padding:18px 22px}
+.handoffReview>div{border-right:1px solid var(--ink)}
+.handoffReview strong{display:block;margin-bottom:8px;font-size:10px}
+.handoffReview ul{display:grid;gap:5px;margin:0;padding-left:17px;color:var(--muted);font-size:9px;line-height:1.5}
+.handoffReview p{color:var(--muted);font-size:9px;line-height:1.6}
+.handoffReview small{display:block;margin-top:10px;color:var(--teal);font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace}
+@media(max-width:900px){.handoffHead,.handoffGrid,.handoffReview{grid-template-columns:1fr}.handoffGrid article{border-right:0;border-bottom:1px solid var(--ink)}.handoffGrid article:last-child{border-bottom:0}.handoffReview>div{border-right:0;border-bottom:1px solid var(--ink)}}
+@media(max-width:620px){.handoffPanel{padding:20px 18px}.handoffHead h3{font-size:20px}.handoffPriority p,.handoffGrid dd,.handoffChecks ul,.handoffReview ul,.handoffReview p{font-size:10px}.handoffGrid dl div{grid-template-columns:64px 1fr}.handoffChecks ul{grid-template-columns:1fr}.handoffBasis span{font-size:9px}}

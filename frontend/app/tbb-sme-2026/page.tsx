@@ -107,7 +107,7 @@ export default function Page() {
         <p className={styles.lead}>
           第一層是可驗證的 Monte Carlo baseline：單一 Python 權威引擎、Wilson 95% 區間、
           Day 0 breach、common random numbers 壓力比較與極端案例回歸。第二層由 Gemini
-          在結構化 schema 內選擇查核證據、聯絡優先序與 RM 問題；它看不到公司身分或原始金額，
+          在結構化 schema 內排序查核證據與 RM 問題；聯絡優先序由權威引擎鎖定，AI 看不到公司身分或原始金額，
           也不能產生或修改風險百分比。未來時序 AI 仍須在 rolling out-of-sample 明確擊敗 baseline 才能升級。
         </p>
         <div className={styles.flowGrid}>

@@ -294,3 +294,73 @@ def test_each_adjustment_recommendation_has_measurable_improvement() -> None:
         )
         cash_improved = item["ending_cash_p50_change"] > 0
         assert probability_improved or cash_improved
+
+
+def test_rm_handoff_is_authoritative_actionable_and_fingerprint_bound() -> None:
+    result = forecast_liquidity(sample_profile(), simulations=1000, seed=204)
+    handoff = result["rm_handoff"]
+
+    assert handoff["schema_version"] == "sme-rm-handoff-v1"  # type: ignore[index]
+    assert handoff["priority"] in {  # type: ignore[index]
+        "MONITOR",
+        "CONTACT_WITHIN_7_DAYS",
+        "CONTACT_WITHIN_48_HOURS",
+    }
+    assert handoff["contact_window_days"] in {2, 7, 30}  # type: ignore[index]
+    assert handoff["source"]["engine_fingerprint"] == result["engine"]["input_fingerprint"]  # type: ignore[index]
+
+    actions = handoff["actions"]  # type: ignore[index]
+    assert 1 <= len(actions) <= 2
+    for rank, action in enumerate(actions, start=1):
+        assert action["rank"] == rank
+        assert len(action["verify_checks"]) == 4
+        assert all(check["id"] and check["label"] for check in action["verify_checks"])
+        assert action["conversation"]
+        assert action["boundary"]
+        assert action["completion_rule"]
+
+    governance = handoff["governance"]  # type: ignore[index]
+    assert governance["crm_write_performed"] is False
+    assert governance["customer_contact_performed"] is False
+    assert governance["is_credit_decision"] is False
+    assert governance["automatic_product_sale"] is False
+    assert governance["human_review_required"] is True
+
+
+def test_rm_handoff_escalates_day_zero_breach_to_48_hours() -> None:
+    result = forecast_liquidity(
+        sample_profile(current_cash=100_000, safety_cash_floor=500_000),
+        simulations=1000,
+        seed=205,
+    )
+    handoff = result["rm_handoff"]
+
+    assert handoff["priority"] == "CONTACT_WITHIN_48_HOURS"  # type: ignore[index]
+    assert handoff["contact_window_days"] == 2  # type: ignore[index]
+    assert "48 小時" in handoff["contact_window_label"]  # type: ignore[index]
+    assert "信用評分" in handoff["decision_boundary"]  # type: ignore[index]
+
+
+def test_rm_handoff_keeps_robust_profile_in_monitoring() -> None:
+    result = forecast_liquidity(
+        sample_profile(
+            current_cash=50_000_000,
+            safety_cash_floor=100_000,
+            baseline_daily_inflow=100_000,
+            daily_inflow_volatility=0,
+            fixed_daily_outflow=1_000,
+            payroll_amount=0,
+            receivables=(),
+            payables=(),
+            fx_receivable_share=0,
+        ),
+        simulations=1000,
+        seed=206,
+    )
+    handoff = result["rm_handoff"]
+
+    assert result["risk_interpretation"]["status"] == "ROBUST"  # type: ignore[index]
+    assert handoff["priority"] == "MONITOR"  # type: ignore[index]
+    assert handoff["contact_window_days"] == 30  # type: ignore[index]
+    trigger_codes = {item["code"] for item in handoff["review_triggers"]}  # type: ignore[index]
+    assert trigger_codes == {"ACTUAL_CASH_UPDATED", "INPUTS_STALE_30_DAYS"}

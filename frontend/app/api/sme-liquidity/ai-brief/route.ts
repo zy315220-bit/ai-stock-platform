@@ -211,6 +211,29 @@ function unique<T>(values: T[]) {
   return [...new Set(values)];
 }
 
+function logGatewayFailure(error: unknown) {
+  const value = error && typeof error === "object"
+    ? error as {
+        name?: unknown;
+        message?: unknown;
+        statusCode?: unknown;
+        cause?: { name?: unknown; message?: unknown; statusCode?: unknown };
+      }
+    : null;
+  console.error("[sme-ai-brief] gateway failure", {
+    name: typeof value?.name === "string" ? value.name : typeof error,
+    message: typeof value?.message === "string" ? value.message.slice(0, 500) : "unavailable",
+    statusCode: typeof value?.statusCode === "number" ? value.statusCode : null,
+    causeName: typeof value?.cause?.name === "string" ? value.cause.name : null,
+    causeMessage: typeof value?.cause?.message === "string"
+      ? value.cause.message.slice(0, 500)
+      : null,
+    causeStatusCode: typeof value?.cause?.statusCode === "number"
+      ? value.cause.statusCode
+      : null,
+  });
+}
+
 function renderBrief(
   selection: Selection,
   evidence: Evidence,
@@ -309,7 +332,8 @@ export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = JSON.parse(raw);
-  } catch {
+  } catch (error) {
+    logGatewayFailure(error);
     return NextResponse.json(
       { error: "invalid JSON" },
       { status: 400, headers: { "cache-control": "no-store" } },

@@ -364,3 +364,14 @@
   .privacyHero{padding-top:72px}
   .privacyDetails dl>div{grid-template-columns:1fr;gap:7px}
 }
+
+.auditPanel{display:grid;grid-template-columns:1fr auto;gap:28px;align-items:center;padding:24px 32px;border-bottom:1px solid var(--ink);background:#edf2ef}
+.auditPanel span{color:var(--teal);font:900 8px ui-monospace,SFMono-Regular,Menlo,monospace}
+.auditPanel h3{margin:7px 0 0;font-size:19px}
+.auditPanel p{max-width:820px;margin:8px 0 0;color:var(--muted);font-size:9px;line-height:1.65}
+.auditActions{display:grid;gap:8px;justify-items:end}
+.auditActions button{min-height:44px;padding:0 18px;border:1px solid var(--ink);background:var(--ink);color:#fff;font-weight:900;cursor:pointer;white-space:nowrap}
+.auditActions button:hover{background:var(--teal);border-color:var(--teal)}
+.auditActions small{max-width:250px;color:var(--muted);font-size:8px;text-align:right;line-height:1.45}
+@media(max-width:900px){.auditPanel{grid-template-columns:1fr}.auditActions{justify-items:start}.auditActions small{text-align:left}}
+@media(max-width:620px){.auditPanel{padding:18px}.auditPanel h3{font-size:18px}.auditPanel p,.auditActions small{font-size:10px}.auditActions button{width:100%;min-height:48px}}

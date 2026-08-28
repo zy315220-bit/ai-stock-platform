@@ -453,6 +453,78 @@ async function requestForecast(body: Record<string, unknown>): Promise<Forecast>
   return response.json() as Promise<Forecast>;
 }
 
+function buildAuditSnapshot(data: Forecast, aiBrief: AiBrief | null) {
+  const h90 = data.horizons.find((item) => item.horizon_days === 90) ?? null;
+  const mostSensitiveStress = data.stress_tests.reduce<Stress | null>(
+    (best, item) =>
+      !best || item.shortfall_probability > best.shortfall_probability ? item : best,
+    null,
+  );
+
+  return {
+    schema_version: "sme-liquidity-audit-v1",
+    generated_at: new Date().toISOString(),
+    privacy: {
+      company_identity_included: false,
+      raw_financial_fields_included: false,
+      export_created_in_browser: true,
+    },
+    engine: {
+      version: data.engine.version,
+      simulations: data.engine.simulations,
+      seed: data.engine.seed,
+      input_fingerprint: data.engine.input_fingerprint,
+      horizons: data.engine.horizons,
+      data_mode: data.engine.data_mode,
+    },
+    risk_interpretation: {
+      status: data.risk_interpretation.status,
+      label: data.risk_interpretation.label,
+      reasons: data.risk_interpretation.reasons,
+      base_90_probability: h90?.shortfall_probability ?? null,
+      base_90_ci95_upper: h90?.shortfall_probability_ci95_upper ?? null,
+      p10_buffer_ratio_90: h90?.p10_buffer_ratio ?? null,
+      most_sensitive_stress: mostSensitiveStress?.stress ?? null,
+      most_sensitive_stress_probability:
+        mostSensitiveStress?.shortfall_probability ?? null,
+    },
+    horizons: data.horizons.map((item) => ({
+      horizon_days: item.horizon_days,
+      shortfall_probability: item.shortfall_probability,
+      shortfall_breach_count: item.shortfall_breach_count,
+      simulated_path_count: item.simulated_path_count,
+      ci95_lower: item.shortfall_probability_ci95_lower,
+      ci95_upper: item.shortfall_probability_ci95_upper,
+      median_first_breach_day: item.median_first_breach_day,
+    })),
+    stress_tests: data.stress_tests.map((item) => ({
+      stress: item.stress,
+      shortfall_probability: item.shortfall_probability,
+      median_first_breach_day: item.median_first_breach_day,
+    })),
+    top_driver: data.drivers[0]?.driver ?? null,
+    adjustments: data.adjustment_recommendations.map((item) => ({
+      code: item.code,
+      before_shortfall_probability: item.before_shortfall_probability,
+      after_shortfall_probability: item.after_shortfall_probability,
+      improvement_percentage_points: item.improvement_percentage_points,
+      reference_stress: item.reference_stress,
+      comparison_seed: item.comparison_seed,
+    })),
+    guardrails: data.guardrails,
+    ai_brief: aiBrief
+      ? {
+          mode: aiBrief.mode,
+          model: aiBrief.model,
+          priority: aiBrief.priority,
+          evidence_ids: aiBrief.evidence.map((item) => item.id),
+          question_ids: aiBrief.rm_questions.map((item) => item.id),
+          governance: aiBrief.governance,
+        }
+      : null,
+  };
+}
+
 export default function LiquidityDemo() {
   const [form, setForm] = useState<InputState>(emptyInput);
   const [data, setData] = useState<Forecast | null>(null);
@@ -621,6 +693,22 @@ export default function LiquidityDemo() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function downloadAuditSnapshot() {
+    if (!data) return;
+    const snapshot = buildAuditSnapshot(data, aiBrief);
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `sme-liquidity-audit-${data.engine.input_fingerprint.slice(0, 12)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function runAiBrief() {
@@ -1155,6 +1243,28 @@ export default function LiquidityDemo() {
                 <li key={reason}>{reason}</li>
               ))}
             </ul>
+          </section>
+
+          <section className={styles.auditPanel} aria-labelledby="audit-pack-title">
+            <div>
+              <span>可稽核證據包</span>
+              <h3 id="audit-pack-title">把這次結果匯成去識別化 Audit JSON。</h3>
+              <p>
+                只帶模型版本、seed、input fingerprint、機率／信賴區間、壓力測試、
+                調整比較與治理旗標；不含公司名稱、統編或原始財務金額。
+                檔案直接在瀏覽器建立，不會為了匯出再把資料送到伺服器。
+              </p>
+            </div>
+            <div className={styles.auditActions}>
+              <button type="button" onClick={downloadAuditSnapshot}>
+                下載去識別稽核 JSON
+              </button>
+              <small>
+                {aiBrief
+                  ? "已附 AI 模式、證據 ID 與治理資訊"
+                  : "尚未產生 AI 摘要；仍可稽核數值引擎"}
+              </small>
+            </div>
           </section>
 
           <div className={styles.analysisGrid}>

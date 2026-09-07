@@ -79,7 +79,7 @@ _RM_ACTION_LIBRARY: dict[str, dict[str, object]] = {
             {"id": "AR_DELAY_HISTORY", "label": "近 6 個月實際延遲紀錄"},
         ],
         "conversation": "先做應收管理、短期週轉與收款節奏的需求訪談。",
-        "boundary": "確認真實帳款與資金缺口後，才由 RM 依既有流程評估可行服務；系統不自動推薦產品。",
+        "boundary": "確認真實帳款與資金缺口後，才由客戶經理依既有流程評估可行服務；系統不自動推薦產品。",
         "completion_rule": "四項證據至少核對到期日與爭議狀態，並以實際資料重跑一次預測。",
     },
     "reschedule_payable": {
@@ -344,7 +344,7 @@ def _action_hint(top_driver: str) -> dict[str, str]:
     if "應收帳款" in top_driver:
         return {
             "route": "應收帳款與收款節奏查核",
-            "reason": "先確認最大客戶付款週期、爭議與實際延遲紀錄，再由 RM 依既有流程處理。",
+            "reason": "先確認最大客戶付款週期、爭議與實際延遲紀錄，再由客戶經理依既有流程處理。",
         }
     if "外幣" in top_driver:
         return {
@@ -354,11 +354,11 @@ def _action_hint(top_driver: str) -> dict[str, str]:
     if "薪資" in top_driver or "營運" in top_driver:
         return {
             "route": "固定支出與安全水位查核",
-            "reason": "固定支出對安全水位影響較高，RM 應先確認付款集中日與短期必要支出。",
+            "reason": "固定支出對安全水位影響較高，客戶經理應先確認付款集中日與短期必要支出。",
         }
     return {
         "route": "大額付款時點查核",
-        "reason": "由 RM 先確認大額付款時點、不可延後項目與既有資金來源。",
+        "reason": "由客戶經理先確認大額付款時點、不可延後項目與既有資金來源。",
     }
 
 
@@ -421,8 +421,9 @@ def _risk_interpretation(
             f"90 天悲觀最低現金 P10 約比安全水位多 {float(h90['p10_buffer_above_floor']):,.0f} 元（{buffer_ratio * 100:.0f}% 緩衝）。"
         )
 
+    stress_label = _STRESS_LABELS.get(str(max_stress["stress"]), str(max_stress["stress"]))
     reasons.append(
-        f"最敏感壓力情境「{max_stress['stress']}」會把 90 天缺口機率推到 {stress * 100:.1f}%。"
+        f"最敏感壓力情境「{stress_label}」會把 90 天缺口機率推到 {stress * 100:.1f}%。"
     )
 
     return {
@@ -601,7 +602,7 @@ def _rm_priority(
             "priority": "CONTACT_WITHIN_48_HOURS",
             "priority_label": "優先聯絡",
             "contact_window_days": 2,
-            "contact_window_label": "48 小時內由 RM 覆核並聯絡",
+            "contact_window_label": "48 小時內由客戶經理覆核並聯絡",
             "rationale": "正常情境或近 30 天已出現明確資金水位壓力，應先核對資料與近期付款事件。",
         }
 

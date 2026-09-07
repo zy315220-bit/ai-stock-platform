@@ -310,6 +310,36 @@ const stressLabels: Record<StressName, string> = {
   combined: "三項同時發生",
 };
 
+const visibleTermReplacements: Array<[RegExp, string]> = [
+  [/major_customer_delay_30d/g, "最大客戶延遲 30 天"],
+  [/revenue_down_15pct/g, "營收下降 15%"],
+  [/twd_strengthens_5pct/g, "台幣升值 5%"],
+  [/\bcombined\b/g, "三項壓力同時發生"],
+  [/scenario prior/gi, "情境先驗值"],
+  [/\bbaseline\b/gi, "基準模型"],
+  [/\bproxy\b/gi, "替代值"],
+  [/\bSME\b/g, "中小企業"],
+  [/\bheuristic\b/gi, "推估方法"],
+  [/\bGate\b/g, "檢核門檻"],
+  [/\bRM\b/g, "客戶經理"],
+  [/\bP10\b/g, "悲觀第 10 百分位"],
+  [/\bP50\b/g, "中位數"],
+];
+
+function localizeVisibleText(value: string) {
+  return visibleTermReplacements.reduce(
+    (text, [pattern, replacement]) => text.replace(pattern, replacement),
+    value,
+  );
+}
+
+function engineVersionLabel(version: string) {
+  const versionNumber = version.match(/v(\d+)/i)?.[1];
+  return versionNumber
+    ? `資金壓力模型第 ${versionNumber} 版`
+    : "資金壓力模型（已驗證版本）";
+}
+
 const privateFields: Array<{
   key: keyof InputState;
   label: string;
@@ -352,7 +382,7 @@ function probabilityDisplay(item: Horizon) {
   return {
     primary: prob(item.shortfall_probability),
     secondary: `${item.shortfall_breach_count.toLocaleString("zh-TW")} / ${item.simulated_path_count.toLocaleString("zh-TW")} 路徑跌破`,
-    uncertainty: `95% CI ${(item.shortfall_probability_ci95_lower * 100).toFixed(2)}%–${(item.shortfall_probability_ci95_upper * 100).toFixed(2)}%`,
+    uncertainty: `95% 信賴區間 ${(item.shortfall_probability_ci95_lower * 100).toFixed(2)}%–${(item.shortfall_probability_ci95_upper * 100).toFixed(2)}%`,
   };
 }
 
@@ -855,7 +885,7 @@ export default function LiquidityDemo() {
     <section className={styles.demo} id="demo">
       <div className={styles.demoHeader}>
         <div>
-          <span className={styles.kicker}>STEP 1 · 找到公司</span>
+          <span className={styles.kicker}>第 1 步 · 找到公司</span>
           <h2>先找公司，網站查得到的資料全部自己帶。</h2>
           <p>
             選到公司後，系統先抓官方登記資料、推測產業，再建立一份可直接評估的資金估算。
@@ -968,7 +998,7 @@ export default function LiquidityDemo() {
             <section className={styles.autoProfile}>
               <div className={styles.autoProfileHead}>
                 <div>
-                  <span className={styles.kicker}>STEP 2 · 已自動完成</span>
+                  <span className={styles.kicker}>第 2 步 · 已自動帶入</span>
                   <h3>{companyProfile.official.company_name}</h3>
                   <p>
                     統編 {companyProfile.official.business_no}
@@ -986,7 +1016,7 @@ export default function LiquidityDemo() {
                 <div>
                   <span>產業</span>
                   <strong>{companyProfile.inferred.industry.label}</strong>
-                  <small>{companyProfile.inferred.industry.reason}</small>
+                  <small>{localizeVisibleText(companyProfile.inferred.industry.reason)}</small>
                 </div>
                 <div>
                   <span>登記資本額</span>
@@ -998,7 +1028,7 @@ export default function LiquidityDemo() {
                   <small>
                     {companyProfile.official.paid_in_capital_amount
                       ? `實收資本額 ${money(companyProfile.official.paid_in_capital_amount)}`
-                      : "實收資本額未提供；估算僅採登記資本 proxy"}
+                      : "實收資本額未提供；估算僅採登記資本替代值"}
                   </small>
                 </div>
                 <div>
@@ -1021,14 +1051,14 @@ export default function LiquidityDemo() {
 
               {companyProfile.quick_estimate_eligibility.status === "NOT_RECOMMENDED" ? (
                 <div className={styles.outOfScopePanel}>
-                  <span>已停止 SME 快速估算</span>
+                  <span>已停止中小企業快速估算</span>
                   <strong>
                     {companyProfile.market?.recommended_data_route === "PUBLIC_FINANCIAL_STATEMENTS"
-                      ? "此競賽版不對公開市場公司啟用 SME 快速估算"
-                      : "這家公司需要更多 SME 身分／真實財務資料"}
+                      ? "此競賽版不對公開市場公司啟用中小企業快速估算"
+                      : "這家公司需要更多中小企業身分／真實財務資料"}
                   </strong>
                   <p>
-                    系統不展示資本額 heuristic 推出的現金、營收或應收估值，避免製造假精準；完整產品應改接公開財報資料後另行建模。
+                    系統不展示由資本額推估出的現金、營收或應收估值，避免製造假精準；完整產品應改接公開財報資料後另行建模。
                   </p>
                   {companyProfile.market?.public_company?.company_code && (
                     <small>
@@ -1044,7 +1074,7 @@ export default function LiquidityDemo() {
                   <div>
                     <span>網站先幫你估</span>
                     <strong>可直接開始，不必先填 11 個財務欄位</strong>
-                    <p>{companyProfile.estimate.disclaimer}</p>
+                    <p>{localizeVisibleText(companyProfile.estimate.disclaimer)}</p>
                   </div>
                   <div className={styles.estimateSummary}>
                     <div>
@@ -1086,7 +1116,7 @@ export default function LiquidityDemo() {
                 </div>
                 <ul>
                   {companyProfile.quick_estimate_eligibility.reasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
+                    <li key={reason}>{localizeVisibleText(reason)}</li>
                   ))}
                 </ul>
               </div>
@@ -1111,7 +1141,7 @@ export default function LiquidityDemo() {
                       ? "正在驗證公司資料…"
                       : companyProfile.quick_estimate_eligibility.can_run_quick_estimate
                         ? "開始快速情境篩檢"
-                        : "此公司尚未通過快速估算 Gate"}
+                        : "此公司尚未通過快速估算檢核門檻"}
                 </button>
               </div>
             </section>
@@ -1134,8 +1164,8 @@ export default function LiquidityDemo() {
                     <strong>只有公開查不到的資料才需要你確認。</strong>
                     <p>
                       下方已先填入產業／公司規模估算。若你知道真實數字，直接覆蓋即可；
-                      不知道就保留估算值。財務輸入只送往同站模型 API、回應不快取且不寫入資料庫；
-                      AI RM 摘要是另外選擇加入，且不傳公司身分或原始金額。詳見
+                      不知道就保留估算值。財務輸入只送往同站模型服務、回應不快取且不寫入資料庫；
+                      AI 客戶經理摘要是另外選擇加入，且不傳公司身分或原始金額。詳見
                       <a href="/tbb-sme-2026/privacy">資料治理說明</a>。
                     </p>
                   </div>
@@ -1209,7 +1239,7 @@ export default function LiquidityDemo() {
           <span className={styles.loadingPulse} aria-hidden="true" />
           <div>
             <strong>正在跑 2,500 條資金路徑與四組壓力情境…</strong>
-            <p>完成後會自動捲到 30／60／90 天風險、反事實調整與 RM 下一步。</p>
+            <p>完成後會自動捲到 30／60／90 天風險、調整模擬與客戶經理下一步。</p>
           </div>
         </div>
       )}
@@ -1238,15 +1268,15 @@ export default function LiquidityDemo() {
                 <span className={styles.resultTitleSuffix}>的 90 天資金壓力報告</span>
               </h2>
               <p>
-                這不是核貸結果，而是未來資金壓力情境篩檢。快速模式使用公開資料＋scenario prior；
+                這不是核貸結果，而是未來資金壓力情境篩檢。快速模式使用公開資料＋產業與規模的情境先驗值；
                 若補入企業真實私有數據，可進一步提高準確度。
               </p>
             </div>
             <div className={styles.engineSeal}>
-              <span>ENGINE</span>
-              <strong>{data.engine.version}</strong>
-              <small>{data.engine.simulations.toLocaleString("zh-TW")} paths · seed {data.engine.seed}</small>
-              <small>fingerprint {data.engine.input_fingerprint.slice(0, 12)}</small>
+              <span>計算引擎</span>
+              <strong>{engineVersionLabel(data.engine.version)}</strong>
+              <small>{data.engine.simulations.toLocaleString("zh-TW")} 條模擬路徑 · 亂數種子 {data.engine.seed}</small>
+              <small>結果指紋 {data.engine.input_fingerprint.slice(0, 12)}</small>
               <small>即時計算 · 不保存輸入</small>
             </div>
           </div>
@@ -1257,7 +1287,7 @@ export default function LiquidityDemo() {
               <strong>{data.profile.name}</strong>
               <small>{data.profile.industry}</small>
             </div>
-            <p>{data.profile.description}</p>
+            <p>{localizeVisibleText(data.profile.description)}</p>
             <div className={styles.cashNow}>
               <span>目前現金</span>
               <strong>{money(data.profile.current_cash)}</strong>
@@ -1291,10 +1321,10 @@ export default function LiquidityDemo() {
                     <strong>{display.uncertainty}</strong>
                   </div>
                   <dl>
-                    <div><dt>悲觀期末 P10</dt><dd>{money(item.ending_cash_p10)}</dd></div>
-                    <div><dt>悲觀最低現金 P10</dt><dd>{money(item.min_cash_p10)}</dd></div>
+                    <div><dt>悲觀期末值</dt><dd>{money(item.ending_cash_p10)}</dd></div>
+                    <div><dt>悲觀最低現金</dt><dd>{money(item.min_cash_p10)}</dd></div>
                     <div><dt>安全水位緩衝</dt><dd>{money(item.p10_buffer_above_floor)}</dd></div>
-                    <div><dt>P50→P10 下行差距</dt><dd>{money(item.cash_flow_at_risk_p50_to_p10)}</dd></div>
+                    <div><dt>中位數至悲觀值差距</dt><dd>{money(item.cash_flow_at_risk_p50_to_p10)}</dd></div>
                   </dl>
                 </article>
               );
@@ -1307,13 +1337,13 @@ export default function LiquidityDemo() {
             <div className={styles.dynamicInterpretationHead}>
               <div>
                 <span>動態判讀</span>
-                <h3>{data.risk_interpretation.label}</h3>
+                <h3>{localizeVisibleText(data.risk_interpretation.label)}</h3>
               </div>
-              <p>{data.risk_interpretation.summary}</p>
+              <p>{localizeVisibleText(data.risk_interpretation.summary)}</p>
             </div>
             <ul>
               {data.risk_interpretation.reasons.map((reason) => (
-                <li key={reason}>{reason}</li>
+                <li key={reason}>{localizeVisibleText(reason)}</li>
               ))}
             </ul>
           </section>
@@ -1321,16 +1351,16 @@ export default function LiquidityDemo() {
           <section className={styles.auditPanel} aria-labelledby="audit-pack-title">
             <div>
               <span>可稽核證據包</span>
-              <h3 id="audit-pack-title">把這次結果匯成去識別化 Audit JSON。</h3>
+              <h3 id="audit-pack-title">把這次結果匯成去識別化稽核檔。</h3>
               <p>
-                只帶模型版本、seed、input fingerprint、機率／信賴區間、壓力測試、
+                只帶模型版本、亂數種子、結果指紋、機率／信賴區間、壓力測試、
                 調整比較與治理旗標；不含公司名稱、統編或原始財務金額。
                 檔案直接在瀏覽器建立，不會為了匯出再把資料送到伺服器。
               </p>
             </div>
             <div className={styles.auditActions}>
               <button type="button" onClick={downloadAuditSnapshot}>
-                下載去識別稽核 JSON
+                下載去識別稽核檔
               </button>
               <small>
                 {aiBrief
@@ -1356,7 +1386,7 @@ export default function LiquidityDemo() {
                     <span>{stressLabels[stress.stress] ?? stress.stress}</span>
                     <strong>{prob(stress.shortfall_probability)}</strong>
                     <small>
-                      P50 {money(stress.ending_cash_p50)}
+                      中位數現金 {money(stress.ending_cash_p50)}
                       {stress.median_first_breach_day
                         ? ` · 常見首次跌破約第 ${stress.median_first_breach_day} 天`
                         : " · 多數路徑未跌破"}
@@ -1372,7 +1402,7 @@ export default function LiquidityDemo() {
                 <strong>主要曝險集中在哪裡？</strong>
               </div>
               <p className={styles.driverDisclaimer}>
-                依金額與延遲／固定負擔曝險排序，用於協助 RM 排查；這不是因果歸因、SHAP 值或授信風險權重。
+                依金額與延遲／固定負擔曝險排序，用於協助客戶經理排查；這不是因果歸因或授信風險權重。
               </p>
               <div className={styles.driverList}>
                 {data.drivers.slice(0, 5).map((driver) => (
@@ -1404,8 +1434,8 @@ export default function LiquidityDemo() {
                   <span className={styles.kicker}>可以怎麼調整？</span>
                   <h3>不只告訴你有風險，直接重跑「如果這樣做」的結果。</h3>
                   <p>
-                    以下以畫面同一個綜合壓力情境、相同 seed 做 common-random-numbers
-                    反事實比較；是模型估計，不是保證效果。
+                    以下以畫面同一個綜合壓力情境、相同亂數種子與相同亂數樣本
+                    進行調整前後比較；這是模型估計，不是保證效果。
                   </p>
                 </div>
               </div>
@@ -1416,7 +1446,7 @@ export default function LiquidityDemo() {
                     <h4>{item.title}</h4>
                     <p>{item.rationale}</p>
                     <small className={styles.adjustmentAudit}>
-                      基準：{stressLabels[item.reference_stress]} · seed {item.comparison_seed}
+                      基準：{stressLabels[item.reference_stress]} · 亂數種子 {item.comparison_seed}
                     </small>
                     <div className={styles.adjustmentImpact}>
                       <div>
@@ -1432,7 +1462,7 @@ export default function LiquidityDemo() {
                     <div className={styles.adjustmentBenefit}>
                       {item.improvement_percentage_points > 0
                         ? `缺口機率估計降低 ${item.improvement_percentage_points.toFixed(1)} 個百分點`
-                        : `90 天 P50 現金估計增加 ${money(item.ending_cash_p50_change)}`}
+                        : `90 天中位數現金估計增加 ${money(item.ending_cash_p50_change)}`}
                     </div>
                   </article>
                 ))}
@@ -1447,54 +1477,54 @@ export default function LiquidityDemo() {
             >
               <div className={styles.handoffHead}>
                 <div>
-                  <span className={styles.kicker}>RM HANDOFF · SERVER AUTHORIZED</span>
-                  <h3 id="rm-handoff-title">把模型訊號變成可覆核、可結案的 RM 工作卡。</h3>
+                  <span className={styles.kicker}>客戶經理交接 · 由權威引擎核定</span>
+                  <h3 id="rm-handoff-title">把模型訊號變成可覆核、可結案的客戶經理工作卡。</h3>
                 </div>
                 <div className={styles.handoffPriority}>
-                  <span>{data.rm_handoff.priority_label}</span>
-                  <strong>{data.rm_handoff.contact_window_label}</strong>
-                  <p>{data.rm_handoff.rationale}</p>
+                  <span>{localizeVisibleText(data.rm_handoff.priority_label)}</span>
+                  <strong>{localizeVisibleText(data.rm_handoff.contact_window_label)}</strong>
+                  <p>{localizeVisibleText(data.rm_handoff.rationale)}</p>
                 </div>
               </div>
 
-              <div className={styles.handoffBasis} aria-label="RM 交接依據">
+              <div className={styles.handoffBasis} aria-label="客戶經理交接依據">
                 {data.rm_handoff.case_basis.map((item) => (
-                  <span key={item.code}>{item.label}</span>
+                  <span key={item.code}>{localizeVisibleText(item.label)}</span>
                 ))}
               </div>
 
               <div className={styles.handoffGrid}>
                 {data.rm_handoff.actions.map((item) => (
                   <article key={item.action_code}>
-                    <span>WORK CARD {String(item.rank).padStart(2, "0")}</span>
-                    <h4>{item.title}</h4>
+                    <span>工作卡 {String(item.rank).padStart(2, "0")}</span>
+                    <h4>{localizeVisibleText(item.title)}</h4>
                     {item.modeled_effect && (
                       <small className={styles.handoffEffect}>
                         {item.modeled_effect.improvement_percentage_points > 0
                           ? `同一綜合壓力下，缺口機率估計改善 ${item.modeled_effect.improvement_percentage_points.toFixed(1)} 個百分點`
-                          : `同一綜合壓力下，90 天 P50 現金估計增加 ${money(item.modeled_effect.ending_cash_p50_change)}`}
+                          : `同一綜合壓力下，90 天中位數現金估計增加 ${money(item.modeled_effect.ending_cash_p50_change)}`}
                       </small>
                     )}
                     <div className={styles.handoffChecks}>
                       <strong>先核對這些證據</strong>
                       <ul>
                         {item.verify_checks.map((check) => (
-                          <li key={check.id}>{check.label}</li>
+                          <li key={check.id}>{localizeVisibleText(check.label)}</li>
                         ))}
                       </ul>
                     </div>
                     <dl>
                       <div>
                         <dt>需求訪談</dt>
-                        <dd>{item.conversation}</dd>
+                        <dd>{localizeVisibleText(item.conversation)}</dd>
                       </div>
                       <div>
                         <dt>完成標準</dt>
-                        <dd>{item.completion_rule}</dd>
+                        <dd>{localizeVisibleText(item.completion_rule)}</dd>
                       </div>
                       <div>
                         <dt>不可越界</dt>
-                        <dd>{item.boundary}</dd>
+                        <dd>{localizeVisibleText(item.boundary)}</dd>
                       </div>
                     </dl>
                   </article>
@@ -1506,15 +1536,15 @@ export default function LiquidityDemo() {
                   <strong>哪些事件要立即重跑？</strong>
                   <ul>
                     {data.rm_handoff.review_triggers.map((item) => (
-                      <li key={item.code}>{item.label}</li>
+                      <li key={item.code}>{localizeVisibleText(item.label)}</li>
                     ))}
                   </ul>
                 </div>
                 <p>
                   <strong>決策邊界</strong>
-                  {data.rm_handoff.decision_boundary}
+                  {localizeVisibleText(data.rm_handoff.decision_boundary)}
                   <small>
-                    {data.rm_handoff.source.engine_version} · evidence {data.rm_handoff.source.engine_fingerprint.slice(0, 12)}
+                    {engineVersionLabel(data.rm_handoff.source.engine_version)} · 證據指紋 {data.rm_handoff.source.engine_fingerprint.slice(0, 12)}
                   </small>
                 </p>
               </div>
@@ -1524,11 +1554,11 @@ export default function LiquidityDemo() {
           <section className={styles.aiPanel} aria-labelledby="ai-brief-title">
             <div className={styles.aiPanelHead}>
               <div>
-                <span className={styles.kicker}>AI RM EVIDENCE ROUTER</span>
-                <h3 id="ai-brief-title">讓 AI 排證據與訪談問題，但不准改模型數字。</h3>
+                <span className={styles.kicker}>AI 證據整理器</span>
+                <h3 id="ai-brief-title">讓 AI 排序證據與訪談問題，但不准改模型數字。</h3>
                 <p>
                   AI 只收到去識別化衍生指標與列舉值；公司名稱、統編、現金、應收、應付等原始金額不會送出。
-                  數值仍完全來自上方 Python 引擎，RM 保留最終判斷。
+                  數值仍完全來自上方權威引擎，客戶經理保留最終判斷。
                 </p>
               </div>
               <div className={styles.aiGovernanceBadges} aria-label="AI 資料治理">
@@ -1549,14 +1579,14 @@ export default function LiquidityDemo() {
                     checked={aiConsent}
                     onChange={(event) => setAiConsent(event.target.checked)}
                   />
-                  <span>我同意送出去識別化衍生風險指標，產生一次 AI RM 摘要。</span>
+                  <span>我同意送出去識別化衍生風險指標，產生一次 AI 客戶經理摘要。</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => void runAiBrief()}
                   disabled={!aiConsent || aiLoading || data.drivers.length === 0}
                 >
-                  {aiLoading ? "AI 正在整理證據…" : "產生 AI RM 摘要"}
+                  {aiLoading ? "AI 正在整理證據…" : "產生 AI 客戶經理摘要"}
                 </button>
               </div>
             )}
@@ -1570,11 +1600,11 @@ export default function LiquidityDemo() {
             {aiBrief && (
               <div className={styles.aiBriefResult}>
                 <div className={styles.aiBriefSummary}>
-                  <span>{aiBrief.priority_label}</span>
-                  <h4>{aiBrief.headline}</h4>
+                  <span>{localizeVisibleText(aiBrief.priority_label)}</span>
+                  <h4>{localizeVisibleText(aiBrief.headline)}</h4>
                   <p>
                     {aiBrief.mode === "AI_GATEWAY"
-                      ? `AI Gateway · ${aiBrief.model}`
+                      ? "AI 服務已完成受控排序"
                       : "規則備援模式 · 本次 AI 服務未成功，因此未冒充 AI 產出"}
                     {` · 引擎指紋 ${aiBrief.governance.engine_fingerprint}`}
                   </p>
@@ -1584,15 +1614,15 @@ export default function LiquidityDemo() {
                     <strong>AI 排序後的查核證據</strong>
                     <ul>
                       {aiBrief.evidence.map((item) => (
-                        <li key={item.id}>{item.text}</li>
+                        <li key={item.id}>{localizeVisibleText(item.text)}</li>
                       ))}
                     </ul>
                   </div>
                   <div>
-                    <strong>建議 RM 先問</strong>
+                    <strong>建議客戶經理先問</strong>
                     <ol>
                       {aiBrief.rm_questions.map((item) => (
-                        <li key={item.id}>{item.text}</li>
+                        <li key={item.id}>{localizeVisibleText(item.text)}</li>
                       ))}
                     </ol>
                   </div>
@@ -1614,8 +1644,8 @@ export default function LiquidityDemo() {
           <section className={styles.rmPanel}>
             <div>
               <span>銀行端下一步</span>
-              <h3>{data.rm_next_step.route}</h3>
-              <p>{data.rm_next_step.reason}</p>
+              <h3>{localizeVisibleText(data.rm_next_step.route)}</h3>
+              <p>{localizeVisibleText(data.rm_next_step.reason)}</p>
             </div>
             <div className={styles.rmRules}>
               <span>AI 可以</span>

@@ -122,11 +122,11 @@ const priorityLabels: Record<z.infer<typeof PrioritySchema>, { label: string; he
   },
   CONTACT_WITHIN_7_DAYS: {
     label: "7 天內聯絡",
-    headline: "建議 RM 一週內確認現金流時點與主要曝險。",
+    headline: "建議客戶經理一週內確認現金流時點與主要曝險。",
   },
   CONTACT_WITHIN_48_HOURS: {
     label: "48 小時內聯絡",
-    headline: "建議 RM 優先聯絡，先核對真實資金缺口與近期付款安排。",
+    headline: "建議客戶經理優先聯絡，先核對真實資金缺口與近期付款安排。",
   },
 };
 

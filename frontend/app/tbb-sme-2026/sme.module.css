@@ -410,3 +410,97 @@
 .handoffReview small{display:block;margin-top:10px;color:var(--teal);font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace}
 @media(max-width:900px){.handoffHead,.handoffGrid,.handoffReview{grid-template-columns:1fr}.handoffGrid article{border-right:0;border-bottom:1px solid var(--ink)}.handoffGrid article:last-child{border-bottom:0}.handoffReview>div{border-right:0;border-bottom:1px solid var(--ink)}}
 @media(max-width:620px){.handoffPanel{padding:20px 18px}.handoffHead h3{font-size:20px}.handoffPriority p,.handoffGrid dd,.handoffChecks ul,.handoffReview ul,.handoffReview p{font-size:10px}.handoffGrid dl div{grid-template-columns:64px 1fr}.handoffChecks ul{grid-template-columns:1fr}.handoffBasis span{font-size:9px}}
+
+/* 競賽展示的可讀性底線：主文 16px、操作文字 15px、次要資訊 13px。 */
+.page{font-size:16px;line-height:1.65;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.page p{font-size:16px!important;line-height:1.75!important}
+.page li,.page dd{font-size:15px!important;line-height:1.65!important}
+.page small{font-size:13px!important;line-height:1.55!important}
+.page button,.page input,.page select{font-size:15px;line-height:1.4}
+.hero p{font-size:19px!important}
+.nav>div{font-size:14px}
+.brand{font-size:15px}
+.kicker{font-size:14px;line-height:1.45;letter-spacing:.08em}
+.heroCard span,
+.outputPromise span,
+.quickExamples>span,
+.inputPanelHead>div>span,
+.submitBar span,
+.emptyResult>span,
+.horizonTop>span,
+.panelLabel span,
+.rmPanel span,
+.flowGrid span,
+.adjustmentRank,
+.quickEstimate>div:first-child>span,
+.quickActionBar span,
+.dynamicInterpretationHead span,
+.aiBriefSummary>span,
+.aiBriefFoot span,
+.eligibilityGate span,
+.outOfScopePanel>span,
+.sourceLinks span,
+.deploymentFlow span,
+.measurementGrid span,
+.privacyGrid span,
+.auditPanel span,
+.handoffPriority span,
+.handoffGrid>article>span{font-size:13px!important;line-height:1.45}
+.inputField span,
+.companyBar span,
+.companySuggestions span,
+.officialGrid span,
+.stressList span,
+.driverList span,
+.estimateSummary span,
+.precisionToggle span,
+.probabilityEvidence span,
+.handoffBasis span{font-size:14px!important;line-height:1.5}
+.engineSeal span,.resultMeaning span{font-size:13px!important;line-height:1.45}
+.riskHigh,.riskMid,.riskLow{font-size:13px!important;line-height:1.35}
+.horizonGrid dl div{font-size:14px;gap:18px;line-height:1.5}
+.horizonGrid dt{max-width:62%}
+.horizonGrid dd{margin:0;text-align:right}
+.outputPromise strong,
+.submitBar strong,
+.loadingPanel strong,
+.quickActionBar strong,
+.precisionNotice strong,
+.precisionToggle strong,
+.probabilityEvidence strong,
+.aiBriefColumns strong,
+.handoffPriority strong,
+.handoffChecks strong,
+.handoffReview strong{font-size:16px!important;line-height:1.45}
+.companySuggestions strong,
+.officialGrid strong{font-size:16px}
+.estimateSummary strong{font-size:18px}
+.eligibilityGate strong,
+.measurementGrid strong{font-size:17px}
+.evidenceGrid strong,
+.boundaryGrid strong,
+.deploymentFlow strong{font-size:18px}
+.sourceBadges span,
+.aiGovernanceBadges span,
+.adjustmentAudit,
+.handoffEffect,
+.handoffReview small{font-size:12px!important;line-height:1.5}
+.autoLoading,.autoWarning,.aiError{font-size:15px!important;line-height:1.6}
+.aiConsentRow label{font-size:15px!important;line-height:1.6}
+.adjustmentGrid h4{font-size:18px}
+.adjustmentImpact span{font-size:13px!important}
+.adjustmentBenefit{font-size:14px!important;line-height:1.5}
+.privacyDetails dt,.handoffGrid dt{font-size:14px}
+.footer strong{font-size:15px}
+.footer a,.aiPrivacyLink{font-size:14px}
+.cta,.submitBar button,.quickActionBar button,.aiConsentRow button,.aiBriefFoot button,.auditActions button{font-size:15px}
+
+@media(max-width:620px){
+  .hero{padding-top:54px;padding-bottom:70px}
+  .hero h1{font-size:clamp(42px,13vw,54px)}
+  .demoHeader h2,.resultIntro h2{line-height:1.15}
+  .page p{font-size:16px!important}
+  .page li,.page dd{font-size:15px!important}
+  .nav{padding:16px 18px}
+  .brand{font-size:14px;letter-spacing:.04em}
+}

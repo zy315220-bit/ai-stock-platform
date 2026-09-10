@@ -154,6 +154,13 @@ def main() -> None:
             )
         ).get("available")
     ]
+    trial_return_paths = {
+        result.candidate.candidate_id: result.validation_metrics.get(
+            "_daily_strategy_returns",
+            [],
+        )
+        for result in all_training_results
+    }
     finalists = [
         replace(
             result,
@@ -165,20 +172,33 @@ def main() -> None:
                         {},
                     ),
                     trial_sharpes,
+                    trial_return_paths,
                 ),
             },
         )
         for result in finalists
     ]
-    excess_returns = {
+    train_excess_returns = {
+        result.candidate.candidate_id: result.validation_metrics.get(
+            "_daily_excess_returns",
+            [],
+        )
+        for result in all_training_results
+    }
+    validation_excess_returns = {
         result.candidate.candidate_id: result.validation_metrics.get(
             "_daily_excess_returns",
             [],
         )
         for result in finalists
     }
-    pbo_evidence = cscv_probability_of_backtest_overfitting(excess_returns)
-    spa_evidence = hansen_spa_test(excess_returns)
+    pbo_evidence = cscv_probability_of_backtest_overfitting(
+        train_excess_returns
+    )
+    validation_pbo_evidence = cscv_probability_of_backtest_overfitting(
+        validation_excess_returns
+    )
+    spa_evidence = hansen_spa_test(validation_excess_returns)
     validation_survivors = [
         result
         for result in finalists
@@ -258,7 +278,6 @@ def main() -> None:
             {},
         ).get("multiple_testing_pass")
         and pbo_evidence.get("overfitting_risk_pass")
-        and spa_evidence.get("superior_predictive_ability_pass")
     )
 
     promotion = None
@@ -271,7 +290,12 @@ def main() -> None:
                 regime_robustness=selected_matrix.robustness,
                 model_selection_evidence={
                     "cscv_pbo": pbo_evidence,
+                    "cscv_pbo_scope": "COMPLETE_CURRENT_TRAIN_SEARCH",
                     "hansen_spa": spa_evidence,
+                    "hansen_spa_role": (
+                        "SET_LEVEL_DIAGNOSTIC_NOT_INDIVIDUAL_PROMOTION_GATE"
+                    ),
+                    "hansen_spa_hard_gate": False,
                 },
                 backtest_fn=backtest_stock,
             )
@@ -311,7 +335,7 @@ def main() -> None:
                 result.candidate.candidate_id for result in identity_results
             ],
             "data_fingerprints": data_fingerprints,
-            "statistical_gate_schema": "research-integrity-v2",
+            "statistical_gate_schema": "research-integrity-v3",
         },
         ensure_ascii=False,
         sort_keys=True,
@@ -373,8 +397,18 @@ def main() -> None:
         ],
         "model_selection_evidence": {
             "trial_count_for_deflated_sharpe": len(trial_sharpes),
+            "deflated_sharpe_correlation_sample_scope": (
+                "COMPLETE_CURRENT_TRAIN_SEARCH"
+            ),
             "cscv_pbo": pbo_evidence,
+            "cscv_pbo_scope": "COMPLETE_CURRENT_TRAIN_SEARCH",
+            "validation_finalist_cscv_pbo": validation_pbo_evidence,
+            "validation_finalist_cscv_pbo_role": "DIAGNOSTIC_ONLY",
             "hansen_spa": spa_evidence,
+            "hansen_spa_role": (
+                "SET_LEVEL_DIAGNOSTIC_NOT_INDIVIDUAL_PROMOTION_GATE"
+            ),
+            "hansen_spa_hard_gate": False,
         },
         "selected_validation": (
             serialize_result(selected) if selected else None

@@ -214,14 +214,14 @@ function CandidateEvidenceCard({
         </small>
       </div>
       <dl>
-        <div><dt>確認 Gate</dt><dd>{formatMetric(candidate.confirmation_gate_pass_count)}/{formatMetric(candidate.confirmation_gate_total)}</dd></div>
+        <div><dt>晉級 Gate</dt><dd>{formatMetric(candidate.confirmation_gate_pass_count)}/{formatMetric(candidate.confirmation_gate_total)}</dd></div>
         <div><dt>DSR</dt><dd>{formatMetric(candidate.validation?.deflated_sharpe_probability_percent)}%</dd></div>
         <div><dt>Validation 報酬</dt><dd>{formatMetric(candidate.validation?.total_return_percent)}%</dd></div>
         <div><dt>Alpha</dt><dd>{formatMetric(candidate.validation?.alpha_percent)}%</dd></div>
         <div><dt>Wilson 下界</dt><dd>{formatMetric(candidate.validation?.wilson_lower_percent)}%</dd></div>
         <div><dt>最大回撤</dt><dd>{formatMetric(candidate.validation?.max_drawdown_percent)}%</dd></div>
       </dl>
-      <p>{note}</p>
+      <p>{note} 現行共 6 個獨立晉級 Gate；Hansen SPA 另列為整組研究診斷。</p>
     </div>
   );
 }

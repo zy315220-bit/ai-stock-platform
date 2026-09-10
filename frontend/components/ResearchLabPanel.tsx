@@ -69,6 +69,9 @@ type ResearchResponse = {
   market_regime_tournament: RegimeTournamentRow[];
   model_selection_evidence: {
     trial_count_for_deflated_sharpe: number;
+    current_run_trial_count_for_deflated_sharpe?: number;
+    deflated_sharpe_correlation_sample_scope?: string;
+    cscv_pbo_scope?: string;
     cscv_pbo: {
       available: boolean;
       pbo_probability_percent?: number;
@@ -76,6 +79,13 @@ type ResearchResponse = {
       overfitting_risk_pass?: boolean;
       reason?: string;
     };
+    validation_finalist_cscv_pbo?: {
+      available: boolean;
+      pbo_probability_percent?: number;
+      overfitting_risk_pass?: boolean;
+      reason?: string;
+    };
+    validation_finalist_cscv_pbo_role?: string;
     hansen_spa: {
       available: boolean;
       spa_p_value?: number;
@@ -83,6 +93,8 @@ type ResearchResponse = {
       superior_predictive_ability_pass?: boolean;
       reason?: string;
     };
+    hansen_spa_role?: string;
+    hansen_spa_hard_gate?: boolean;
   };
   walk_forward_matrix: null | {
     candidate_id: string;
@@ -147,7 +159,7 @@ const reasonLabels: Record<string, string> = {
   psr_mintrl_bootstrap_failed: "PSR、MinTRL 或區塊 Bootstrap 證據不足",
   deflated_sharpe_failed: "DSR 多重測試修正未通過",
   cscv_pbo_failed_or_unavailable: "CSCV / PBO 過度擬合檢查未通過",
-  hansen_spa_failed_or_unavailable: "Hansen SPA 未證明候選優於基準",
+  hansen_spa_failed_or_unavailable: "Hansen SPA（舊制；現為整組診斷）",
   missing_bull_regime: "研究期間缺少牛市樣本",
   missing_bear_regime: "研究期間缺少熊市樣本",
   insufficient_bull_trades: "牛市完成交易不足",
@@ -235,6 +247,8 @@ export default function ResearchLabPanel() {
         available?: boolean;
         deflated_sharpe_probability_percent?: number;
         trial_count?: number;
+        raw_trial_count?: number;
+        effective_trial_count?: number;
         multiple_testing_pass?: boolean;
       }
     | undefined;
@@ -472,7 +486,10 @@ export default function ResearchLabPanel() {
                   <article className={deflatedSharpe?.multiple_testing_pass ? "pass" : "blocked"}>
                     <span>DSR</span>
                     <strong>{deflatedSharpe?.deflated_sharpe_probability_percent === undefined ? "資料不足" : `${formatNumber(deflatedSharpe.deflated_sharpe_probability_percent)}%`}</strong>
-                    <small>已修正 {formatNumber(deflatedSharpe?.trial_count, 0)} 次策略試驗</small>
+                    <small>
+                      原始 {formatNumber(deflatedSharpe?.raw_trial_count ?? deflatedSharpe?.trial_count, 0)} 次；
+                      有效獨立約 {formatNumber(deflatedSharpe?.effective_trial_count ?? deflatedSharpe?.trial_count, 1)} 次
+                    </small>
                   </article>
                   <article className={statisticalEvidence?.track_record_sufficient ? "pass" : "blocked"}>
                     <span>MinTRL</span>
@@ -480,14 +497,14 @@ export default function ResearchLabPanel() {
                     <small>實際 {formatNumber(statisticalEvidence?.observations, 0)} 日</small>
                   </article>
                   <article className={result.model_selection_evidence.cscv_pbo.overfitting_risk_pass ? "pass" : "blocked"}>
-                    <span>CSCV / PBO</span>
+                    <span>TRAIN CSCV / PBO</span>
                     <strong>{result.model_selection_evidence.cscv_pbo.pbo_probability_percent === undefined ? "資料不足" : `${formatNumber(result.model_selection_evidence.cscv_pbo.pbo_probability_percent)}%`}</strong>
-                    <small>回測過度擬合機率</small>
+                    <small>完整 Train 搜尋的回測過度擬合機率</small>
                   </article>
-                  <article className={result.model_selection_evidence.hansen_spa.superior_predictive_ability_pass ? "pass" : "blocked"}>
+                  <article className="diagnostic">
                     <span>Hansen SPA</span>
                     <strong>{result.model_selection_evidence.hansen_spa.spa_p_value === undefined ? "資料不足" : formatNumber(result.model_selection_evidence.hansen_spa.spa_p_value, 4)}</strong>
-                    <small>p-value，門檻 &lt; 0.05</small>
+                    <small>整組研究診斷；不是單一候選晉級 Gate</small>
                   </article>
                   <article className={(statisticalEvidence?.stationary_bootstrap?.annualized_arithmetic_return_ci_percent?.[0] ?? -1) > 0 ? "pass" : "blocked"}>
                     <span>Stationary Bootstrap</span>

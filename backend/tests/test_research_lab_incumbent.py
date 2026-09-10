@@ -12,6 +12,7 @@ def _candidate(
     score: float,
     decision: str = "HOLDOUT_READY",
 ) -> dict[str, object]:
+    flags = [index < min(gates, 6) for index in range(6)]
     return {
         "stock_code": stock,
         "candidate_id": candidate_id,
@@ -22,18 +23,20 @@ def _candidate(
         "eligible_for_one_shot_holdout": False,
         "confirmation_gate_pass_count": gates,
         "confirmation_gate_total": 7,
-        "regime_robust": False,
-        "walk_forward_sample_sufficient": True,
-        "walk_forward_positive_slice_ratio": 0.6667,
+        "gate_reasons": ["hansen_spa_failed_or_unavailable"],
+        "regime_robust": flags[0],
+        "walk_forward_sample_sufficient": flags[1],
+        "walk_forward_positive_slice_ratio": 0.6667 if flags[2] else 0.0,
         "validation": {
-            "deflated_sharpe_pass": False,
+            "statistical_quality_pass": flags[3],
+            "deflated_sharpe_pass": flags[4],
             "deflated_sharpe_probability_percent": dsr,
             "wilson_lower_percent": 40.0,
             "max_drawdown_percent": 12.0,
         },
         "model_selection": {
-            "hansen_spa_pass": False,
-            "cscv_pbo_pass": False,
+            "hansen_spa_pass": gates >= 7,
+            "cscv_pbo_pass": flags[5],
         },
     }
 
@@ -58,6 +61,14 @@ def test_old_stronger_candidate_is_retained() -> None:
     assert updated["incumbent_candidate"]["candidate_id"] == "old"
     assert updated["incumbent_status"]["state"] == "RETAINED"
     assert record["candidate"]["stock_code"] == "2882"
+    assert updated["top_candidate"]["confirmation_gate_total"] == 6
+    assert updated["top_candidate"]["confirmation_gate_pass_count"] == 3
+    assert "hansen_spa_failed_or_unavailable" not in updated["top_candidate"][
+        "gate_reasons"
+    ]
+    assert updated["top_candidate"]["model_selection"][
+        "hansen_spa_hard_gate"
+    ] is False
 
 
 def test_stronger_current_round_replaces_incumbent() -> None:

@@ -6,7 +6,11 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Iterable
 
-from scripts.aggregate_daily_autoresearch import _ranking_key
+from scripts.aggregate_daily_autoresearch import (
+    _CONFIRMATION_GATE_TOTAL,
+    _confirmation_gate_pass_count,
+    _ranking_key,
+)
 from scripts.run_daily_autoresearch import write_json_atomic
 
 
@@ -38,7 +42,23 @@ def _valid_candidate(value: Any) -> dict[str, Any] | None:
         return None
     if not _candidate_identity(value):
         return None
-    return deepcopy(value)
+    candidate = deepcopy(value)
+    candidate["gate_reasons"] = [
+        reason
+        for reason in candidate.get("gate_reasons") or []
+        if reason != "hansen_spa_failed_or_unavailable"
+    ]
+    candidate["confirmation_gate_pass_count"] = (
+        _confirmation_gate_pass_count(candidate)
+    )
+    candidate["confirmation_gate_total"] = _CONFIRMATION_GATE_TOTAL
+    model_selection = candidate.get("model_selection")
+    if isinstance(model_selection, dict):
+        model_selection["hansen_spa_role"] = (
+            "SET_LEVEL_DIAGNOSTIC_NOT_INDIVIDUAL_PROMOTION_GATE"
+        )
+        model_selection["hansen_spa_hard_gate"] = False
+    return candidate
 
 
 def _historical_candidates(

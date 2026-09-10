@@ -51,7 +51,6 @@ def _candidate(
             False,
             dsr_pass,
             pbo_pass,
-            spa_pass,
         )
     )
     candidate["confirmation_gate_pass_count"] = confirmation
@@ -125,3 +124,32 @@ def test_promotion_eligibility_remains_absolute_first_priority() -> None:
 
     ranked = sorted([not_eligible, eligible], key=_ranking_key, reverse=True)
     assert ranked[0]["stock_code"] == "2330"
+
+
+def test_spa_diagnostic_does_not_rank_individual_candidates() -> None:
+    failed = _candidate(
+        "2330",
+        decision="HOLDOUT_READY",
+        score=70.0,
+        wilson=45.0,
+        dsr=80.0,
+        dsr_pass=False,
+        total_return=20.0,
+        alpha=3.0,
+        drawdown=8.0,
+        spa_pass=False,
+    )
+    passed = _candidate(
+        "2330",
+        decision="HOLDOUT_READY",
+        score=70.0,
+        wilson=45.0,
+        dsr=80.0,
+        dsr_pass=False,
+        total_return=20.0,
+        alpha=3.0,
+        drawdown=8.0,
+        spa_pass=True,
+    )
+
+    assert _ranking_key(failed) == _ranking_key(passed)

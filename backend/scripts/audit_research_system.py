@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.services.scanner_service import SCANNER_UNIVERSE
+from app.services.research_universe import DAILY_RESEARCH_UNIVERSE
 from scripts.run_daily_autoresearch import write_json_atomic
 
 
@@ -31,7 +31,7 @@ def audit_research_system(
     certified_robots: dict[str, Any],
     challenger_roster: dict[str, Any],
     competition_tournament: dict[str, Any],
-    expected_universe: tuple[str, ...] = SCANNER_UNIVERSE,
+    expected_universe: tuple[str, ...] = DAILY_RESEARCH_UNIVERSE,
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
 

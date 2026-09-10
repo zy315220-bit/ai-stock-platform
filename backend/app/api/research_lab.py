@@ -208,6 +208,13 @@ def execute_research_pipeline(
         trial_sharpes = [
             float(value) for value in prior_train_trial_sharpes
         ] + current_trial_sharpes
+        current_trial_return_paths = {
+            result.candidate.candidate_id: result.validation_metrics.get(
+                "_daily_strategy_returns",
+                [],
+            )
+            for result in train_ranked
+        }
         validation_results = [
             replace(
                 result,
@@ -219,23 +226,38 @@ def execute_research_pipeline(
                             {},
                         ),
                         trial_sharpes,
+                        current_trial_return_paths,
                     ),
                 },
             )
             for result in validation_results
         ]
-        excess_return_matrix = {
+        train_excess_return_matrix = {
+            result.candidate.candidate_id: result.validation_metrics.get(
+                "_daily_excess_returns",
+                [],
+            )
+            for result in train_ranked
+        }
+        validation_excess_return_matrix = {
             result.candidate.candidate_id: result.validation_metrics.get(
                 "_daily_excess_returns",
                 [],
             )
             for result in validation_results
         }
+        # PBO evaluates the complete adaptive Train search, where model
+        # selection actually occurred. The finalist-only Validation view is
+        # retained as observation-only telemetry and is not a promotion gate.
         pbo_evidence = cscv_probability_of_backtest_overfitting(
-            excess_return_matrix,
+            train_excess_return_matrix,
             slice_count=8,
         )
-        spa_evidence = hansen_spa_test(excess_return_matrix)
+        validation_pbo_evidence = cscv_probability_of_backtest_overfitting(
+            validation_excess_return_matrix,
+            slice_count=8,
+        )
+        spa_evidence = hansen_spa_test(validation_excess_return_matrix)
 
         validation_survivors = [
             result
@@ -332,8 +354,11 @@ def execute_research_pipeline(
             eligibility_reasons.append("deflated_sharpe_failed")
     if not pbo_evidence.get("overfitting_risk_pass"):
         eligibility_reasons.append("cscv_pbo_failed_or_unavailable")
-    if not spa_evidence.get("superior_predictive_ability_pass"):
-        eligibility_reasons.append("hansen_spa_failed_or_unavailable")
+    # Hansen SPA tests the finalist set's global null ("no model beats the
+    # benchmark"). A set-level rejection does not identify the ultimately
+    # selected candidate as individually superior, and short validation
+    # windows can have low power. Keep SPA as audited research-program
+    # evidence rather than an individual promotion blocker.
 
     rounds = [
         {
@@ -395,7 +420,7 @@ def execute_research_pipeline(
             "training_memory_id": (
                 (training_memory_audit or {}).get("prior_memory_id")
             ),
-            "statistical_gate_schema": "research-integrity-v2",
+            "statistical_gate_schema": "research-integrity-v3",
         },
         ensure_ascii=False,
         sort_keys=True,
@@ -433,10 +458,20 @@ def execute_research_pipeline(
         "market_regime_tournament": tournament_payload,
         "model_selection_evidence": {
             "cscv_pbo": pbo_evidence,
+            "cscv_pbo_scope": "COMPLETE_CURRENT_TRAIN_SEARCH",
+            "validation_finalist_cscv_pbo": validation_pbo_evidence,
+            "validation_finalist_cscv_pbo_role": "DIAGNOSTIC_ONLY",
             "hansen_spa": spa_evidence,
+            "hansen_spa_role": (
+                "SET_LEVEL_DIAGNOSTIC_NOT_INDIVIDUAL_PROMOTION_GATE"
+            ),
+            "hansen_spa_hard_gate": False,
             "trial_count_for_deflated_sharpe": len(trial_sharpes),
             "current_run_trial_count_for_deflated_sharpe": len(
                 current_trial_sharpes
+            ),
+            "deflated_sharpe_correlation_sample_scope": (
+                "COMPLETE_CURRENT_TRAIN_SEARCH"
             ),
         },
         "walk_forward_matrix": _serialize_walk_forward(walk_forward),
@@ -452,7 +487,7 @@ def execute_research_pipeline(
                 "VALIDATION_FINALISTS",
                 "BULL_BEAR_SIDEWAYS_AUDIT",
                 "PSR_DSR_MINTRL_STATIONARY_BOOTSTRAP",
-                "CSCV_PBO_AND_HANSEN_SPA",
+                "CSCV_PBO_GATE_AND_HANSEN_SPA_SET_DIAGNOSTIC",
                 "WALK_FORWARD_VALIDATION",
                 "LOCKED_FINAL_HOLDOUT",
             ],

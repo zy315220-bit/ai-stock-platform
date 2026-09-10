@@ -155,6 +155,11 @@ def _validation_metrics(report: dict[str, Any]) -> dict[str, Any]:
             "_daily_excess_returns",
             [],
         )
+        # Train return paths stay in-memory only (serialize_result removes
+        # underscore-prefixed fields).  DSR needs them to estimate how many
+        # searched mutations were behaviorally independent instead of
+        # treating every correlated parameter variation as a new trial.
+        metrics["_daily_strategy_returns"] = list(strategy_returns)
     return metrics
 
 

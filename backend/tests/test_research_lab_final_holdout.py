@@ -236,3 +236,24 @@ def test_certified_registry_contains_only_final_holdout_passes(tmp_path: Path) -
     assert registry["robots"][0]["stock_code"] == "2882"
     assert registry["robots"][0]["status"] == "CERTIFIED_FINAL_HOLDOUT_PASS"
     assert "Holdout scores are not used to rank" in registry["selection_policy"]
+
+
+def test_same_stock_campaign_cannot_reuse_holdout_with_mutated_candidate(
+    tmp_path: Path,
+) -> None:
+    first_payload = _eligible_payload()
+    first_record = evaluate_final_holdout_once(
+        first_payload,
+        backtest_fn=lambda **_: _passing_report(),
+    )
+    path = ledger_path_for(first_payload, tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(first_record), encoding="utf-8")
+
+    mutated = _eligible_payload()
+    mutated["result"]["selected_candidate"]["candidate_id"] = "candidate-strong-v2"
+    mutated["result"]["selected_candidate"]["parameters"]["entry_score"] = 62
+
+    assert ledger_path_for(mutated, tmp_path) == path
+    with pytest.raises(ValueError, match="identity collision"):
+        load_existing_ledger(path, mutated)

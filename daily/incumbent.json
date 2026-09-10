@@ -43,8 +43,7 @@
     "eligible_for_one_shot_holdout": false,
     "gate_reasons": [
       "bull_bear_robustness_failed",
-      "deflated_sharpe_failed",
-      "hansen_spa_failed_or_unavailable"
+      "deflated_sharpe_failed"
     ],
     "validation": {
       "completed_trades": 4,
@@ -64,14 +63,16 @@
       "cscv_pbo_pass": true,
       "hansen_spa_available": true,
       "hansen_spa_p_value": 0.675541,
-      "hansen_spa_pass": false
+      "hansen_spa_pass": false,
+      "hansen_spa_role": "SET_LEVEL_DIAGNOSTIC_NOT_INDIVIDUAL_PROMOTION_GATE",
+      "hansen_spa_hard_gate": false
     },
     "regime_robust": false,
     "regime_score": 56.2269,
     "walk_forward_sample_sufficient": true,
     "walk_forward_positive_slice_ratio": 0.6667,
     "confirmation_gate_pass_count": 4,
-    "confirmation_gate_total": 7
+    "confirmation_gate_total": 6
   },
   "source_snapshot_as_of_date": "2026-09-10",
   "selection": {
@@ -80,7 +81,7 @@
     "source": "prior_incumbent",
     "campaign_id": "2026-Q3",
     "incumbent_identity": "b168317faf150911baf8b6fa",
-    "round_challenger_identity": "b78ff0b76c0563cd32f2f0a1",
+    "round_challenger_identity": "ffb7adb6fcdf42e87deb33ba",
     "previous_incumbent_identity": "b168317faf150911baf8b6fa",
     "round_challenger_replaced_incumbent": false,
     "incumbent_in_current_round": false,

@@ -38,14 +38,14 @@ def test_autoresearch_respects_experiment_budget():
     assert session.stopped_reason == "experiment_budget_reached"
 
 
-def test_autoresearch_stops_when_every_candidate_dies():
+def test_autoresearch_continues_unexplored_seeds_when_early_candidates_die():
     candidates = generate_parameter_candidates(entry_scores=(55, 60), exit_scores=(40,))
     session = run_autoresearch(
         "2330", split(), candidates,
         backtest_fn=weak_report, max_generations=10, max_experiments=100,
     )
-    assert session.experiments_run == 10
-    assert len(session.rounds) == 1
+    assert session.experiments_run == len(candidates)
+    assert len(session.rounds) > 1
     assert session.stopped_reason == "no_surviving_candidates"
 
 

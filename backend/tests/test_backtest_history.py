@@ -29,7 +29,11 @@ class BacktestHistoryTests(unittest.TestCase):
             return_value=frame,
         ):
             with self.assertRaisesRegex(ValueError, "basis 尚未驗證"):
-                backtest_stock("00878", start_date="2021-08-20")
+                backtest_stock(
+                    "00878",
+                    start_date="2021-08-20",
+                    end_date="2026-08-20",
+                )
 
     def test_backtest_requests_warmup_and_preserves_five_year_period(self) -> None:
         dates = pd.bdate_range("2021-01-01", "2026-08-20")
@@ -71,6 +75,7 @@ class BacktestHistoryTests(unittest.TestCase):
             result = backtest_stock(
                 "00878",
                 start_date="2021-08-20",
+                end_date="2026-08-20",
                 initial_capital=80_000,
             )
 
@@ -189,6 +194,7 @@ class BacktestHistoryTests(unittest.TestCase):
             result = backtest_stock(
                 "00878",
                 start_date="2021-08-20",
+                end_date="2026-08-20",
                 initial_capital=80_000,
             )
 
@@ -231,6 +237,7 @@ class BacktestHistoryTests(unittest.TestCase):
             result = backtest_stock(
                 "0050",
                 start_date=dates[0].strftime("%Y-%m-%d"),
+                end_date=dates[-1].strftime("%Y-%m-%d"),
                 initial_capital=10_000,
                 commission_rate=0.0,
                 transaction_tax_rate=0.0,

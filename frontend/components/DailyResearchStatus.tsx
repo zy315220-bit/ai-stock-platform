@@ -57,6 +57,12 @@ type DailySnapshot = {
   eligible_candidate_count?: number;
   holdout_opened?: boolean;
   integrity_status?: string;
+  search_progress?: {
+    advancing_symbol_count?: number;
+    no_new_experiment_symbols?: string[];
+    minimum_family_bucket_count?: number;
+    maximum_family_bucket_count?: number;
+  };
   ranking_methodology?: {
     schema?: string;
     production_champion_rule?: string;
@@ -153,7 +159,6 @@ type DailyStatus = {
 };
 
 const AVAILABLE_STRATEGY_FAMILY_COUNT = 16;
-const MINIMUM_FAMILY_COVERAGE_PER_ROUND = 6;
 
 function formatTaipeiTime(value?: string): string {
   if (!value) return "等待首次執行";
@@ -179,7 +184,10 @@ function workflowLabel(status: DailyStatus): string {
   if (status.workflow?.status === "in_progress") return "研究執行中";
   if (status.workflow?.status === "queued") return "已排入研究佇列";
   if (status.workflow?.conclusion === "failure") return "上次研究失敗，等待重試";
-  if (status.workflow?.conclusion === "success") return "上次研究已完成";
+  if (status.workflow?.conclusion === "success") {
+    const stalled = status.latest_snapshot?.search_progress?.no_new_experiment_symbols ?? [];
+    return stalled.length ? `${stalled.length} 檔本輪未新增實驗` : "上次研究已完成";
+  }
   return status.snapshot_available ? "自動研究正常" : "等待首次自動研究";
 }
 
@@ -302,9 +310,14 @@ export default function DailyResearchStatus() {
           <small>{status?.schedule.label ?? "每日 06:30 與 18:30"}</small>
         </article>
         <article>
-          <span>Research Engine</span>
-          <strong>{audit?.system_ready ? "OPERATIONAL" : audit ? "FAIL CLOSED" : "等待全系統稽核"}</strong>
+          <span>研究流程完整性</span>
+          <strong>{audit?.system_ready ? "稽核通過" : audit ? "稽核未通過" : "等待全系統稽核"}</strong>
           <small>{audit ? `${audit.passed_check_count ?? 0} 項通過・${audit.failed_check_count ?? 0} 項失敗` : "每輪結束自動驗證完整生命週期"}</small>
+        </article>
+        <article>
+          <span>研究實際進度</span>
+          <strong>{snapshot?.search_progress ? `${snapshot.search_progress.advancing_symbol_count ?? 0}/${snapshot.universe_size ?? 0} 檔有新實驗` : "等待新版本統計"}</strong>
+          <small>{snapshot?.search_progress?.no_new_experiment_symbols?.length ? `本輪未新增：${snapshot.search_progress.no_new_experiment_symbols.join("、")}` : "依實際新增實驗判定搜尋進度"}</small>
         </article>
         <article>
           <span>下次自動研究</span>
@@ -356,12 +369,12 @@ export default function DailyResearchStatus() {
             <div><dt>待探索前沿</dt><dd>{formatMetric(memory.frontier_count)}</dd></div>
             <div><dt>可用策略家族</dt><dd>{formatMetric(AVAILABLE_STRATEGY_FAMILY_COUNT)}</dd></div>
             <div><dt>已研究策略家族</dt><dd>{formatMetric(memory.strategy_family_count)}</dd></div>
-            <div><dt>每輪最低覆蓋</dt><dd>{formatMetric(MINIMUM_FAMILY_COVERAGE_PER_ROUND)} 類</dd></div>
+            <div><dt>本輪各檔覆蓋</dt><dd>{snapshot?.search_progress ? `${snapshot.search_progress.minimum_family_bucket_count ?? 0}–${snapshot.search_progress.maximum_family_bucket_count ?? 0} 類` : "待統計"}</dd></div>
           </dl>
           <p>
-            可用家族是目前 alpha-family-diversity-v5 的完整研究宇宙；已研究家族來自跨日 Train 記憶。
-            每輪至少覆蓋 Mean Reversion、Volatility、Trend、Breakout、Momentum 與 Score control；
-            Validation 與 Final Holdout
+            已研究家族是歷次累積；本輪覆蓋只計入實際執行的新實驗。
+            有未測候選時，優先探索均值回歸、波動風控、趨勢、突破、動能與分數策略，並調整持有天數與曝險參數。
+            驗證資料與最終保留測試
             {memory.validation_feedback_used || memory.holdout_feedback_used ? " 發生異常回饋" : " 保持隔離"}。
           </p>
         </div>

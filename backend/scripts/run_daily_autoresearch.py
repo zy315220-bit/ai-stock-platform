@@ -13,6 +13,7 @@ from app.services.backtest.engine import backtest_stock
 from app.services.research_lab.evolution import generate_parameter_candidates
 from app.services.research_lab.splits import build_research_split
 from app.services.research_lab.training_memory import (
+    LEGACY_TRAIN_DATA_IDENTITY_SCHEMA,
     TRAIN_DATA_IDENTITY_SCHEMA,
     build_training_memory,
     prepare_daily_candidate_plan,
@@ -29,6 +30,7 @@ def resolve_train_data_identity(
     stock_code: str,
     train_start: str,
     train_end: str,
+    identity_audit: dict[str, Any] | None = None,
 ) -> str:
     """Fingerprint one fixed Train-only frame before adaptive search.
 
@@ -52,27 +54,34 @@ def resolve_train_data_identity(
         liquidate_at_end=False,
         include_research_series=False,
     )
-    cache = report.get("score_series_cache") or {}
+    cache = report.get("research_data_identity") or {}
     fingerprint = str(cache.get("fingerprint") or "").strip()
     if not fingerprint:
-        raise RuntimeError("Canonical Train data probe produced no fingerprint")
-    identity_payload = json.dumps(
-        {
-            "schema": TRAIN_DATA_IDENTITY_SCHEMA,
-            "score_cache_schema": cache.get("schema"),
+        raise RuntimeError("Canonical Train data probe produced no economic fingerprint")
+
+    def identity(schema: str, frame: dict[str, Any]) -> str:
+        payload = {
+            "schema": schema,
+            "score_cache_schema": frame.get("schema"),
             "stock_code": stock_code,
             "train_window": [train_start, train_end],
             "actual_window": [
                 report.get("actual_start_date"),
                 report.get("actual_end_date"),
             ],
-            "fingerprint": fingerprint,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(identity_payload.encode("utf-8")).hexdigest()[:24]
+            "fingerprint": frame["fingerprint"],
+        }
+        return hashlib.sha256(json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()[:24]
+
+    if identity_audit is not None:
+        legacy_frame = report.get("score_series_cache") or {}
+        if legacy_frame.get("fingerprint"):
+            identity_audit["legacy_train_data_identity"] = identity(
+                LEGACY_TRAIN_DATA_IDENTITY_SCHEMA, legacy_frame,
+            )
+    return identity(TRAIN_DATA_IDENTITY_SCHEMA, cache)
 
 
 def campaign_window(as_of_date: date) -> dict[str, str]:
@@ -138,10 +147,16 @@ def execute_daily_stock_research(
         campaign["start_date"],
         campaign["end_date"],
     )
+    identity_audit: dict[str, Any] = {}
+    identity_kwargs = (
+        {"identity_audit": identity_audit}
+        if train_identity_resolver is resolve_train_data_identity else {}
+    )
     train_data_identity = train_identity_resolver(
         stock_code=stock,
         train_start=split.train_start,
         train_end=split.train_end,
+        **identity_kwargs,
     )
     grid = generate_parameter_candidates()
     rotated_grid = grid[candidate_offset:] + grid[:candidate_offset]
@@ -152,6 +167,7 @@ def execute_daily_stock_research(
         train_data_identity=train_data_identity,
         rotated_grid=rotated_grid,
         prior_memory=prior_training_memory,
+        legacy_train_data_identity=identity_audit.get("legacy_train_data_identity"),
     )
     result = research_runner(
         stock_code=stock,
@@ -185,6 +201,7 @@ def execute_daily_stock_research(
         as_of_date=as_of_date.isoformat(),
         result=payload,
         prior_memory=prior_training_memory,
+        legacy_train_data_identity=identity_audit.get("legacy_train_data_identity"),
     )
     promotion_block_reason: str | None = None
     if memory.get("memory_reset_reason") == "train_data_revision":

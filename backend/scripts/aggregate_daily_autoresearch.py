@@ -317,6 +317,24 @@ def aggregate_payloads(
         "eligible_candidate_count": eligible_count,
         "holdout_opened": False,
         "integrity_status": "PASS",
+        "search_progress": {
+            "advancing_symbol_count": sum(
+                int(summary.get("last_run_new_experiment_count", 0)) > 0
+                for summary in memory_summaries.values()
+            ),
+            "no_new_experiment_symbols": [
+                symbol for symbol, summary in memory_summaries.items()
+                if int(summary.get("last_run_new_experiment_count", 0)) == 0
+            ],
+            "minimum_family_bucket_count": min(
+                int(summary.get("last_run_family_bucket_count", 0))
+                for summary in memory_summaries.values()
+            ),
+            "maximum_family_bucket_count": max(
+                int(summary.get("last_run_family_bucket_count", 0))
+                for summary in memory_summaries.values()
+            ),
+        },
         "training_memory": {
             "enabled": True,
             "provenance": "TRAIN_ONLY",

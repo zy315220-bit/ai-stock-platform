@@ -7,6 +7,7 @@ import json
 from typing import Iterable
 
 from .models import ExperimentDecision, ExperimentResult, ResearchCandidate, ResearchSplit
+from .exploration import alpha_parameter_neighbors
 from .runner import BacktestFn, run_research_batch
 
 
@@ -418,9 +419,16 @@ def evolve_candidates(
         )[:top_k]
     )
     children: list[ResearchCandidate] = []
-    seen: set[tuple[object, ...]] = set()
+    seen: set[str] = set()
     for result in ranked:
         parent = result.candidate
+        if parent.strategy_family in SIGNAL_DOMINANT_FAMILIES:
+            for child in alpha_parameter_neighbors(parent):
+                key = candidate_parameter_signature(child)
+                if key not in seen:
+                    seen.add(key)
+                    children.append(child)
+            continue
         mutations = [
             (entry_delta, exit_delta, label, None, None)
             for entry_delta, exit_delta, label in _mutation_neighborhood(result)
@@ -452,19 +460,7 @@ def evolve_candidates(
                 strategy_structure=structure,
                 max_holding_days_override=holding_override,
             )
-            key = (
-                int(child.parameters["entry_score"]),
-                int(child.parameters["exit_score"]),
-                bool(child.parameters.get("require_ema_trend", False)),
-                str(child.parameters.get("ema_fast_column", "EMA20")),
-                str(child.parameters.get("ema_slow_column", "EMA60")),
-                str(child.parameters.get("entry_mode", "score")),
-                str(child.parameters.get("exit_mode", "score")),
-                int(child.parameters.get("max_holding_days", 60)),
-                child.parameters.get("atr_target_percent"),
-                child.parameters.get("min_position_fraction"),
-                child.parameters.get("max_position_fraction"),
-            )
+            key = candidate_parameter_signature(child)
             if key not in seen:
                 seen.add(key)
                 children.append(child)

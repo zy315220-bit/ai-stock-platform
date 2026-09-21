@@ -112,3 +112,56 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  continuity-audit:
+    name: Real-data continuity ${{ matrix.stock }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        stock: ["3037", "0056"]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - name: Load durable Train-only memory
+        uses: actions/checkout@v6
+        with:
+          ref: research-data
+          path: research-data
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Verify real-data search resumes without opening Final Holdout
+        env:
+          RESEARCH_STOCK: ${{ matrix.stock }}
+        run: |
+          python -m scripts.run_daily_autoresearch \
+            --stock-code "$RESEARCH_STOCK" --as-of-date "$(TZ=Asia/Taipei date +%F)" \
+            --max-experiments 64 --attempts 2 --retry-delay-seconds 10 \
+            --prior-memory "../research-data/daily/memory/${RESEARCH_STOCK}.json" \
+            --output "research_artifacts/continuity/${RESEARCH_STOCK}.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('research_artifacts/continuity') / (os.environ['RESEARCH_STOCK'] + '.json')
+          payload = json.loads(path.read_text())
+          assert payload['result']['experiments_run'] > 0, 'Search still produced zero experiments'
+          assert payload['result']['promotion_eligibility']['holdout_opened'] is False
+          assert payload['training_memory']['provenance'] == 'TRAIN_ONLY'
+          assert payload['training_memory']['validation_feedback_used'] is False
+          assert payload['training_memory']['holdout_feedback_used'] is False
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: research-continuity-${{ matrix.stock }}
+          path: backend/research_artifacts/continuity/*.json
+          if-no-files-found: warn
+          retention-days: 21

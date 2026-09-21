@@ -26,6 +26,7 @@ from .benchmark import _calculate_buy_and_hold
 from .corporate_action_adapter import ledger_schedule_from_frame
 from .corporate_action_execution import apply_session_corporate_actions
 from .corporate_action_gate import prepare_research_frame, research_metadata
+from .data_identity import economic_frame_identity
 from .drawdown import _calculate_drawdown_statistics, _calculate_max_drawdown
 from .metrics import _calculate_performance_metrics
 from .report import _extract_score, _get_row_date, _prepare_stock_data
@@ -1030,6 +1031,7 @@ def backtest_stock(
             "cache_hit": score_cache_hit,
             "fingerprint": score_series_fingerprint[:20],
         },
+        "research_data_identity": economic_frame_identity(normalized_code, df),
         "commission_rate": commission_rate,
         "transaction_tax_rate": transaction_tax_rate,
         "initial_capital": round(normalized_capital, 2),

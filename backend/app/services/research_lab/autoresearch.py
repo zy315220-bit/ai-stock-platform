@@ -66,7 +66,8 @@ def run_autoresearch(
         generations_left = max_generations - generation + 1
         generation_budget = max(1, remaining // generations_left)
         batch: list[ResearchCandidate] = []
-        for candidate in candidates:
+        consumed_count = 0
+        for consumed_count, candidate in enumerate(candidates, start=1):
             signature = candidate_parameter_signature(candidate)
             if signature in seen_signatures:
                 skipped_duplicates += 1
@@ -76,6 +77,7 @@ def run_autoresearch(
             batch.append(candidate)
             if len(batch) >= generation_budget:
                 break
+        pending = candidates[consumed_count:]
         if not batch:
             stopped_reason = (
                 "no_novel_candidates"
@@ -126,10 +128,12 @@ def run_autoresearch(
         if experiments >= max_experiments:
             stopped_reason = "experiment_budget_reached"
             break
-        if not children:
+        if not children and not pending:
             stopped_reason = "no_surviving_candidates"
             break
-        candidates = list(children)
+        # Retain unexplored seeds when one generation's parents die or their
+        # neighborhood is exhausted. The same fixed Train budget still applies.
+        candidates = list(children) + pending
     else:
         stopped_reason = "generation_budget_reached"
 

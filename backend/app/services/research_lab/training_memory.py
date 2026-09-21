@@ -10,12 +10,15 @@ from .evolution import (
     SEARCH_SPACE_SCHEMA,
     candidate_parameter_signature,
     evolve_candidates,
+    generate_signal_dominant_candidates,
 )
+from .exploration import EXPLORATION_POLICY_SCHEMA, generate_alpha_exploration
 from .models import ExperimentDecision, ExperimentResult, ResearchCandidate
 
 
 TRAINING_MEMORY_SCHEMA_VERSION = 1
-TRAIN_DATA_IDENTITY_SCHEMA = "canonical-train-score-series-v1"
+LEGACY_TRAIN_DATA_IDENTITY_SCHEMA = "canonical-train-score-series-v1"
+TRAIN_DATA_IDENTITY_SCHEMA = "canonical-train-economic-inputs-v2"
 MAX_ELITES = 12
 MAX_FRONTIER = 96
 MAX_SEEN_SIGNATURES = 10_000
@@ -86,6 +89,7 @@ def _memory_compatibility(
     campaign_id: str,
     train_window: tuple[str, str],
     train_data_identity: str,
+    legacy_train_data_identity: str | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     normalized_identity = str(train_data_identity or "").strip()
     if not normalized_identity:
@@ -126,6 +130,24 @@ def _memory_compatibility(
             return None, reason
     prior_identity = str(memory.get("train_data_identity") or "").strip()
     if prior_identity:
+        if memory.get("train_data_identity_schema") == LEGACY_TRAIN_DATA_IDENTITY_SCHEMA:
+            if not legacy_train_data_identity or prior_identity != legacy_train_data_identity:
+                return None, "train_data_revision"
+            # Both fingerprints came from the same current probe. Matching its
+            # legacy identity proves compatibility with the prior Train run;
+            # carry its seen signatures, elites, and cumulative DSR trials.
+            memory = {
+                **memory,
+                "train_data_identity_schema": TRAIN_DATA_IDENTITY_SCHEMA,
+                "train_data_identity": normalized_identity,
+                "identity_schema_bridge": {
+                    "from_schema": LEGACY_TRAIN_DATA_IDENTITY_SCHEMA,
+                    "legacy_identity": prior_identity,
+                    "economic_identity": normalized_identity,
+                    "verified_by": "matching_legacy_probe_on_same_frame",
+                },
+            }
+            prior_identity = normalized_identity
         if (
             memory.get("train_data_identity_schema")
             != TRAIN_DATA_IDENTITY_SCHEMA
@@ -240,6 +262,7 @@ def prepare_daily_candidate_plan(
     train_data_identity: str,
     rotated_grid: Iterable[ResearchCandidate],
     prior_memory: dict[str, Any] | None,
+    legacy_train_data_identity: str | None = None,
 ) -> DailyCandidatePlan:
     """Build a novel train-only seed queue without validation feedback."""
     compatible, reset_reason = _memory_compatibility(
@@ -248,6 +271,7 @@ def prepare_daily_candidate_plan(
         campaign_id=campaign_id,
         train_window=train_window,
         train_data_identity=train_data_identity,
+        legacy_train_data_identity=legacy_train_data_identity,
     )
     prior_identity = str(
         (compatible or {}).get("train_data_identity") or ""
@@ -279,12 +303,19 @@ def prepare_daily_candidate_plan(
         evolve_candidates(elite_results, top_k=3),
         excluded=seen,
     )
-    novel_grid = _unique_candidates(rotated_grid, excluded=seen)
+    grid = list(rotated_grid)
+    novel_grid = _unique_candidates(grid, excluded=seen)
+    capital = float(grid[0].parameters.get("initial_capital", 1_000_000)) if grid else 1_000_000.0
+    alpha_exploration = _unique_candidates(
+        generate_alpha_exploration(generate_signal_dominant_candidates(initial_capital=capital)),
+        excluded=seen,
+    )
 
     queues = [
         ("frontier", frontier),
         ("elite_mutation", elite_children),
         ("novel_grid", novel_grid),
+        ("alpha_exploration", alpha_exploration),
     ]
     planned: list[ResearchCandidate] = []
     planned_signatures: set[str] = set()
@@ -340,6 +371,7 @@ def prepare_daily_candidate_plan(
             (compatible or {}).get("train_trial_period_sharpes", [])
         ),
         "planned_candidate_count": len(planned),
+        "exploration_policy_schema": EXPLORATION_POLICY_SCHEMA,
         "seed_source_counts": seed_source_counts,
         "family_coverage_enabled": True,
         "family_coverage_prefix_count": len(coverage_details),
@@ -436,6 +468,7 @@ def build_training_memory(
     as_of_date: str,
     result: dict[str, Any],
     prior_memory: dict[str, Any] | None,
+    legacy_train_data_identity: str | None = None,
 ) -> dict[str, Any]:
     """Persist only train-derived evidence for the next unattended run."""
     audit = result.get("research_audit") or {}
@@ -450,6 +483,7 @@ def build_training_memory(
         campaign_id=campaign_id,
         train_window=train_window,
         train_data_identity=train_data_identity,
+        legacy_train_data_identity=legacy_train_data_identity,
     )
     records = _training_records(result)
     current_fingerprints = sorted(
@@ -576,6 +610,7 @@ def build_training_memory(
         "train_data_identity": str(train_data_identity).strip(),
         "train_data_identity_verified": identity_verified,
         "train_data_identity_migrated": identity_migrated,
+        "identity_schema_bridge": (compatible or {}).get("identity_schema_bridge"),
         "train_data_fingerprints": current_fingerprints
         or prior_fingerprints,
         "seen_parameter_signatures": merged_seen,
@@ -586,6 +621,16 @@ def build_training_memory(
         "lifetime_experiment_count": previous_experiments + len(records),
         "lifetime_run_count": previous_runs + 1,
         "last_run_new_experiment_count": len(records),
+        "exploration_policy_schema": EXPLORATION_POLICY_SCHEMA,
+        "search_state": "ADVANCING" if records else "NO_NEW_EXPERIMENTS",
+        "consecutive_no_new_experiment_runs": (
+            0 if records else int((compatible or {}).get("consecutive_no_new_experiment_runs", 0)) + 1
+        ),
+        "last_run_family_bucket_count": len({
+            bucket for record in records
+            if (candidate := _candidate_from_payload(record.get("candidate"))) is not None
+            if (bucket := _family_coverage_bucket(candidate)) is not None
+        }),
         "last_run_duplicate_skip_count": int(
             result.get("skipped_duplicate_count", 0) or 0
         ),
@@ -627,6 +672,11 @@ def build_training_memory(
 
 def training_memory_summary(memory: dict[str, Any]) -> dict[str, Any]:
     return {
+        "exploration_policy_schema": memory.get("exploration_policy_schema"),
+        "identity_schema_bridge": memory.get("identity_schema_bridge"),
+        "search_state": memory.get("search_state"),
+        "consecutive_no_new_experiment_runs": int(memory.get("consecutive_no_new_experiment_runs", 0)),
+        "last_run_family_bucket_count": int(memory.get("last_run_family_bucket_count", 0)),
         "memory_id": memory.get("memory_id"),
         "search_space_schema": memory.get("search_space_schema"),
         "train_data_identity_schema": memory.get(

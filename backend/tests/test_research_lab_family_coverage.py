@@ -3,9 +3,12 @@ from __future__ import annotations
 from app.services.research_lab.evolution import (
     candidate_parameter_signature,
     generate_parameter_candidates,
+    generate_signal_dominant_candidates,
 )
+from app.services.research_lab.exploration import generate_alpha_exploration
 from app.services.research_lab.training_memory import (
     FAMILY_COVERAGE_BUCKETS,
+    TRAIN_DATA_IDENTITY_SCHEMA,
     _family_coverage_bucket,
     prepare_daily_candidate_plan,
 )
@@ -86,11 +89,15 @@ def test_seen_family_seed_is_not_repeated_and_missing_bucket_is_audited() -> Non
         "stock_code": "2330",
         "campaign_id": "2026-Q3",
         "train_window": list(TRAIN_WINDOW),
-        "train_data_identity_schema": "canonical-train-score-series-v1",
+        "train_data_identity_schema": TRAIN_DATA_IDENTITY_SCHEMA,
         "train_data_identity": TRAIN_IDENTITY,
         "validation_feedback_used": False,
         "holdout_feedback_used": False,
-        "seen_parameter_signatures": [seen_signature],
+        "seen_parameter_signatures": [
+            candidate_parameter_signature(candidate)
+            for candidate in grid + generate_alpha_exploration(generate_signal_dominant_candidates())
+            if _family_coverage_bucket(candidate) == "mean_reversion"
+        ],
         "frontier": [],
         "elites": [],
         "train_trial_period_sharpes": [],

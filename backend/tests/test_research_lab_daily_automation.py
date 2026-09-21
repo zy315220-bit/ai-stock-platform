@@ -190,6 +190,10 @@ def test_train_data_identity_uses_one_fixed_train_only_probe(
                 "schema": "score-series-v1",
                 "fingerprint": "stable-frame-fingerprint",
             },
+            "research_data_identity": {
+                "schema": "economic-research-frame-v1",
+                "fingerprint": "stable-economic-fingerprint",
+            },
         }
 
     monkeypatch.setattr(daily_runner, "backtest_stock", fake_backtest)

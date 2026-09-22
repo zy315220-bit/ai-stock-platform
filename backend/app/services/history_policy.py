@@ -7,7 +7,11 @@ from typing import Any
 
 INTERACTIVE_CHART_RANGES = ("1m", "3m", "6m", "1y", "3y", "5y")
 INTERACTIVE_HISTORY_MONTHS = 13
-RESEARCH_HISTORY_MONTHS = 60
+# Fetch a materially deeper daily-history buffer than the minimum evidence
+# horizon. Yahoo already requests 10y/max; keeping the official exchange
+# fallback at the same order of magnitude prevents a temporary Yahoo gap from
+# silently shrinking a six-year autonomous campaign to only ~5 years.
+RESEARCH_HISTORY_MONTHS = 120
 BACKTEST_WARMUP_MONTHS = 6
 MINIMUM_RESEARCH_YEARS = 3
 PREFERRED_RESEARCH_YEARS = 5
@@ -47,7 +51,7 @@ def default_research_start_date(as_of: date | None = None) -> date:
 def history_policy() -> dict[str, Any]:
     """Single source of truth for user-facing and strategy-research horizons."""
     return {
-        "schema": "history-policy-v1",
+        "schema": "history-policy-v2",
         "interactive_chart_ranges": list(INTERACTIVE_CHART_RANGES),
         "interactive_history_months": INTERACTIVE_HISTORY_MONTHS,
         "research_history_months": RESEARCH_HISTORY_MONTHS,
@@ -57,9 +61,11 @@ def history_policy() -> dict[str, Any]:
         "forward_holdout_months": FORWARD_HOLDOUT_MONTHS,
         "principles": [
             "圖表時間範圍與策略研究樣本分離，避免使用者圖表設定改變研究證據。",
-            "策略研究優先取得五年可靠日線；資料不足三年時不得標示為長期驗證。",
+            "研究下載層盡量取得十年日線並保留額外 warm-up；正式長期證據門檻仍以實際可用資料判定。",
+            "策略研究優先至少取得五年可靠日線；資料不足三年時不得標示為長期驗證。",
+            "上市前不存在的資料不可補造；已知上市日以前不視為資料缺口。",
             "最後 forward holdout 不參與策略調參或冠軍選拔訓練。",
-            "所有績效必須標示實際可用起訖日期，而不是宣稱不存在的五年資料。",
+            "所有績效必須標示實際可用起訖日期，而不是宣稱不存在的資料。",
         ],
     }
 

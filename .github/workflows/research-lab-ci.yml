@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "backend/app/services/research_lab/**"
+      - "backend/app/services/research_universe.py"
       - "backend/app/api/research_lab.py"
       - "backend/app/main.py"
       - "backend/app/services/backtest/**"
@@ -30,6 +31,7 @@ on:
     branches: ["main", "feature/ai-research-lab"]
     paths:
       - "backend/app/services/research_lab/**"
+      - "backend/app/services/research_universe.py"
       - "backend/app/api/research_lab.py"
       - "backend/app/main.py"
       - "backend/app/services/backtest/**"

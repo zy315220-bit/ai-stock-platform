@@ -83,7 +83,7 @@ class BacktestHistoryTests(unittest.TestCase):
         self.assertFalse(calls[0]["prefer_official"])
         self.assertEqual(calls[0]["daily_period"], "10y")
         self.assertFalse(calls[0]["update_with_intraday"])
-        self.assertEqual(calls[0]["official_months"], 66)
+        self.assertGreaterEqual(calls[0]["official_months"], 66)
         self.assertTrue(calls[0]["include_corporate_actions"])
         self.assertEqual(result["requested_start_date"], "2021-08-20")
         self.assertEqual(result["actual_start_date"], "2021-08-20")

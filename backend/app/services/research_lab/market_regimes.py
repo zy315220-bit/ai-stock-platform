@@ -89,6 +89,13 @@ def load_point_in_time_benchmark_returns(
         required_start_date=required_start,
         required_end_date=split.validation_end,
     )
+    # Full-history providers also return prices after Validation. They must
+    # not enter corporate-action checks, return calculation, or evidence IDs.
+    frame_dates = pd.to_datetime(
+        frame["Date"] if "Date" in frame.columns else frame.index,
+        errors="coerce",
+    )
+    frame = frame.loc[frame_dates <= pd.Timestamp(split.validation_end)].copy()
     frame = prepare_research_frame(frame, benchmark_code)
     if "Date" in frame.columns:
         dates = pd.to_datetime(frame["Date"], errors="coerce")

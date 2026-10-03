@@ -111,15 +111,21 @@ def _clean_ohlcv(df,require_all_columns=True):
 
 def _download_yahoo_chart(ticker,period,interval,prepost=False):
     """No-crumb Yahoo chart fallback when yfinance is temporarily rate-limited."""
+    params = {
+        "interval": interval,
+        "events": "div,splits",
+        "includePrePost": str(bool(prepost)).lower(),
+    }
+    if period == "max":
+        # Yahoo's range=max may silently aggregate daily requests to monthly
+        # bars. Explicit timestamps retain the requested daily resolution.
+        params.update(period1=0, period2=int(pd.Timestamp.now(tz="UTC").timestamp()))
+    else:
+        params["range"] = period
     try:
         response=requests.get(
             YAHOO_CHART_URL.format(ticker=ticker),
-            params={
-                "range":period,
-                "interval":interval,
-                "events":"div,splits",
-                "includePrePost":str(bool(prepost)).lower(),
-            },
+            params=params,
             headers=YAHOO_HEADERS,
             timeout=YAHOO_CHART_TIMEOUT_SECONDS,
         )
@@ -127,7 +133,11 @@ def _download_yahoo_chart(ticker,period,interval,prepost=False):
         if chart.get("error"):return pd.DataFrame()
         results=chart.get("result") or []
         if not results:return pd.DataFrame()
-        result=results[0];timestamps=result.get("timestamp") or [];quotes=(result.get("indicators") or {}).get("quote") or []
+        result=results[0]
+        granularity=(result.get("meta") or {}).get("dataGranularity")
+        if granularity and granularity != interval:
+            return pd.DataFrame()
+        timestamps=result.get("timestamp") or [];quotes=(result.get("indicators") or {}).get("quote") or []
         if not timestamps or not quotes:return pd.DataFrame()
         quote=quotes[0];row_count=len(timestamps)
         columns={

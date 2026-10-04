@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getResearchHealth } from "@/lib/researchHealth";
 
 export const dynamic = "force-dynamic";
 
@@ -87,9 +88,15 @@ export async function GET() {
       ? (workflowResult.value as { workflow_runs?: WorkflowRun[] })
       : null;
   const latestRun = workflowPayload?.workflow_runs?.[0] ?? null;
+  const health = getResearchHealth(
+    snapshot as Parameters<typeof getResearchHealth>[0],
+    latestRun,
+    systemAudit as Parameters<typeof getResearchHealth>[2],
+  );
 
   return NextResponse.json({
     enabled: true,
+    operational_health: health,
     manual_action_required: false,
     schedule: {
       cron: "30 22,10 * * *",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getResearchHealth, type ResearchHealth } from "@/lib/researchHealth";
 
 type Candidate = {
   stock_code?: string;
@@ -92,6 +93,7 @@ type DailySnapshot = {
 };
 
 type SystemAudit = {
+  generated_at_utc?: string;
   system_status?: "OPERATIONAL" | "FAIL_CLOSED";
   system_ready?: boolean;
   research_engine_complete?: boolean;
@@ -136,6 +138,7 @@ type CompetitionTournament = {
 };
 
 type DailyStatus = {
+  operational_health?: ResearchHealth;
   enabled: boolean;
   manual_action_required: boolean;
   schedule: {
@@ -181,6 +184,10 @@ function formatMetric(value?: number): string {
 }
 
 function workflowLabel(status: DailyStatus): string {
+  const health = status.operational_health ?? getResearchHealth(
+    status.latest_snapshot, status.workflow, status.system_audit ?? null,
+  );
+  if (health.state !== "OPERATIONAL") return health.label;
   if (status.workflow?.status === "in_progress") return "研究執行中";
   if (status.workflow?.status === "queued") return "已排入研究佇列";
   if (status.workflow?.conclusion === "failure") return "上次研究失敗，等待重試";
@@ -287,6 +294,9 @@ export default function DailyResearchStatus() {
   const tournament = status?.competition_tournament ?? null;
   const promoted = tournament?.promotion?.challenger_replaced_incumbent === true;
   const running = status?.workflow?.status === "in_progress";
+  const health = status ? status.operational_health ?? getResearchHealth(
+    snapshot, status.workflow, audit,
+  ) : null;
 
   return (
     <section className="daily-research-card" aria-live="polite">
@@ -296,12 +306,15 @@ export default function DailyResearchStatus() {
           <h2>每日自動研究</h2>
           <p>不需開著網頁；每天兩輪延續 Train 研究、避開已測實驗並保存候選版本。</p>
         </div>
-        <span className={running ? "daily-status running" : "daily-status enabled"}>
-          {running ? "RUNNING" : "AUTOMATIC ON"}
+        <span className={health?.state === "DEGRADED" ? "daily-status failed" : running ? "daily-status running" : "daily-status enabled"}>
+          {health?.state === "DEGRADED" ? "更新中斷" : running ? "RUNNING" : health?.state === "QUEUED" ? "QUEUED" : health?.state === "OPERATIONAL" ? "AUTOMATIC ON" : "確認中"}
         </span>
       </div>
 
       {error ? <div className="research-error" role="alert">{error}</div> : null}
+      {health?.state === "DEGRADED" || (health && !health.snapshot_fresh) ? (
+        <div className="research-error" role="alert">{health.reason}</div>
+      ) : null}
 
       <div className="daily-research-grid">
         <article>
@@ -311,8 +324,8 @@ export default function DailyResearchStatus() {
         </article>
         <article>
           <span>研究流程完整性</span>
-          <strong>{audit?.system_ready ? "稽核通過" : audit ? "稽核未通過" : "等待全系統稽核"}</strong>
-          <small>{audit ? `${audit.passed_check_count ?? 0} 項通過・${audit.failed_check_count ?? 0} 項失敗` : "每輪結束自動驗證完整生命週期"}</small>
+          <strong>{health?.state === "OPERATIONAL" ? "最新稽核通過" : audit?.system_ready ? "歷史稽核通過・待確認本輪" : audit ? "稽核未通過" : "等待全系統稽核"}</strong>
+          <small>{audit ? `${formatTaipeiTime(audit.generated_at_utc)}・${audit.passed_check_count ?? 0} 項通過・${audit.failed_check_count ?? 0} 項失敗` : "每輪結束自動驗證完整生命週期"}</small>
         </article>
         <article>
           <span>研究實際進度</span>

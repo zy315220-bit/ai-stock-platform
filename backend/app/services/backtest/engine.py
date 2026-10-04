@@ -343,10 +343,22 @@ def _download_backtest_history(
     )
     if cached is not None:
         return cached
+    # Regime stress tests can request history far beyond the interactive
+    # five-year horizon. Provider requests must cover that actual window.
+    today = pd.Timestamp(date.today()).normalize()
+    daily_period = (
+        "max" if effective_required_start < today - pd.DateOffset(years=10)
+        else "10y"
+    )
+    official_months = max(
+        RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS,
+        (today.year - effective_required_start.year) * 12
+        + today.month - effective_required_start.month + 1,
+    )
     attempts = (
         {
             "prefer_official": False,
-            "daily_period": "10y",
+            "daily_period": daily_period,
             "force_official_refresh": False,
         },
         {
@@ -367,9 +379,7 @@ def _download_backtest_history(
                 prefer_official=bool(options["prefer_official"]),
                 daily_period=str(options["daily_period"]),
                 update_with_intraday=False,
-                official_months=(
-                    RESEARCH_HISTORY_MONTHS + BACKTEST_WARMUP_MONTHS
-                ),
+                official_months=official_months,
                 force_official_refresh=bool(
                     options["force_official_refresh"]
                 ),

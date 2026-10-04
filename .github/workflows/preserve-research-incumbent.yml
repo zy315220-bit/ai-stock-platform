@@ -48,12 +48,14 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Preserve strongest same-campaign incumbent
+      - name: Preserve current-campaign and all-time strongest evidence
         run: >-
           cd backend && python -m scripts.preserve_research_incumbent
           --snapshot ../research-data/daily/latest.json
           --runs-root ../research-data/daily/runs
           --incumbent ../research-data/daily/incumbent.json
+          --history-root ../research-data/daily/history
+          --all-time-incumbent ../research-data/daily/all-time-incumbent.json
 
       - name: Mirror incumbent-aware daily history
         run: |
@@ -71,10 +73,10 @@ jobs:
         run: |
           git -C research-data config user.name "ai-stock-research-bot"
           git -C research-data config user.email "actions@users.noreply.github.com"
-          git -C research-data add daily/latest.json daily/incumbent.json daily/history
+          git -C research-data add daily/latest.json daily/incumbent.json daily/all-time-incumbent.json daily/history
           if git -C research-data diff --cached --quiet; then
             echo "Incumbent unchanged; nothing to publish."
           else
-            git -C research-data commit -m "research: preserve same-campaign incumbent"
+            git -C research-data commit -m "research: preserve current and all-time incumbents"
             git -C research-data push origin HEAD:research-data
           fi

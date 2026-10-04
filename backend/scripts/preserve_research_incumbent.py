@@ -15,6 +15,7 @@ from scripts.run_daily_autoresearch import write_json_atomic
 
 
 INCUMBENT_SCHEMA_VERSION = 1
+ALL_TIME_INCUMBENT_SCHEMA_VERSION = 1
 
 
 def _behavior_signature(candidate: dict[str, Any] | None) -> str:
@@ -194,6 +195,82 @@ def select_research_incumbent(
     return output, incumbent_record
 
 
+def select_all_time_incumbent(
+    snapshot: dict[str, Any],
+    *,
+    prior_all_time_incumbent: dict[str, Any] | None = None,
+    historical_snapshots: Iterable[dict[str, Any]] = (),
+) -> dict[str, Any]:
+    """Archive the strongest observed evidence without granting current eligibility.
+
+    Campaign windows remain separate for promotion. This record is a permanent,
+    observation-only high-water mark; it is never read by search or Holdout.
+    """
+    pool: list[tuple[str, dict[str, Any]]] = []
+    if isinstance(prior_all_time_incumbent, dict):
+        candidate = _valid_candidate(prior_all_time_incumbent.get("candidate"))
+        if candidate is not None and prior_all_time_incumbent.get("campaign_id"):
+            prior = deepcopy(prior_all_time_incumbent)
+            prior["candidate"] = candidate
+            pool.append(("prior_all_time_incumbent", prior))
+
+    for source, snapshots in (
+        ("historical_archive", historical_snapshots),
+        ("current_snapshot", (snapshot,)),
+    ):
+        for observed in snapshots:
+            embedded = observed.get("all_time_incumbent")
+            if isinstance(embedded, dict) and embedded.get("scope") == "ALL_TIME":
+                candidate = _valid_candidate(embedded.get("candidate"))
+                if candidate is not None and embedded.get("campaign_id"):
+                    recovered = deepcopy(embedded)
+                    recovered["candidate"] = candidate
+                    pool.append((source, recovered))
+            campaign_id = str(observed.get("campaign_id") or "").strip()
+            if not campaign_id:
+                continue
+            values = [
+                observed.get("incumbent_candidate"),
+                observed.get("top_candidate"),
+                observed.get("round_top_candidate"),
+                *(observed.get("candidates") or []),
+            ]
+            for value in values:
+                candidate = _valid_candidate(value)
+                if candidate is None:
+                    continue
+                pool.append((source, {
+                    "campaign_id": campaign_id,
+                    "candidate": candidate,
+                    "source_snapshot_as_of_date": observed.get("as_of_date"),
+                    "source_generated_at_utc": observed.get("generated_at_utc"),
+                }))
+
+    if not pool:
+        raise ValueError("no historical candidate evidence is available")
+    # Prior evidence wins ties, preserving its original date and provenance.
+    source, strongest = max(pool, key=lambda item: _ranking_key(item[1]["candidate"]))
+    record = deepcopy(strongest)
+    previous = prior_all_time_incumbent
+    state = "BOOTSTRAPPED" if previous is None else (
+        "RETAINED" if source == "prior_all_time_incumbent" else "REPLACED"
+    )
+    record["schema_version"] = ALL_TIME_INCUMBENT_SCHEMA_VERSION
+    record["scope"] = "ALL_TIME"
+    record["selection"] = {
+        "state": state,
+        "source": source,
+        "historical_identity": f"{record['campaign_id']}:{_candidate_identity(record['candidate'])}",
+        "ranking_key": "paper_guided_evidence_hierarchy_v1",
+        "evidence_scope": "ORIGINAL_CAMPAIGN_ONLY",
+        "observation_only": True,
+        "grants_current_promotion_eligibility": False,
+        "feeds_train_memory": False,
+        "opens_final_holdout": False,
+    }
+    return record
+
+
 def load_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -207,11 +284,16 @@ def load_optional_json(path: Path) -> dict[str, Any] | None:
     return load_json(path)
 
 
-def load_historical_snapshots(runs_root: Path) -> list[dict[str, Any]]:
-    if not runs_root.is_dir():
-        return []
+def load_historical_snapshots(
+    runs_root: Path,
+    history_root: Path | None = None,
+) -> list[dict[str, Any]]:
     snapshots: list[dict[str, Any]] = []
-    for path in sorted(runs_root.glob("*/*/latest.json")):
+    paths = list(runs_root.glob("*/*/latest.json"))
+    if history_root is not None:
+        # Daily archives include preserved incumbents missing from raw runs.
+        paths.extend(history_root.glob("*.json"))
+    for path in sorted(paths):
         try:
             snapshots.append(load_json(path))
         except (OSError, ValueError, json.JSONDecodeError):
@@ -221,11 +303,13 @@ def load_historical_snapshots(runs_root: Path) -> list[dict[str, Any]]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Preserve the strongest same-campaign research incumbent"
+        description="Preserve current-campaign and all-time research incumbents"
     )
     parser.add_argument("--snapshot", type=Path, required=True)
     parser.add_argument("--runs-root", type=Path, required=True)
     parser.add_argument("--incumbent", type=Path, required=True)
+    parser.add_argument("--history-root", type=Path)
+    parser.add_argument("--all-time-incumbent", type=Path)
     return parser.parse_args()
 
 
@@ -233,12 +317,21 @@ def main() -> None:
     args = parse_args()
     snapshot = load_json(args.snapshot)
     prior = load_optional_json(args.incumbent)
-    historical = load_historical_snapshots(args.runs_root)
+    history_root = args.history_root or args.snapshot.parent / "history"
+    all_time_path = args.all_time_incumbent or args.snapshot.parent / "all-time-incumbent.json"
+    historical = load_historical_snapshots(args.runs_root, history_root)
     updated, incumbent = select_research_incumbent(
         snapshot,
         prior_incumbent=prior,
         historical_snapshots=historical,
     )
+    all_time = select_all_time_incumbent(
+        updated,
+        prior_all_time_incumbent=load_optional_json(all_time_path),
+        historical_snapshots=historical,
+    )
+    write_json_atomic(all_time_path, all_time)
+    updated["all_time_incumbent"] = all_time
     write_json_atomic(args.snapshot, updated)
     write_json_atomic(args.incumbent, incumbent)
     print(

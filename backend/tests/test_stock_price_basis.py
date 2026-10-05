@@ -4,12 +4,14 @@ import unittest
 from unittest.mock import patch
 
 import pandas as pd
+from app.services.backtest.corporate_action_gate import prepare_research_frame
 
 from stock import (
     _clean_ohlcv,
     _download_yfinance,
     _normalize_datetime_index,
     _normalize_price_basis,
+    download_stock,
 )
 
 
@@ -127,6 +129,35 @@ class StockPriceBasisTests(unittest.TestCase):
         chart_download.assert_called_once_with("0050.TW", "10y", "1d", False)
         yfinance_download.assert_not_called()
         pd.testing.assert_frame_equal(result, expected)
+
+    def test_unused_ancient_jump_does_not_block_requested_history(self) -> None:
+        frame = pd.DataFrame({
+            "Open": [100.0, 46.0, 100.0, 101.0],
+            "High": [101.0, 47.0, 101.0, 102.0],
+            "Low": [99.0, 45.0, 99.0, 100.0],
+            "Close": [100.0, 46.0, 100.0, 101.0],
+            "Volume": [1000.0] * 4,
+        }, index=pd.to_datetime(["1994-05-23", "1994-05-24", "2006-07-03", "2006-07-04"]))
+        frame.attrs["provider_dividends"] = [{"ex_date": "2006-07-04", "amount": 1.0}]
+        with patch("stock._download_yfinance", return_value=frame), patch("stock.build_ticker_list", return_value=["2317.TW"]):
+            result = download_stock("2317", update_with_intraday=False, history_start_date="2006-07-01")
+            self.assertEqual(list(result.index), list(frame.index[2:]))
+            self.assertEqual(result.attrs["provider_dividends"], frame.attrs["provider_dividends"])
+            self.assertTrue(result.attrs["corporate_action_validated"])
+            prepare_research_frame(result, "2317")
+            # Full-history consumers still reject the unconfirmed old jump.
+            with self.assertRaisesRegex(ValueError, "1994-05-24"):
+                prepare_research_frame(download_stock("2317", update_with_intraday=False), "2317")
+
+    def test_requested_history_still_rejects_unconfirmed_action_jump(self) -> None:
+        frame = pd.DataFrame({
+            "Open": [100.0, 46.0], "High": [101.0, 47.0],
+            "Low": [99.0, 45.0], "Close": [100.0, 46.0],
+            "Volume": [1000.0, 1000.0],
+        }, index=pd.to_datetime(["2025-06-30", "2025-07-01"]))
+        with patch("stock._download_yfinance", return_value=frame), patch("stock.build_ticker_list", return_value=["2317.TW"]):
+            with self.assertRaisesRegex(ValueError, "2025-07-01"):
+                prepare_research_frame(download_stock("2317", update_with_intraday=False, history_start_date="2006-07-01"), "2317")
 
 
 if __name__ == "__main__":

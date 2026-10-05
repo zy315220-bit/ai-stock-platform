@@ -384,6 +384,7 @@ def _download_backtest_history(
                     options["force_official_refresh"]
                 ),
                 include_corporate_actions=True,
+                history_start_date=effective_required_start.to_period("M").start_time.strftime("%Y-%m-%d"),
             )
         except Exception as error:
             errors.append(str(error))

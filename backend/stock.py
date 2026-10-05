@@ -216,7 +216,7 @@ def _normalize_price_basis(daily,stock_code,source):
     daily.attrs.pop("split_adjusted",None)
     return apply_split_adjustments(daily,stock_code)
 
-def download_stock(stock_code:Any,daily_period="max",update_with_intraday=True,intraday_period="5d",intraday_interval="5m",prefer_official=False,official_months=10,force_official_refresh=False,include_corporate_actions=False):
+def download_stock(stock_code:Any,daily_period="max",update_with_intraday=True,intraday_period="5d",intraday_interval="5m",prefer_official=False,official_months=10,force_official_refresh=False,include_corporate_actions=False,history_start_date=None):
     errors=[]
     for ticker in build_ticker_list(stock_code):
         market="上櫃" if ticker.endswith(".TWO") else "上市";code=normalize_stock_code(ticker);official_daily=pd.DataFrame()
@@ -230,7 +230,13 @@ def download_stock(stock_code:Any,daily_period="max",update_with_intraday=True,i
             else:
                 official_daily=download_official_history(code,market=market,months=official_months,force_refresh=force_official_refresh);daily=_clean_ohlcv(official_daily);daily_source=str(official_daily.attrs.get("source","官方交易所資料"))
         if daily.empty:errors.append(f"{ticker}：Yahoo 與官方來源皆沒有有效日線資料");continue
-        daily=_normalize_datetime_index(daily,remove_timezone=True);daily=_normalize_price_basis(daily,code,daily_source)
+        daily=_normalize_datetime_index(daily,remove_timezone=True)
+        if history_start_date is not None:
+            # Include the caller's indicator warmup, but exclude older prices
+            # that cannot participate in this research or its action ledger.
+            daily=daily.loc[daily.index>=pd.Timestamp(history_start_date).normalize()].copy()
+            if daily.empty:errors.append(f"{ticker}：指定研究範圍內沒有有效日線資料");continue
+        daily=_normalize_price_basis(daily,code,daily_source)
         if include_corporate_actions:daily=attach_official_dividends(daily,code)
         if update_with_intraday and daily_source=="Yahoo Finance":
             intraday=_clean_ohlcv(_download_yfinance(ticker,intraday_period,intraday_interval,False))

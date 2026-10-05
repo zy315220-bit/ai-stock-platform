@@ -11,6 +11,7 @@ on:
       - "backend/scripts/run_research_lab_audit.py"
       - "backend/scripts/run_daily_autoresearch.py"
       - "backend/scripts/aggregate_daily_autoresearch.py"
+      - "backend/scripts/preserve_research_incumbent.py"
       - "backend/scripts/build_competition_challengers.py"
       - "backend/scripts/run_competition_challengers.py"
       - "backend/scripts/summarize_model_selection_evidence.py"
@@ -26,9 +27,12 @@ on:
       - "frontend/components/DailyResearchStatus.tsx"
       - "frontend/lib/researchHealth.ts"
       - "frontend/tests/researchHealth.test.mjs"
+      - "frontend/lib/researchHistory.ts"
+      - "frontend/tests/researchHistory.test.mjs"
       - "frontend/components/Dashboard.tsx"
       - ".github/workflows/daily-autoresearch.yml"
       - ".github/workflows/research-lab-ci.yml"
+      - ".github/workflows/preserve-research-incumbent.yml"
   push:
     branches: ["main", "feature/ai-research-lab"]
     paths:
@@ -40,6 +44,7 @@ on:
       - "backend/scripts/run_research_lab_audit.py"
       - "backend/scripts/run_daily_autoresearch.py"
       - "backend/scripts/aggregate_daily_autoresearch.py"
+      - "backend/scripts/preserve_research_incumbent.py"
       - "backend/scripts/build_competition_challengers.py"
       - "backend/scripts/run_competition_challengers.py"
       - "backend/scripts/summarize_model_selection_evidence.py"
@@ -55,9 +60,12 @@ on:
       - "frontend/components/DailyResearchStatus.tsx"
       - "frontend/lib/researchHealth.ts"
       - "frontend/tests/researchHealth.test.mjs"
+      - "frontend/lib/researchHistory.ts"
+      - "frontend/tests/researchHistory.test.mjs"
       - "frontend/components/Dashboard.tsx"
       - ".github/workflows/daily-autoresearch.yml"
       - ".github/workflows/research-lab-ci.yml"
+      - ".github/workflows/preserve-research-incumbent.yml"
 
 jobs:
   backend-tests:
@@ -118,6 +126,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run test:research-health
+      - run: npm run test:research-history
       - run: npm run build
 
   continuity-audit:

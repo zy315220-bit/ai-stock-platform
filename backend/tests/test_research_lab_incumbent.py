@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from scripts.preserve_research_incumbent import select_research_incumbent
+import json
+from copy import deepcopy
+from pathlib import Path
+
+from scripts.preserve_research_incumbent import (
+    load_historical_snapshots,
+    select_all_time_incumbent,
+    select_research_incumbent,
+)
 
 
 def _candidate(
@@ -162,3 +170,100 @@ def test_incumbent_marks_behaviorally_duplicate_challenger() -> None:
         == "exact_behavior_signature"
     )
     assert updated["incumbent_status"]["behavioral_duplicate_of"] == "robot-old"
+
+
+def test_all_time_survives_quarter_change_without_promoting_old_evidence() -> None:
+    old = _candidate("2882", "old", gates=5, dsr=96.04, score=80.0)
+    current = _candidate("2615", "current", gates=3, dsr=70.0, score=65.0)
+    historical = [{
+        "campaign_id": "2026-Q3", "as_of_date": "2026-09-30",
+        "top_candidate": old,
+    }]
+    snapshot = {
+        "campaign_id": "2026-Q4", "as_of_date": "2026-10-04",
+        "top_candidate": current, "eligible_candidate_count": 0,
+        "holdout_opened": False,
+        "training_memory": {"provenance": "TRAIN_ONLY"},
+    }
+    original = deepcopy(snapshot)
+    updated, _ = select_research_incumbent(snapshot, historical_snapshots=historical)
+    archive = select_all_time_incumbent(updated, historical_snapshots=historical)
+
+    assert archive["candidate"]["candidate_id"] == "old"
+    assert archive["candidate"]["confirmation_gate_pass_count"] == 5
+    assert archive["campaign_id"] == "2026-Q3"
+    assert archive["source_snapshot_as_of_date"] == "2026-09-30"
+    assert archive["selection"]["grants_current_promotion_eligibility"] is False
+    assert archive["selection"]["feeds_train_memory"] is False
+    assert archive["selection"]["opens_final_holdout"] is False
+    assert updated["top_candidate"]["candidate_id"] == "current"
+    assert updated["eligible_candidate_count"] == 0
+    assert updated["holdout_opened"] is False
+    assert updated["training_memory"] == original["training_memory"]
+    assert snapshot == original
+
+
+def test_durable_all_time_retains_provenance_when_original_archive_is_missing() -> None:
+    old = _candidate("2882", "old", gates=5, dsr=96.04, score=80.0)
+    historical = {"campaign_id": "2026-Q3", "as_of_date": "2026-09-30", "top_candidate": old}
+    prior = select_all_time_incumbent(historical)
+    weaker = {"campaign_id": "2027-Q1", "as_of_date": "2027-01-02",
+              "top_candidate": _candidate("2615", "weaker", gates=3, dsr=70.0, score=65.0)}
+
+    archive = select_all_time_incumbent(weaker, prior_all_time_incumbent=prior)
+    assert archive["selection"]["state"] == "RETAINED"
+    assert archive["candidate"] == prior["candidate"]
+    assert archive["source_snapshot_as_of_date"] == "2026-09-30"
+    assert archive["campaign_id"] == "2026-Q3"
+    assert prior["selection"]["state"] == "BOOTSTRAPPED"
+
+
+def test_all_time_replaces_only_with_stronger_observed_evidence() -> None:
+    old = _candidate("2882", "same-version", gates=5, dsr=96.04, score=80.0)
+    prior = select_all_time_incumbent({"campaign_id": "2026-Q3", "top_candidate": old})
+    # Even the same robot version evaluated in a new quarter has new provenance.
+    stronger = _candidate("2882", "same-version", gates=6, dsr=99.0, score=85.0)
+    snapshot = {"campaign_id": "2026-Q4", "as_of_date": "2026-10-05", "top_candidate": stronger}
+    archive = select_all_time_incumbent(snapshot, prior_all_time_incumbent=prior)
+    assert archive["selection"]["state"] == "REPLACED"
+    assert archive["campaign_id"] == "2026-Q4"
+    assert archive["candidate"]["confirmation_gate_pass_count"] == 6
+    assert archive["source_snapshot_as_of_date"] == "2026-10-05"
+
+
+def test_all_time_can_recover_best_from_daily_history_when_runs_are_absent(tmp_path: Path) -> None:
+    history = tmp_path / "history"
+    history.mkdir()
+    observed = {"campaign_id": "2026-Q3", "as_of_date": "2026-09-30",
+                "incumbent_candidate": _candidate("2882", "old", gates=5, dsr=96.04, score=80.0)}
+    (history / "2026-09-30.json").write_text(json.dumps(observed))
+    (history / "broken.json").write_text("interrupted write")
+    recovered = load_historical_snapshots(tmp_path / "missing-runs", history)
+    assert recovered == [observed]
+    archive = select_all_time_incumbent({"campaign_id": "2026-Q4"}, historical_snapshots=recovered)
+    assert archive["candidate"]["candidate_id"] == "old"
+
+
+def test_all_time_includes_candidates_outside_snapshot_top() -> None:
+    snapshot = {
+        "campaign_id": "2026-Q3",
+        "top_candidate": _candidate("2615", "top", gates=3, dsr=70.0, score=65.0),
+        "candidates": [_candidate("2882", "best", gates=5, dsr=96.04, score=80.0)],
+    }
+    assert select_all_time_incumbent(snapshot)["candidate"]["candidate_id"] == "best"
+
+
+def test_all_time_recovers_embedded_archive_without_changing_its_origin() -> None:
+    archive = select_all_time_incumbent({
+        "campaign_id": "2026-Q3", "as_of_date": "2026-09-30",
+        "top_candidate": _candidate("2882", "old", gates=5, dsr=96.04, score=80.0),
+    })
+    snapshot = {
+        "campaign_id": "2026-Q4", "as_of_date": "2026-10-05",
+        "top_candidate": _candidate("2615", "new", gates=3, dsr=70.0, score=65.0),
+        "all_time_incumbent": archive,
+    }
+    recovered = select_all_time_incumbent(snapshot)
+    assert recovered["candidate"]["candidate_id"] == "old"
+    assert recovered["campaign_id"] == "2026-Q3"
+    assert recovered["source_snapshot_as_of_date"] == "2026-09-30"

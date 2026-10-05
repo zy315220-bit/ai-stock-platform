@@ -2,33 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { getResearchHealth, type ResearchHealth } from "@/lib/researchHealth";
-
-type Candidate = {
-  stock_code?: string;
-  candidate_id?: string;
-  robot_version_id?: string;
-  strategy_family?: string;
-  decision?: "DISCARD" | "KEEP" | "HOLDOUT_READY";
-  research_score?: number;
-  confirmation_gate_pass_count?: number;
-  confirmation_gate_total?: number;
-  eligible_for_one_shot_holdout?: boolean;
-  regime_robust?: boolean;
-  walk_forward_sample_sufficient?: boolean;
-  walk_forward_positive_slice_ratio?: number;
-  validation?: {
-    wilson_lower_percent?: number;
-    total_return_percent?: number;
-    alpha_percent?: number;
-    max_drawdown_percent?: number;
-    deflated_sharpe_probability_percent?: number;
-    deflated_sharpe_pass?: boolean;
-  };
-  model_selection?: {
-    cscv_pbo_pass?: boolean;
-    hansen_spa_pass?: boolean;
-  };
-};
+import {
+  candidateIdentity,
+  getHistoricalStrongest,
+  type AllTimeIncumbent,
+  type ResearchCandidate as Candidate,
+} from "@/lib/researchHistory";
 
 type IncumbentStatus = {
   state?: "BOOTSTRAPPED" | "RETAINED" | "REPLACED";
@@ -90,6 +69,8 @@ type DailySnapshot = {
   incumbent_candidate?: Candidate | null;
   round_top_candidate?: Candidate | null;
   incumbent_status?: IncumbentStatus | null;
+  candidates?: Candidate[];
+  all_time_incumbent?: AllTimeIncumbent | null;
 };
 
 type SystemAudit = {
@@ -154,6 +135,7 @@ type DailyStatus = {
     url?: string;
   };
   latest_snapshot: DailySnapshot | null;
+  all_time_incumbent?: AllTimeIncumbent | null;
   system_audit?: SystemAudit | null;
   certified_robots?: CertifiedRobots | null;
   competition_challengers?: CompetitionChallengers | null;
@@ -205,31 +187,31 @@ function decisionLabel(value?: Candidate["decision"]): string {
   return "—";
 }
 
-function candidateIdentity(candidate?: Candidate | null): string {
-  if (!candidate) return "";
-  return candidate.robot_version_id || `${candidate.stock_code ?? ""}:${candidate.candidate_id ?? ""}`;
-}
-
 function CandidateEvidenceCard({
   candidate,
   title,
   note,
+  provenance,
+  gateLabel = "晉級 Gate",
 }: {
   candidate: Candidate;
   title: string;
   note: string;
+  provenance?: string;
+  gateLabel?: string;
 }) {
   return (
     <div className="daily-top-candidate">
       <div>
         <span>{title}</span>
         <strong>{candidate.stock_code}・{candidate.candidate_id}</strong>
+        {provenance ? <small>{provenance}</small> : null}
         <small>
           {candidate.strategy_family}・{decisionLabel(candidate.decision)}・Research Score {formatMetric(candidate.research_score)}
         </small>
       </div>
       <dl>
-        <div><dt>晉級 Gate</dt><dd>{formatMetric(candidate.confirmation_gate_pass_count)}/{formatMetric(candidate.confirmation_gate_total)}</dd></div>
+        <div><dt>{gateLabel}</dt><dd>{formatMetric(candidate.confirmation_gate_pass_count)}/{formatMetric(candidate.confirmation_gate_total)}</dd></div>
         <div><dt>DSR</dt><dd>{formatMetric(candidate.validation?.deflated_sharpe_probability_percent)}%</dd></div>
         <div><dt>Validation 報酬</dt><dd>{formatMetric(candidate.validation?.total_return_percent)}%</dd></div>
         <div><dt>Alpha</dt><dd>{formatMetric(candidate.validation?.alpha_percent)}%</dd></div>
@@ -260,7 +242,11 @@ export default function DailyResearchStatus() {
           throw new Error("無法讀取每日自動研究狀態");
         }
         if (active) {
-          setStatus(payload as DailyStatus);
+          const next = payload as DailyStatus;
+          setStatus((previous) => ({
+            ...next,
+            all_time_incumbent: next.all_time_incumbent ?? next.latest_snapshot?.all_time_incumbent ?? previous?.all_time_incumbent ?? null,
+          }));
           setError("");
         }
       } catch (reason) {
@@ -282,6 +268,7 @@ export default function DailyResearchStatus() {
   const incumbent = snapshot?.incumbent_candidate ?? snapshot?.top_candidate ?? null;
   const roundTop = snapshot?.round_top_candidate ?? null;
   const incumbentStatus = snapshot?.incumbent_status ?? null;
+  const historical = getHistoricalStrongest(status?.all_time_incumbent, snapshot);
   const challengerDiffers = Boolean(
     incumbent && roundTop && candidateIdentity(incumbent) !== candidateIdentity(roundTop)
   );
@@ -414,6 +401,20 @@ export default function DailyResearchStatus() {
             競賽結果不回灌同一研究 campaign 的 Train，避免二次過擬合。
           </p>
         </div>
+      ) : null}
+
+      {historical ? (
+        <CandidateEvidenceCard
+          candidate={historical.archive.candidate}
+          title="歷史以來最強候選・跨季度永久保留"
+          gateLabel="歷史 Gate"
+          provenance={`${historical.archive.campaign_id}・留存日期 ${historical.archive.source_snapshot_as_of_date ?? "尚無紀錄"}・版本 ${historical.archive.candidate.robot_version_id ?? historical.archive.candidate.candidate_id}`}
+          note={
+            historical.currentEvidence
+              ? `本輪同版本重驗結果為 ${formatMetric(historical.currentEvidence.confirmation_gate_pass_count)}/${formatMetric(historical.currentEvidence.confirmation_gate_total)} Gate。歷史最佳成績持續保留；正式認證仍依本期驗證與 Final Holdout 結果。`
+              : `此成績屬於 ${historical.archive.campaign_id}；${snapshot?.campaign_id ?? "本期"} 本輪尚無此版本的完整重驗結果。換季或較弱的新候選不會清除歷史最強紀錄；須通過本期驗證及 Final Holdout 才能正式認證。`
+          }
+        />
       ) : null}
 
       {incumbent ? (

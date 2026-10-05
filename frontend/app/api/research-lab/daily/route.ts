@@ -5,6 +5,8 @@ export const dynamic = "force-dynamic";
 
 const RESULT_URL =
   "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/daily/latest.json";
+const ALL_TIME_INCUMBENT_URL =
+  "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/daily/all-time-incumbent.json";
 const SYSTEM_AUDIT_URL =
   "https://raw.githubusercontent.com/zy315220-bit/ai-stock-platform/research-data/daily/diagnostics/research-system-audit.json";
 const CERTIFIED_ROBOTS_URL =
@@ -63,6 +65,7 @@ export async function GET() {
     certifiedResult,
     challengersResult,
     tournamentResult,
+    allTimeResult,
   ] = await Promise.allSettled([
     fetchJson(RESULT_URL),
     fetchJson(WORKFLOW_RUNS_URL),
@@ -70,6 +73,7 @@ export async function GET() {
     fetchJson(CERTIFIED_ROBOTS_URL),
     fetchJson(COMPETITION_CHALLENGERS_URL),
     fetchJson(COMPETITION_TOURNAMENT_URL),
+    fetchJson(ALL_TIME_INCUMBENT_URL),
   ]);
   const snapshot =
     snapshotResult.status === "fulfilled" ? snapshotResult.value : null;
@@ -118,6 +122,8 @@ export async function GET() {
         }
       : null,
     latest_snapshot: snapshot,
+    // Read the durable archive independently: each research run replaces latest.json.
+    all_time_incumbent: allTimeResult.status === "fulfilled" ? allTimeResult.value : null,
     system_audit: systemAudit,
     certified_robots: certifiedRobots,
     competition_challengers: competitionChallengers,
@@ -130,6 +136,7 @@ export async function GET() {
       certified_robots: certifiedResult.status,
       competition_challengers: challengersResult.status,
       competition_tournament: tournamentResult.status,
+      all_time_incumbent: allTimeResult.status,
     },
   });
 }

@@ -3,6 +3,10 @@ type Snapshot = {
   integrity_status?: string;
   completed_symbol_count?: number;
   universe_size?: number;
+  search_progress?: {
+    advancing_symbol_count?: number;
+    no_new_experiment_symbols?: string[];
+  };
 };
 
 type Workflow = { status?: string; conclusion?: string | null };
@@ -71,6 +75,14 @@ export function getResearchHealth(
   if (!workflow || workflow.conclusion !== "success") {
     return { ...base, state: "DEGRADED", label: "執行狀態待確認",
       reason: "無法確認最近一輪排程是否成功。" };
+  }
+  const stalled = snapshot.search_progress?.no_new_experiment_symbols ?? [];
+  const advancing = snapshot.search_progress?.advancing_symbol_count;
+  if (stalled.length || (typeof advancing === "number" && advancing < snapshot.universe_size)) {
+    return { ...base, state: "DEGRADED", label: "部分研究停滯",
+      reason: stalled.length
+        ? `${stalled.join("、")} 本輪未產生新實驗；工作完成仍需確認搜尋進度。`
+        : "部分股票本輪未產生新實驗，不能標示全部研究正常。" };
   }
   return { ...base, state: "OPERATIONAL", label: "自動研究正常",
     reason: "最新完整結果與對應稽核均已通過。" };

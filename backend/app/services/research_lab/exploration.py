@@ -9,15 +9,22 @@ from __future__ import annotations
 from hashlib import sha256
 from itertools import product
 import json
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from .models import ResearchCandidate
 
 
-EXPLORATION_POLICY_SCHEMA = "alpha-duration-exposure-exploration-v1"
+EXPLORATION_POLICY_SCHEMA = "alpha-duration-exposure-exploration-v2"
 HOLDING_DAYS = (5, 10, 15, 20, 30, 40, 60, 80, 100, 120, 160, 200, 252)
 ATR_TARGETS = (0.75, 1.0, 1.5, 2.0, 3.0)
 MAX_POSITION_FRACTIONS = (0.50, 0.65, 0.75, 0.85)
+# A fixed, outcome-independent continuation catalog. Hash ordering spreads
+# duration coverage instead of trying adjacent, often identical trade paths
+# first. Existing parameter signatures and all prior trials remain valid.
+CONTINUATION_HOLDING_DAYS = tuple(sorted(
+    range(2, 253),
+    key=lambda days: sha256(f"alpha-duration-v2:{days}".encode()).hexdigest(),
+))
 
 
 def _variant(parent: ResearchCandidate, **overrides: object) -> ResearchCandidate:
@@ -56,6 +63,37 @@ def generate_alpha_exploration(seeds: Iterable[ResearchCandidate]) -> list[Resea
             if candidate.parameters != seed.parameters:
                 candidates.append(candidate)
     return sorted(candidates, key=lambda candidate: candidate.candidate_id)
+
+
+def iter_alpha_continuation(
+    seeds: Iterable[ResearchCandidate],
+) -> Iterator[ResearchCandidate]:
+    """Resume exhausted seed neighborhoods using bounded execution parameters.
+
+    This catalog never consults scores, dates, Validation or Holdout results.
+    The caller skips every durably recorded parameter signature and consumes
+    only the needed prefix, so interrupted/unconsumed plans can be replayed.
+    It is finite: true exhaustion must be reported, never a successful no-op.
+    """
+    timed_seeds = [
+        seed for seed in seeds
+        if "time" in str(seed.parameters.get("exit_mode", ""))
+    ]
+    for days, target, fraction in product(
+        CONTINUATION_HOLDING_DAYS, ATR_TARGETS, MAX_POSITION_FRACTIONS,
+    ):
+        for seed in timed_seeds:
+            overrides: dict[str, object] = {"max_holding_days": days}
+            if seed.parameters.get("atr_target_percent") is None:
+                if (target, fraction) != (ATR_TARGETS[0], MAX_POSITION_FRACTIONS[0]):
+                    continue
+            else:
+                if fraction < float(seed.parameters.get("min_position_fraction", 0.25)):
+                    continue
+                overrides.update(atr_target_percent=target, max_position_fraction=fraction)
+            candidate = _variant(seed, **overrides)
+            if candidate.parameters != seed.parameters:
+                yield candidate
 
 
 def alpha_parameter_neighbors(parent: ResearchCandidate) -> list[ResearchCandidate]:

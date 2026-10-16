@@ -13,6 +13,22 @@ const success = { status: "completed", conclusion: "success" };
 test("fresh complete results with the matching audit are operational", () => {
   assert.equal(getResearchHealth(snapshot, success, audit, now).state, "OPERATIONAL");
 });
+test("a successful workflow cannot hide zero-experiment research", () => {
+  const result = getResearchHealth({ ...snapshot, search_progress: {
+    advancing_symbol_count: 19, no_new_experiment_symbols: ["3037"],
+  } }, success, audit, now);
+  assert.equal(result.state, "DEGRADED");
+  assert.equal(result.label, "部分研究停滯");
+  assert.match(result.reason, /3037/);
+});
+test("all symbols must advance when progress telemetry is present", () => {
+  assert.equal(getResearchHealth({ ...snapshot, search_progress: {
+    advancing_symbol_count: 19,
+  } }, success, audit, now).state, "DEGRADED");
+  assert.equal(getResearchHealth({ ...snapshot, search_progress: {
+    advancing_symbol_count: 20, no_new_experiment_symbols: [],
+  } }, success, audit, now).state, "OPERATIONAL");
+});
 test("a failed latest run overrides a previously passing audit", () => {
   assert.equal(getResearchHealth(snapshot, { status: "completed", conclusion: "failure" }, audit, now).state, "DEGRADED");
 });

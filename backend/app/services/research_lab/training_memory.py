@@ -12,7 +12,11 @@ from .evolution import (
     evolve_candidates,
     generate_signal_dominant_candidates,
 )
-from .exploration import EXPLORATION_POLICY_SCHEMA, generate_alpha_exploration
+from .exploration import (
+    EXPLORATION_POLICY_SCHEMA,
+    generate_alpha_exploration,
+    iter_alpha_continuation,
+)
 from .models import ExperimentDecision, ExperimentResult, ResearchCandidate
 
 
@@ -21,7 +25,6 @@ LEGACY_TRAIN_DATA_IDENTITY_SCHEMA = "canonical-train-score-series-v1"
 TRAIN_DATA_IDENTITY_SCHEMA = "canonical-train-economic-inputs-v2"
 MAX_ELITES = 12
 MAX_FRONTIER = 96
-MAX_SEEN_SIGNATURES = 10_000
 FAMILY_COVERAGE_BUCKETS = (
     "mean_reversion",
     "volatility_managed",
@@ -263,6 +266,7 @@ def prepare_daily_candidate_plan(
     rotated_grid: Iterable[ResearchCandidate],
     prior_memory: dict[str, Any] | None,
     legacy_train_data_identity: str | None = None,
+    minimum_candidate_count: int = 64,
 ) -> DailyCandidatePlan:
     """Build a novel train-only seed queue without validation feedback."""
     compatible, reset_reason = _memory_compatibility(
@@ -317,6 +321,29 @@ def prepare_daily_candidate_plan(
         ("novel_grid", novel_grid),
         ("alpha_exploration", alpha_exploration),
     ]
+    available_signatures = seen | {
+        candidate_parameter_signature(candidate)
+        for _, queue in queues for candidate in queue
+    }
+    novel_count = len(available_signatures - seen)
+    needed = max(0, int(minimum_candidate_count) - novel_count)
+    continuation: list[ResearchCandidate] = []
+    catalog_exhausted = False
+    if needed:
+        for candidate in iter_alpha_continuation(
+            generate_signal_dominant_candidates(initial_capital=capital),
+        ):
+            signature = candidate_parameter_signature(candidate)
+            if signature in available_signatures:
+                continue
+            available_signatures.add(signature)
+            continuation.append(candidate)
+            if len(continuation) >= needed:
+                break
+        else:
+            catalog_exhausted = True
+    continuation_count = len(continuation)
+    queues.append(("alpha_continuation", continuation))
     planned: list[ResearchCandidate] = []
     planned_signatures: set[str] = set()
     seed_source_counts = {name: 0 for name, _ in queues}
@@ -373,6 +400,12 @@ def prepare_daily_candidate_plan(
         "planned_candidate_count": len(planned),
         "exploration_policy_schema": EXPLORATION_POLICY_SCHEMA,
         "seed_source_counts": seed_source_counts,
+        "continuation": {
+            "triggered": needed > 0,
+            "minimum_candidate_count": int(minimum_candidate_count),
+            "novel_candidate_count": continuation_count,
+            "catalog_exhausted": catalog_exhausted,
+        },
         "family_coverage_enabled": True,
         "family_coverage_prefix_count": len(coverage_details),
         "family_coverage_required_buckets": list(FAMILY_COVERAGE_BUCKETS),
@@ -516,7 +549,10 @@ def build_training_memory(
     current_seen = {
         str(record["parameter_signature"]) for record in records
     }
-    merged_seen = sorted(prior_seen | current_seen)[-MAX_SEEN_SIGNATURES:]
+    # Campaigns and experiment budgets bound this history. Dropping old
+    # signatures would rerun rejected candidates; dropping old trial Sharpes
+    # would understate the multiple-testing correction after 10,000 trials.
+    merged_seen = sorted(prior_seen | current_seen)
 
     elite_by_signature: dict[str, dict[str, Any]] = {}
     for item in (compatible or {}).get("elites", []):
@@ -594,9 +630,6 @@ def build_training_memory(
         for record in records
         if record.get("train_period_sharpe") is not None
     )
-    train_trial_period_sharpes = train_trial_period_sharpes[
-        -MAX_SEEN_SIGNATURES:
-    ]
     memory = {
         "schema_version": TRAINING_MEMORY_SCHEMA_VERSION,
         "search_space_schema": SEARCH_SPACE_SCHEMA,

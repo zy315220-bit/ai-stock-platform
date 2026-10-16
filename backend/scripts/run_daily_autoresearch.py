@@ -168,7 +168,13 @@ def execute_daily_stock_research(
         rotated_grid=rotated_grid,
         prior_memory=prior_training_memory,
         legacy_train_data_identity=identity_audit.get("legacy_train_data_identity"),
+        minimum_candidate_count=max_experiments,
     )
+    if not candidate_plan.candidates:
+        raise RuntimeError(
+            f"SEARCH_SPACE_EXHAUSTED: {stock} has no unseen Train candidates; "
+            "research cannot publish a successful zero-experiment run"
+        )
     result = research_runner(
         stock_code=stock,
         start_date=date.fromisoformat(campaign["start_date"]),
@@ -193,6 +199,10 @@ def execute_daily_stock_research(
     )
     payload = dict(result)
     _assert_locked_holdout(payload)
+    if int(payload.get("experiments_run", 0) or 0) == 0:
+        raise RuntimeError(
+            f"SEARCH_STALLED: {stock} evaluated zero new experiments"
+        )
     memory = build_training_memory(
         stock_code=stock,
         campaign_id=campaign["campaign_id"],

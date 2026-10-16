@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-10-16T00:58:40.272972+00:00",
+  "generated_at_utc": "2026-10-16T07:02:34.887671+00:00",
   "symbol_count": 20,
   "eligible_symbol_count": 0,
   "blocked_symbol_count": 20,
@@ -10,50 +10,44 @@
       "symbol_count": 17
     },
     {
-      "reason": "bull_bear_robustness_failed",
-      "symbol_count": 11
-    },
-    {
       "reason": "deflated_sharpe_failed",
-      "symbol_count": 11
+      "symbol_count": 14
     },
     {
       "reason": "psr_mintrl_bootstrap_failed",
-      "symbol_count": 11
+      "symbol_count": 14
+    },
+    {
+      "reason": "bull_bear_robustness_failed",
+      "symbol_count": 13
     },
     {
       "reason": "validation_gate_not_ready",
-      "symbol_count": 10
+      "symbol_count": 13
     },
     {
       "reason": "no_validation_survivor",
-      "symbol_count": 9
+      "symbol_count": 6
     },
     {
       "reason": "walk_forward_stability_failed",
       "symbol_count": 6
-    },
-    {
-      "reason": "cscv_pbo_unavailable",
-      "symbol_count": 1
     }
   ],
   "model_selection_state_counts": {
     "cscv_pbo": {
       "failed": 17,
-      "pass": 2,
-      "unavailable": 1
+      "pass": 3
     },
     "hansen_spa": {
-      "failed": 19,
-      "unavailable": 1
+      "failed": 20
     }
   },
   "research_priority_observer": [
     "cscv_pbo_failed",
-    "bull_bear_robustness_failed",
     "deflated_sharpe_failed",
     "psr_mintrl_bootstrap_failed",
+    "bull_bear_robustness_failed",
     "validation_gate_not_ready"
   ],
   "feedback_policy": "OBSERVATION_ONLY: validation/holdout diagnostics must not feed candidate generation or train-memory adaptation",
@@ -100,11 +94,19 @@
       "stock_code": "00878",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed"
       ],
       "model_selection_state": {
@@ -140,11 +142,19 @@
       "stock_code": "2303",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed"
       ],
       "model_selection_state": {
@@ -182,7 +192,6 @@
       "raw_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
@@ -190,7 +199,6 @@
       "normalized_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed"
@@ -227,14 +235,12 @@
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
         "validation_gate_not_ready",
-        "bull_bear_robustness_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
         "validation_gate_not_ready",
-        "bull_bear_robustness_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed"
@@ -284,17 +290,19 @@
         "bull_bear_robustness_failed",
         "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed"
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed"
+        "deflated_sharpe_failed",
+        "cscv_pbo_failed"
       ],
       "model_selection_state": {
-        "cscv_pbo": "pass",
+        "cscv_pbo": "failed",
         "hansen_spa": "failed"
       }
     },
@@ -322,11 +330,17 @@
       "stock_code": "2615",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed"
       ],
       "model_selection_state": {
@@ -338,7 +352,6 @@
       "stock_code": "2881",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
@@ -346,7 +359,6 @@
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
-        "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
@@ -362,15 +374,15 @@
       "stock_code": "2882",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
+        "validation_gate_not_ready",
         "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
+        "validation_gate_not_ready",
         "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed"
@@ -387,18 +399,16 @@
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed",
-        "cscv_pbo_failed_or_unavailable"
+        "deflated_sharpe_failed"
       ],
       "normalized_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
         "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed",
-        "cscv_pbo_failed"
+        "deflated_sharpe_failed"
       ],
       "model_selection_state": {
-        "cscv_pbo": "failed",
+        "cscv_pbo": "pass",
         "hansen_spa": "failed"
       }
     },
@@ -406,16 +416,14 @@
       "stock_code": "3037",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "no_validation_survivor",
-        "cscv_pbo_failed_or_unavailable"
+        "no_validation_survivor"
       ],
       "normalized_reasons": [
-        "no_validation_survivor",
-        "cscv_pbo_unavailable"
+        "no_validation_survivor"
       ],
       "model_selection_state": {
-        "cscv_pbo": "unavailable",
-        "hansen_spa": "unavailable"
+        "cscv_pbo": "pass",
+        "hansen_spa": "failed"
       }
     },
     {

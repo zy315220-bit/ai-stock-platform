@@ -110,6 +110,20 @@ def test_history_beyond_ten_thousand_is_not_forgotten():
     assert len(result["train_trial_period_sharpes"]) == 10_002
 
 
+def test_small_continuation_budget_covers_multiple_horizons_and_risk_settings():
+    candidates = _plan(_exhausted_memory()).candidates[:64]
+    durations = {c.parameters["max_holding_days"] for c in candidates}
+    assert len(durations) >= 3
+    assert any(days <= 20 for days in durations)
+    assert any(20 < days <= 80 for days in durations)
+    assert any(days > 80 for days in durations)
+    risk_settings = {
+        (c.parameters["atr_target_percent"], c.parameters["max_position_fraction"])
+        for c in candidates if c.parameters.get("atr_target_percent") is not None
+    }
+    assert len(risk_settings) >= 3
+
+
 def test_continuation_preserves_execution_limits_and_has_a_finite_end():
     memory = _exhausted_memory()
     seen = set(memory["seen_parameter_signatures"])

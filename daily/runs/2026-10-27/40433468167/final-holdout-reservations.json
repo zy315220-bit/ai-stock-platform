@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "phase": "RESERVE_BEFORE_OPEN",
+  "policy": {
+    "one_shot": true,
+    "durable_reservation_before_open": true,
+    "open_only_after_all_promotion_gates_pass": true,
+    "holdout_feedback_to_train": false,
+    "overwrite_existing_ledger": false,
+    "foreign_reservation_recovery": "FAIL_CLOSED_REQUIRES_AUDIT"
+  },
+  "claim_run_id": "40433468167",
+  "eligible_candidate_count": 0,
+  "new_reservation_count": 0,
+  "owned_existing_reservation_count": 0,
+  "already_evaluated_count": 0,
+  "blocked_reservation_count": 0,
+  "holdout_opened_in_this_phase": 0,
+  "rows": []
+}

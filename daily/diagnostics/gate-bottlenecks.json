@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-11-15T17:37:31.565251+00:00",
+  "generated_at_utc": "2026-11-16T02:38:18.904678+00:00",
   "symbol_count": 20,
   "eligible_symbol_count": 0,
   "blocked_symbol_count": 20,
@@ -10,28 +10,28 @@
       "symbol_count": 20
     },
     {
-      "reason": "deflated_sharpe_failed",
-      "symbol_count": 10
+      "reason": "bull_bear_robustness_failed",
+      "symbol_count": 12
     },
     {
-      "reason": "no_validation_survivor",
-      "symbol_count": 10
+      "reason": "deflated_sharpe_failed",
+      "symbol_count": 12
     },
     {
       "reason": "psr_mintrl_bootstrap_failed",
-      "symbol_count": 10
-    },
-    {
-      "reason": "bull_bear_robustness_failed",
-      "symbol_count": 9
+      "symbol_count": 12
     },
     {
       "reason": "validation_gate_not_ready",
-      "symbol_count": 9
+      "symbol_count": 11
+    },
+    {
+      "reason": "no_validation_survivor",
+      "symbol_count": 8
     },
     {
       "reason": "walk_forward_stability_failed",
-      "symbol_count": 6
+      "symbol_count": 5
     }
   ],
   "model_selection_state_counts": {
@@ -44,10 +44,10 @@
   },
   "research_priority_observer": [
     "cscv_pbo_failed",
+    "bull_bear_robustness_failed",
     "deflated_sharpe_failed",
-    "no_validation_survivor",
     "psr_mintrl_bootstrap_failed",
-    "bull_bear_robustness_failed"
+    "validation_gate_not_ready"
   ],
   "feedback_policy": "OBSERVATION_ONLY: validation/holdout diagnostics must not feed candidate generation or train-memory adaptation",
   "rows": [
@@ -57,7 +57,6 @@
       "raw_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
@@ -65,7 +64,6 @@
       "normalized_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed"
@@ -79,11 +77,17 @@
       "stock_code": "0056",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed"
       ],
       "model_selection_state": {
@@ -121,7 +125,6 @@
       "raw_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
@@ -129,7 +132,6 @@
       "normalized_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed"
@@ -143,19 +145,11 @@
       "stock_code": "2303",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "validation_gate_not_ready",
-        "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
-        "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed",
+        "no_validation_survivor",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
-        "validation_gate_not_ready",
-        "bull_bear_robustness_failed",
-        "walk_forward_stability_failed",
-        "psr_mintrl_bootstrap_failed",
-        "deflated_sharpe_failed",
+        "no_validation_survivor",
         "cscv_pbo_failed"
       ],
       "model_selection_state": {
@@ -169,6 +163,7 @@
       "raw_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
+        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
@@ -176,6 +171,7 @@
       "normalized_reasons": [
         "validation_gate_not_ready",
         "bull_bear_robustness_failed",
+        "walk_forward_stability_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed"
@@ -228,12 +224,14 @@
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
         "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
         "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
         "psr_mintrl_bootstrap_failed",
         "deflated_sharpe_failed",
         "cscv_pbo_failed"
@@ -303,11 +301,17 @@
       "stock_code": "2603",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed"
       ],
       "model_selection_state": {
@@ -357,11 +361,19 @@
       "stock_code": "2882",
       "eligible_for_one_shot_holdout": false,
       "raw_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed_or_unavailable"
       ],
       "normalized_reasons": [
-        "no_validation_survivor",
+        "validation_gate_not_ready",
+        "bull_bear_robustness_failed",
+        "walk_forward_stability_failed",
+        "psr_mintrl_bootstrap_failed",
+        "deflated_sharpe_failed",
         "cscv_pbo_failed"
       ],
       "model_selection_state": {

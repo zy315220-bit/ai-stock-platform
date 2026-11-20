@@ -73,3 +73,16 @@ Running the unchanged parameters on the official 2026-11-20 0050 close of
 NT$84.45 produces score 29 and `NO_ENTRY`. This is an executed rule inference,
 not an independent 0050 performance validation or a prediction that price must
 fall. The original +55.55% return remains labelled as 2882 validation evidence.
+
+A separate retrospective transfer observation used the unchanged version from
+2026-10-01 (after the current campaign's locked period) through 2026-11-20.
+The existing execution engine was supplied with the official downloaded frame
+and prevented from entering before the observation start; no parameter was
+optimized on this window. It completed one trade, buying at 113.00 on October
+14 and exiting at 102.85 on November 13 under the fixed holding-period rule.
+After the engine's commissions and ETF transaction tax, the strategy returned
+-9.33%, versus -25.02% for buying and holding over the observation window.
+Maximum strategy drawdown was 18.26%. This short, retrospective, one-trade
+observation is not independent certification and is not fed back into Train.
+It shows why the source asset's positive return must not be presented as a
+0050 result.

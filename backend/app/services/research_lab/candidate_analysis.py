@@ -43,7 +43,7 @@ def load_strongest_archive() -> dict[str, Any]:
         response = requests.get(
             ARCHIVE_URL,
             headers={"Accept": "application/json"},
-            timeout=(3, 8),
+            timeout=(10, 10),
         )
         response.raise_for_status()
         archive = response.json()

@@ -84,6 +84,48 @@ export type AnalysisPerspectives = {
   };
 };
 
+export type ResearchCandidateAnalysis = {
+  status: "READY" | "UNAVAILABLE";
+  reason?: string;
+  model_id?: string;
+  candidate_id?: string;
+  strategy_family?: string;
+  source_stock_code?: string;
+  target_stock_code?: string;
+  source_campaign?: string;
+  selected_at?: string;
+  certified: boolean;
+  gate_pass_count?: number;
+  gate_total?: number;
+  gate_failures?: string[];
+  cross_asset_transfer?: boolean;
+  evidence_note?: string;
+  source_validation?: {
+    completed_trades?: number;
+    total_return_percent?: number;
+    alpha_percent?: number;
+    max_drawdown_percent?: number;
+  };
+  parameters?: {
+    entry_score: number;
+    exit_score: number;
+    require_ema_trend?: boolean;
+    entry_mode?: string;
+    exit_mode?: string;
+    max_holding_days?: number;
+  };
+  signal?: {
+    action: "ENTRY_SIGNAL" | "NO_ENTRY";
+    title: string;
+    as_of_date: string;
+    close: number;
+    score: number;
+    entry_threshold: number;
+    score_gap: number;
+    entry_checks: Record<string, boolean>;
+  };
+};
+
 export type AnalysisResponse = {
   stock: {
     code: string;
@@ -148,6 +190,7 @@ export type AnalysisResponse = {
       disclaimer: string;
     };
     perspectives?: AnalysisPerspectives;
+    research_candidate?: ResearchCandidateAnalysis;
   };
   chart: {
     candles: Candle[];

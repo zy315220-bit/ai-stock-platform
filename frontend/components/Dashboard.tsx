@@ -13,6 +13,7 @@ import {
 } from "react";
 
 import StockChart from "@/components/StockChart";
+import ResearchCandidateAnalysis from "@/components/ResearchCandidateAnalysis";
 import { clearRecoveryAttempt } from "@/lib/client-recovery";
 import {
   readClientStorage,
@@ -1895,13 +1896,17 @@ export default function Dashboard() {
           </div>
         </section>
 
+        {data.analysis.research_candidate && (
+          <ResearchCandidateAnalysis result={data.analysis.research_candidate} />
+        )}
+
         <section
           className={`recommendation-banner ${data.analysis.recommendation.tone}`}
         >
           <div>
             <span>
               {data.analysis.recommendation.position_label}
-              {" ・ 系統判斷"}
+              {data.analysis.research_candidate ? " ・ 通用基準規則參考" : " ・ 系統判斷"}
             </span>
             <h2>{data.analysis.recommendation.title}</h2>
             <p>{data.analysis.recommendation.summary}</p>

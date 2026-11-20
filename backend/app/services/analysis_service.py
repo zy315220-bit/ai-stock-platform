@@ -15,6 +15,10 @@ from app.services.history_policy import INTERACTIVE_HISTORY_MONTHS
 from app.services.market_context import build_perspectives
 from app.services.research_history import frame_coverage
 from app.services.stock_code import base_stock_code
+from app.services.research_lab.candidate_analysis import (
+    analyze_strongest_candidate,
+    load_strongest_archive,
+)
 
 
 CHART_ROWS = 260
@@ -566,7 +570,8 @@ def _real_response(stock_code: str, position_status: str) -> dict:
 
     # 官方歷史資料與即時行情互不相依，同時取得可避免兩段網路等待
     # 疊加。額外取得一個月可確保圖表涵蓋完整的一年交易日。
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        archive_future = executor.submit(load_strongest_archive)
         daily_future = executor.submit(
             _download_interactive_daily_history,
             download_stock,
@@ -581,6 +586,7 @@ def _real_response(stock_code: str, position_status: str) -> dict:
         except Exception:
             realtime = None
 
+    strongest_archive = archive_future.result()
     daily_source = str(raw_daily_df.attrs.get("source", ""))
     history_recovery = dict(raw_daily_df.attrs.get("history_recovery", {}))
     history_coverage = frame_coverage(raw_daily_df)
@@ -715,6 +721,9 @@ def _real_response(stock_code: str, position_status: str) -> dict:
                 position_status=position_status,
             ),
             "perspectives": perspectives,
+            "research_candidate": analyze_strongest_candidate(
+                code, daily_df, strongest_archive,
+            ),
         },
         "chart": {
             "candles": _series_to_candles(daily_df),

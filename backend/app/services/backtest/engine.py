@@ -19,6 +19,7 @@ from app.services.history_policy import (
 )
 from app.services.research_history import frame_coverage
 from indicators import add_indicators
+from app.services.strategy_rules import entry_predicates
 from score_engine.calculate import calculate_score
 from stock import download_stock
 
@@ -661,39 +662,16 @@ def backtest_stock(
             total_dividends += ledger_cash_flow
             position_dividends += ledger_cash_flow
 
-        ema_trend_ok = (
-            not require_ema_trend
-            or float(current_row[ema_fast_column])
-            > float(current_row[ema_slow_column])
+        entry_checks = entry_predicates(
+            current_row,
+            score,
+            entry_score=entry_score,
+            require_ema_trend=require_ema_trend,
+            ema_fast_column=ema_fast_column,
+            ema_slow_column=ema_slow_column,
+            entry_mode=entry_mode,
         )
-        entry_structure_ok = (
-            entry_mode == "score"
-            or (
-                entry_mode == "score_and_rsi_momentum"
-                and 55.0 <= float(current_row["RSI"]) <= 80.0
-            )
-            or (
-                entry_mode == "score_and_bollinger_breakout"
-                and float(current_row["Close"])
-                >= float(current_row["Upper"])
-            )
-            or (
-                entry_mode == "score_and_volume_confirmation"
-                and float(current_row["VolumeRatio"]) >= 1.2
-            )
-            or (
-                entry_mode == "mean_reversion_bollinger_rsi"
-                and float(current_row["Close"])
-                <= float(current_row["Lower"])
-                and float(current_row["RSI"]) <= 35.0
-            )
-        )
-        if (
-            shares == 0
-            and score >= entry_score
-            and ema_trend_ok
-            and entry_structure_ok
-        ):
+        if shares == 0 and all(entry_checks.values()):
             current_atr_percent = float(
                 current_row.get("NATR", current_row["ATR"] / current_row["Close"] * 100)
             )

@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at_utc": "2026-11-23T22:29:21.115710+00:00",
+  "generated_at_utc": "2026-11-24T06:34:06.531228+00:00",
   "symbol_count": 20,
   "pbo": {
     "available_symbol_count": 20,
@@ -9,12 +9,12 @@
     "unavailable_reasons": {},
     "best_by_lowest_pbo_probability": [
       {
-        "stock_code": "2330",
+        "stock_code": "2891",
         "pbo": {
           "available": true,
           "pass": true,
           "probability_percent": 7.1429,
-          "candidate_count": 29,
+          "candidate_count": 18,
           "original_candidate_count": 64,
           "reason": null
         },
@@ -23,32 +23,32 @@
           "pass": false,
           "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
           "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 0.690516,
+          "p_value": 0.90183,
           "p_values": {
-            "lower": 0.540765,
-            "consistent": 0.690516,
-            "upper": 0.690516
+            "lower": 0.733777,
+            "consistent": 0.90183,
+            "upper": 0.90183
           },
           "candidate_count": 7,
           "active_candidate_count": 7,
           "observations": 258,
-          "best_candidate_id": "mut-d51297fb191a",
-          "best_mean_daily_excess_percent": 0.019083,
-          "observed_max_studentized_statistic": 0.227932,
-          "critical_value_5pct_consistent": 2.182451,
-          "required_mean_daily_excess_percent_at_5pct": 0.182722,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.163639,
+          "best_candidate_id": "mut-45d5905adb7b",
+          "best_mean_daily_excess_percent": 0.002873,
+          "observed_max_studentized_statistic": 0.035154,
+          "critical_value_5pct_consistent": 2.31538,
+          "required_mean_daily_excess_percent_at_5pct": 0.189254,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.186381,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 6592
+        "deflated_sharpe_trial_count": 6656
       },
       {
-        "stock_code": "2603",
+        "stock_code": "2330",
         "pbo": {
           "available": true,
           "pass": true,
-          "probability_percent": 8.5714,
-          "candidate_count": 40,
+          "probability_percent": 11.4286,
+          "candidate_count": 34,
           "original_candidate_count": 64,
           "reason": null
         },
@@ -57,66 +57,32 @@
           "pass": false,
           "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
           "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 1.0,
+          "p_value": 0.668885,
           "p_values": {
-            "lower": 1.0,
-            "consistent": 1.0,
-            "upper": 1.0
+            "lower": 0.507488,
+            "consistent": 0.668885,
+            "upper": 0.668885
           },
-          "candidate_count": 5,
-          "active_candidate_count": 5,
+          "candidate_count": 7,
+          "active_candidate_count": 7,
           "observations": 258,
-          "best_candidate_id": "alpha-parameter-aafca0dbd646fe4b",
-          "best_mean_daily_excess_percent": -0.152361,
-          "observed_max_studentized_statistic": 0.0,
-          "critical_value_5pct_consistent": 1.73915,
-          "required_mean_daily_excess_percent_at_5pct": 0.226815,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.379177,
+          "best_candidate_id": "mut-0901203d4bdc",
+          "best_mean_daily_excess_percent": 0.019083,
+          "observed_max_studentized_statistic": 0.227932,
+          "critical_value_5pct_consistent": 2.16701,
+          "required_mean_daily_excess_percent_at_5pct": 0.181429,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.162346,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 4160
-      },
-      {
-        "stock_code": "2881",
-        "pbo": {
-          "available": true,
-          "pass": false,
-          "probability_percent": 27.1429,
-          "candidate_count": 38,
-          "original_candidate_count": 64,
-          "reason": null
-        },
-        "spa": {
-          "available": true,
-          "pass": false,
-          "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-          "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 0.464226,
-          "p_values": {
-            "lower": 0.464226,
-            "consistent": 0.464226,
-            "upper": 0.464226
-          },
-          "candidate_count": 4,
-          "active_candidate_count": 4,
-          "observations": 258,
-          "best_candidate_id": "mut-e22a7a2f8ed5",
-          "best_mean_daily_excess_percent": 0.028523,
-          "observed_max_studentized_statistic": 0.330394,
-          "critical_value_5pct_consistent": 1.950515,
-          "required_mean_daily_excess_percent_at_5pct": 0.168389,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.139866,
-          "reason": null
-        },
-        "deflated_sharpe_trial_count": 6592
+        "deflated_sharpe_trial_count": 6656
       },
       {
         "stock_code": "2454",
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 34.2857,
-          "candidate_count": 27,
+          "probability_percent": 25.7143,
+          "candidate_count": 45,
           "original_candidate_count": 64,
           "reason": null
         },
@@ -131,26 +97,26 @@
             "consistent": 1.0,
             "upper": 1.0
           },
-          "candidate_count": 6,
-          "active_candidate_count": 6,
+          "candidate_count": 8,
+          "active_candidate_count": 8,
           "observations": 258,
-          "best_candidate_id": "mut-d0175bd3d7ad",
-          "best_mean_daily_excess_percent": -0.101671,
+          "best_candidate_id": "mut-1dc20066c4aa",
+          "best_mean_daily_excess_percent": -0.090846,
           "observed_max_studentized_statistic": 0.0,
-          "critical_value_5pct_consistent": 2.078678,
-          "required_mean_daily_excess_percent_at_5pct": 0.317332,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.419003,
+          "critical_value_5pct_consistent": 2.164804,
+          "required_mean_daily_excess_percent_at_5pct": 0.330196,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.421041,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 6592
+        "deflated_sharpe_trial_count": 6656
       },
       {
-        "stock_code": "2303",
+        "stock_code": "3231",
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 38.5714,
-          "candidate_count": 57,
+          "probability_percent": 40.0,
+          "candidate_count": 20,
           "original_candidate_count": 64,
           "reason": null
         },
@@ -159,24 +125,58 @@
           "pass": false,
           "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
           "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 0.445923,
+          "p_value": 1.0,
           "p_values": {
-            "lower": 0.404326,
-            "consistent": 0.445923,
-            "upper": 0.445923
+            "lower": 1.0,
+            "consistent": 1.0,
+            "upper": 1.0
           },
-          "candidate_count": 2,
-          "active_candidate_count": 2,
+          "candidate_count": 3,
+          "active_candidate_count": 3,
           "observations": 258,
-          "best_candidate_id": "mut-cebc883c1eb7",
-          "best_mean_daily_excess_percent": 0.028927,
-          "observed_max_studentized_statistic": 0.294541,
-          "critical_value_5pct_consistent": 1.713157,
-          "required_mean_daily_excess_percent_at_5pct": 0.168253,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.139325,
+          "best_candidate_id": "mut-e9e42b5c4fed",
+          "best_mean_daily_excess_percent": -0.094141,
+          "observed_max_studentized_statistic": 0.0,
+          "critical_value_5pct_consistent": 1.881981,
+          "required_mean_daily_excess_percent_at_5pct": 0.285407,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.379548,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 6592
+        "deflated_sharpe_trial_count": 6656
+      },
+      {
+        "stock_code": "2603",
+        "pbo": {
+          "available": true,
+          "pass": false,
+          "probability_percent": 41.4286,
+          "candidate_count": 45,
+          "original_candidate_count": 64,
+          "reason": null
+        },
+        "spa": {
+          "available": true,
+          "pass": false,
+          "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+          "studentization": "stationary_bootstrap_long_run_variance",
+          "p_value": 1.0,
+          "p_values": {
+            "lower": 1.0,
+            "consistent": 1.0,
+            "upper": 1.0
+          },
+          "candidate_count": 7,
+          "active_candidate_count": 7,
+          "observations": 258,
+          "best_candidate_id": "alpha-parameter-1f4283703dc06801",
+          "best_mean_daily_excess_percent": -0.148763,
+          "observed_max_studentized_statistic": 0.0,
+          "critical_value_5pct_consistent": 1.780783,
+          "required_mean_daily_excess_percent_at_5pct": 0.225612,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.374375,
+          "reason": null
+        },
+        "deflated_sharpe_trial_count": 4224
       }
     ]
   },
@@ -191,8 +191,8 @@
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 60.0,
-          "candidate_count": 50,
+          "probability_percent": 51.4286,
+          "candidate_count": 54,
           "original_candidate_count": 64,
           "reason": null
         },
@@ -201,66 +201,32 @@
           "pass": false,
           "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
           "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 0.329451,
+          "p_value": 0.347754,
           "p_values": {
-            "lower": 0.329451,
-            "consistent": 0.329451,
-            "upper": 0.329451
+            "lower": 0.347754,
+            "consistent": 0.347754,
+            "upper": 0.347754
           },
-          "candidate_count": 8,
-          "active_candidate_count": 8,
+          "candidate_count": 6,
+          "active_candidate_count": 6,
           "observations": 258,
-          "best_candidate_id": "alpha-parameter-0309c3d3e435424d",
-          "best_mean_daily_excess_percent": 0.110726,
-          "observed_max_studentized_statistic": 0.661944,
-          "critical_value_5pct_consistent": 1.775162,
-          "required_mean_daily_excess_percent_at_5pct": 0.296939,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.186212,
+          "best_candidate_id": "alpha-parameter-8bc2f6d5dac91392",
+          "best_mean_daily_excess_percent": 0.122695,
+          "observed_max_studentized_statistic": 0.652648,
+          "critical_value_5pct_consistent": 1.706961,
+          "required_mean_daily_excess_percent_at_5pct": 0.320901,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.198206,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 6360
-      },
-      {
-        "stock_code": "2303",
-        "pbo": {
-          "available": true,
-          "pass": false,
-          "probability_percent": 38.5714,
-          "candidate_count": 57,
-          "original_candidate_count": 64,
-          "reason": null
-        },
-        "spa": {
-          "available": true,
-          "pass": false,
-          "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-          "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 0.445923,
-          "p_values": {
-            "lower": 0.404326,
-            "consistent": 0.445923,
-            "upper": 0.445923
-          },
-          "candidate_count": 2,
-          "active_candidate_count": 2,
-          "observations": 258,
-          "best_candidate_id": "mut-cebc883c1eb7",
-          "best_mean_daily_excess_percent": 0.028927,
-          "observed_max_studentized_statistic": 0.294541,
-          "critical_value_5pct_consistent": 1.713157,
-          "required_mean_daily_excess_percent_at_5pct": 0.168253,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.139325,
-          "reason": null
-        },
-        "deflated_sharpe_trial_count": 6592
+        "deflated_sharpe_trial_count": 6424
       },
       {
         "stock_code": "2881",
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 27.1429,
-          "candidate_count": 38,
+          "probability_percent": 45.7143,
+          "candidate_count": 37,
           "original_candidate_count": 64,
           "reason": null
         },
@@ -269,32 +235,32 @@
           "pass": false,
           "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
           "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 0.464226,
+          "p_value": 0.477537,
           "p_values": {
-            "lower": 0.464226,
-            "consistent": 0.464226,
-            "upper": 0.464226
+            "lower": 0.419301,
+            "consistent": 0.477537,
+            "upper": 0.477537
           },
-          "candidate_count": 4,
-          "active_candidate_count": 4,
+          "candidate_count": 7,
+          "active_candidate_count": 7,
           "observations": 258,
-          "best_candidate_id": "mut-e22a7a2f8ed5",
-          "best_mean_daily_excess_percent": 0.028523,
-          "observed_max_studentized_statistic": 0.330394,
-          "critical_value_5pct_consistent": 1.950515,
-          "required_mean_daily_excess_percent_at_5pct": 0.168389,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.139866,
+          "best_candidate_id": "mut-ec045ab8d826",
+          "best_mean_daily_excess_percent": 0.043623,
+          "observed_max_studentized_statistic": 0.522801,
+          "critical_value_5pct_consistent": 1.993788,
+          "required_mean_daily_excess_percent_at_5pct": 0.166362,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.12274,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 6592
+        "deflated_sharpe_trial_count": 6656
       },
       {
         "stock_code": "2317",
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 51.4286,
-          "candidate_count": 53,
+          "probability_percent": 68.5714,
+          "candidate_count": 28,
           "original_candidate_count": 64,
           "reason": null
         },
@@ -303,32 +269,32 @@
           "pass": false,
           "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
           "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 0.613977,
+          "p_value": 0.572379,
           "p_values": {
-            "lower": 0.587354,
-            "consistent": 0.613977,
-            "upper": 0.613977
+            "lower": 0.540765,
+            "consistent": 0.572379,
+            "upper": 0.572379
           },
-          "candidate_count": 6,
-          "active_candidate_count": 6,
+          "candidate_count": 4,
+          "active_candidate_count": 4,
           "observations": 258,
-          "best_candidate_id": "mut-1ba16e0c19a5",
-          "best_mean_daily_excess_percent": 0.005241,
-          "observed_max_studentized_statistic": 0.034399,
-          "critical_value_5pct_consistent": 2.026836,
-          "required_mean_daily_excess_percent_at_5pct": 0.308789,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.303549,
+          "best_candidate_id": "mut-6edea11b2954",
+          "best_mean_daily_excess_percent": 0.02541,
+          "observed_max_studentized_statistic": 0.160114,
+          "critical_value_5pct_consistent": 2.024926,
+          "required_mean_daily_excess_percent_at_5pct": 0.321355,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.295945,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 6592
+        "deflated_sharpe_trial_count": 6656
       },
       {
-        "stock_code": "0050",
+        "stock_code": "2379",
         "pbo": {
           "available": true,
           "pass": false,
-          "probability_percent": 52.8571,
-          "candidate_count": 36,
+          "probability_percent": 70.0,
+          "candidate_count": 49,
           "original_candidate_count": 64,
           "reason": null
         },
@@ -337,24 +303,58 @@
           "pass": false,
           "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
           "studentization": "stationary_bootstrap_long_run_variance",
-          "p_value": 0.657238,
+          "p_value": 0.638935,
           "p_values": {
-            "lower": 0.554077,
-            "consistent": 0.657238,
-            "upper": 0.657238
+            "lower": 0.499168,
+            "consistent": 0.638935,
+            "upper": 0.638935
           },
           "candidate_count": 8,
           "active_candidate_count": 8,
           "observations": 258,
-          "best_candidate_id": "mut-a58ad50d6881",
-          "best_mean_daily_excess_percent": 0.012263,
-          "observed_max_studentized_statistic": 0.155031,
-          "critical_value_5pct_consistent": 2.025537,
-          "required_mean_daily_excess_percent_at_5pct": 0.160222,
-          "additional_mean_daily_excess_percent_needed_at_5pct": 0.147959,
+          "best_candidate_id": "mut-5b41228a2571",
+          "best_mean_daily_excess_percent": 0.017905,
+          "observed_max_studentized_statistic": 0.155158,
+          "critical_value_5pct_consistent": 2.197291,
+          "required_mean_daily_excess_percent_at_5pct": 0.253559,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.235654,
           "reason": null
         },
-        "deflated_sharpe_trial_count": 6592
+        "deflated_sharpe_trial_count": 6656
+      },
+      {
+        "stock_code": "3711",
+        "pbo": {
+          "available": true,
+          "pass": false,
+          "probability_percent": 61.4286,
+          "candidate_count": 26,
+          "original_candidate_count": 64,
+          "reason": null
+        },
+        "spa": {
+          "available": true,
+          "pass": false,
+          "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+          "studentization": "stationary_bootstrap_long_run_variance",
+          "p_value": 0.642263,
+          "p_values": {
+            "lower": 0.582363,
+            "consistent": 0.642263,
+            "upper": 0.642263
+          },
+          "candidate_count": 7,
+          "active_candidate_count": 7,
+          "observations": 258,
+          "best_candidate_id": "mut-4c1f4df96fa6",
+          "best_mean_daily_excess_percent": 0.004902,
+          "observed_max_studentized_statistic": 0.029108,
+          "critical_value_5pct_consistent": 1.981709,
+          "required_mean_daily_excess_percent_at_5pct": 0.333718,
+          "additional_mean_daily_excess_percent_needed_at_5pct": 0.328817,
+          "reason": null
+        },
+        "deflated_sharpe_trial_count": 6656
       }
     ]
   },
@@ -364,8 +364,8 @@
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 52.8571,
-        "candidate_count": 36,
+        "probability_percent": 55.7143,
+        "candidate_count": 35,
         "original_candidate_count": 64,
         "reason": null
       },
@@ -374,32 +374,32 @@
         "pass": false,
         "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
         "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.657238,
+        "p_value": 0.718802,
         "p_values": {
-          "lower": 0.554077,
-          "consistent": 0.657238,
-          "upper": 0.657238
+          "lower": 0.514143,
+          "consistent": 0.718802,
+          "upper": 0.718802
         },
         "candidate_count": 8,
         "active_candidate_count": 8,
         "observations": 258,
-        "best_candidate_id": "mut-a58ad50d6881",
-        "best_mean_daily_excess_percent": 0.012263,
-        "observed_max_studentized_statistic": 0.155031,
-        "critical_value_5pct_consistent": 2.025537,
-        "required_mean_daily_excess_percent_at_5pct": 0.160222,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.147959,
+        "best_candidate_id": "mut-81e0d6873d76",
+        "best_mean_daily_excess_percent": 0.005666,
+        "observed_max_studentized_statistic": 0.071125,
+        "critical_value_5pct_consistent": 2.003874,
+        "required_mean_daily_excess_percent_at_5pct": 0.159634,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.153968,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
       "stock_code": "0056",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 70.0,
-        "candidate_count": 18,
+        "probability_percent": 74.2857,
+        "candidate_count": 25,
         "original_candidate_count": 64,
         "reason": null
       },
@@ -408,32 +408,32 @@
         "pass": false,
         "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
         "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.810316,
+        "p_value": 0.797005,
         "p_values": {
-          "lower": 0.532446,
-          "consistent": 0.810316,
-          "upper": 0.810316
+          "lower": 0.517471,
+          "consistent": 0.797005,
+          "upper": 0.868552
         },
         "candidate_count": 6,
-        "active_candidate_count": 6,
+        "active_candidate_count": 5,
         "observations": 258,
-        "best_candidate_id": "mut-e10471d9c283",
-        "best_mean_daily_excess_percent": 0.004003,
-        "observed_max_studentized_statistic": 0.048659,
-        "critical_value_5pct_consistent": 1.899781,
-        "required_mean_daily_excess_percent_at_5pct": 0.156305,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.152302,
+        "best_candidate_id": "mut-f34e2f24133d",
+        "best_mean_daily_excess_percent": 0.005638,
+        "observed_max_studentized_statistic": 0.068364,
+        "critical_value_5pct_consistent": 1.889214,
+        "required_mean_daily_excess_percent_at_5pct": 0.155812,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.150174,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
       "stock_code": "00878",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 75.7143,
-        "candidate_count": 57,
+        "probability_percent": 58.5714,
+        "candidate_count": 46,
         "original_candidate_count": 64,
         "reason": null
       },
@@ -449,25 +449,25 @@
           "upper": 1.0
         },
         "candidate_count": 6,
-        "active_candidate_count": 4,
+        "active_candidate_count": 5,
         "observations": 258,
-        "best_candidate_id": "mut-cf4503865345",
-        "best_mean_daily_excess_percent": -0.021372,
+        "best_candidate_id": "mut-97824582f743",
+        "best_mean_daily_excess_percent": -0.020161,
         "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 1.906855,
-        "required_mean_daily_excess_percent_at_5pct": 0.130622,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.151994,
+        "critical_value_5pct_consistent": 1.78176,
+        "required_mean_daily_excess_percent_at_5pct": 0.13826,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.15842,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
       "stock_code": "00919",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 85.7143,
-        "candidate_count": 19,
+        "probability_percent": 71.4286,
+        "candidate_count": 20,
         "original_candidate_count": 64,
         "reason": null
       },
@@ -476,99 +476,31 @@
         "pass": false,
         "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
         "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.911814,
+        "p_value": 0.670549,
         "p_values": {
-          "lower": 0.693844,
-          "consistent": 0.911814,
-          "upper": 0.933444
+          "lower": 0.56406,
+          "consistent": 0.670549,
+          "upper": 0.670549
         },
-        "candidate_count": 7,
-        "active_candidate_count": 6,
+        "candidate_count": 8,
+        "active_candidate_count": 8,
         "observations": 258,
-        "best_candidate_id": "mut-4a429d77fd97",
-        "best_mean_daily_excess_percent": 0.008028,
-        "observed_max_studentized_statistic": 0.099597,
-        "critical_value_5pct_consistent": 2.371242,
-        "required_mean_daily_excess_percent_at_5pct": 0.191124,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.183096,
+        "best_candidate_id": "mut-817b98f23e4d",
+        "best_mean_daily_excess_percent": 0.002898,
+        "observed_max_studentized_statistic": 0.035672,
+        "critical_value_5pct_consistent": 2.069579,
+        "required_mean_daily_excess_percent_at_5pct": 0.168129,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.165231,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
       "stock_code": "2303",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 38.5714,
-        "candidate_count": 57,
-        "original_candidate_count": 64,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-        "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.445923,
-        "p_values": {
-          "lower": 0.404326,
-          "consistent": 0.445923,
-          "upper": 0.445923
-        },
-        "candidate_count": 2,
-        "active_candidate_count": 2,
-        "observations": 258,
-        "best_candidate_id": "mut-cebc883c1eb7",
-        "best_mean_daily_excess_percent": 0.028927,
-        "observed_max_studentized_statistic": 0.294541,
-        "critical_value_5pct_consistent": 1.713157,
-        "required_mean_daily_excess_percent_at_5pct": 0.168253,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.139325,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 6592
-    },
-    {
-      "stock_code": "2308",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 40.0,
-        "candidate_count": 40,
-        "original_candidate_count": 64,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-        "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 1.0,
-        "p_values": {
-          "lower": 1.0,
-          "consistent": 1.0,
-          "upper": 1.0
-        },
-        "candidate_count": 6,
-        "active_candidate_count": 6,
-        "observations": 258,
-        "best_candidate_id": "mut-e6383f2ce5dd",
-        "best_mean_daily_excess_percent": -0.010172,
-        "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 1.975517,
-        "required_mean_daily_excess_percent_at_5pct": 0.205583,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.215755,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 6592
-    },
-    {
-      "stock_code": "2317",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 51.4286,
+        "probability_percent": 70.0,
         "candidate_count": 53,
         "original_candidate_count": 64,
         "reason": null
@@ -578,176 +510,6 @@
         "pass": false,
         "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
         "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.613977,
-        "p_values": {
-          "lower": 0.587354,
-          "consistent": 0.613977,
-          "upper": 0.613977
-        },
-        "candidate_count": 6,
-        "active_candidate_count": 6,
-        "observations": 258,
-        "best_candidate_id": "mut-1ba16e0c19a5",
-        "best_mean_daily_excess_percent": 0.005241,
-        "observed_max_studentized_statistic": 0.034399,
-        "critical_value_5pct_consistent": 2.026836,
-        "required_mean_daily_excess_percent_at_5pct": 0.308789,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.303549,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 6592
-    },
-    {
-      "stock_code": "2330",
-      "pbo": {
-        "available": true,
-        "pass": true,
-        "probability_percent": 7.1429,
-        "candidate_count": 29,
-        "original_candidate_count": 64,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-        "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.690516,
-        "p_values": {
-          "lower": 0.540765,
-          "consistent": 0.690516,
-          "upper": 0.690516
-        },
-        "candidate_count": 7,
-        "active_candidate_count": 7,
-        "observations": 258,
-        "best_candidate_id": "mut-d51297fb191a",
-        "best_mean_daily_excess_percent": 0.019083,
-        "observed_max_studentized_statistic": 0.227932,
-        "critical_value_5pct_consistent": 2.182451,
-        "required_mean_daily_excess_percent_at_5pct": 0.182722,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.163639,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 6592
-    },
-    {
-      "stock_code": "2345",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 67.1429,
-        "candidate_count": 52,
-        "original_candidate_count": 64,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-        "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 1.0,
-        "p_values": {
-          "lower": 1.0,
-          "consistent": 1.0,
-          "upper": 1.0
-        },
-        "candidate_count": 7,
-        "active_candidate_count": 7,
-        "observations": 258,
-        "best_candidate_id": "alpha-parameter-75183d93c40ee815",
-        "best_mean_daily_excess_percent": -0.114778,
-        "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 1.664136,
-        "required_mean_daily_excess_percent_at_5pct": 0.241742,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.35652,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 6592
-    },
-    {
-      "stock_code": "2379",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 47.1429,
-        "candidate_count": 40,
-        "original_candidate_count": 64,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-        "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 1.0,
-        "p_values": {
-          "lower": 1.0,
-          "consistent": 1.0,
-          "upper": 1.0
-        },
-        "candidate_count": 7,
-        "active_candidate_count": 7,
-        "observations": 258,
-        "best_candidate_id": "mut-d8a641ae77cf",
-        "best_mean_daily_excess_percent": -0.053601,
-        "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 2.120366,
-        "required_mean_daily_excess_percent_at_5pct": 0.180009,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.23361,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 6592
-    },
-    {
-      "stock_code": "2382",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 77.1429,
-        "candidate_count": 27,
-        "original_candidate_count": 64,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-        "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.785358,
-        "p_values": {
-          "lower": 0.613977,
-          "consistent": 0.785358,
-          "upper": 0.785358
-        },
-        "candidate_count": 7,
-        "active_candidate_count": 7,
-        "observations": 258,
-        "best_candidate_id": "mut-cbc66df051dc",
-        "best_mean_daily_excess_percent": 0.009891,
-        "observed_max_studentized_statistic": 0.061046,
-        "critical_value_5pct_consistent": 2.034322,
-        "required_mean_daily_excess_percent_at_5pct": 0.329606,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.319715,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 6592
-    },
-    {
-      "stock_code": "2454",
-      "pbo": {
-        "available": true,
-        "pass": false,
-        "probability_percent": 34.2857,
-        "candidate_count": 27,
-        "original_candidate_count": 64,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-        "studentization": "stationary_bootstrap_long_run_variance",
         "p_value": 1.0,
         "p_values": {
           "lower": 1.0,
@@ -757,56 +519,22 @@
         "candidate_count": 6,
         "active_candidate_count": 6,
         "observations": 258,
-        "best_candidate_id": "mut-d0175bd3d7ad",
-        "best_mean_daily_excess_percent": -0.101671,
+        "best_candidate_id": "mut-db79e62d95a1",
+        "best_mean_daily_excess_percent": -0.011942,
         "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 2.078678,
-        "required_mean_daily_excess_percent_at_5pct": 0.317332,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.419003,
+        "critical_value_5pct_consistent": 1.682388,
+        "required_mean_daily_excess_percent_at_5pct": 0.152247,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.16419,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
-      "stock_code": "2603",
-      "pbo": {
-        "available": true,
-        "pass": true,
-        "probability_percent": 8.5714,
-        "candidate_count": 40,
-        "original_candidate_count": 64,
-        "reason": null
-      },
-      "spa": {
-        "available": true,
-        "pass": false,
-        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
-        "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 1.0,
-        "p_values": {
-          "lower": 1.0,
-          "consistent": 1.0,
-          "upper": 1.0
-        },
-        "candidate_count": 5,
-        "active_candidate_count": 5,
-        "observations": 258,
-        "best_candidate_id": "alpha-parameter-aafca0dbd646fe4b",
-        "best_mean_daily_excess_percent": -0.152361,
-        "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 1.73915,
-        "required_mean_daily_excess_percent_at_5pct": 0.226815,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.379177,
-        "reason": null
-      },
-      "deflated_sharpe_trial_count": 4160
-    },
-    {
-      "stock_code": "2615",
+      "stock_code": "2308",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 64.2857,
+        "probability_percent": 54.2857,
         "candidate_count": 48,
         "original_candidate_count": 64,
         "reason": null
@@ -822,26 +550,26 @@
           "consistent": 1.0,
           "upper": 1.0
         },
-        "candidate_count": 3,
-        "active_candidate_count": 1,
+        "candidate_count": 6,
+        "active_candidate_count": 6,
         "observations": 258,
-        "best_candidate_id": "alpha-parameter-1f4283703dc06801",
-        "best_mean_daily_excess_percent": -0.346027,
+        "best_candidate_id": "mut-8d5feea8f5d7",
+        "best_mean_daily_excess_percent": -0.024177,
         "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 1.433674,
-        "required_mean_daily_excess_percent_at_5pct": 0.267171,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.613199,
+        "critical_value_5pct_consistent": 1.971164,
+        "required_mean_daily_excess_percent_at_5pct": 0.197416,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.221593,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
-      "stock_code": "2881",
+      "stock_code": "2317",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 27.1429,
-        "candidate_count": 38,
+        "probability_percent": 68.5714,
+        "candidate_count": 28,
         "original_candidate_count": 64,
         "reason": null
       },
@@ -850,32 +578,202 @@
         "pass": false,
         "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
         "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.464226,
+        "p_value": 0.572379,
         "p_values": {
-          "lower": 0.464226,
-          "consistent": 0.464226,
-          "upper": 0.464226
+          "lower": 0.540765,
+          "consistent": 0.572379,
+          "upper": 0.572379
         },
         "candidate_count": 4,
         "active_candidate_count": 4,
         "observations": 258,
-        "best_candidate_id": "mut-e22a7a2f8ed5",
-        "best_mean_daily_excess_percent": 0.028523,
-        "observed_max_studentized_statistic": 0.330394,
-        "critical_value_5pct_consistent": 1.950515,
-        "required_mean_daily_excess_percent_at_5pct": 0.168389,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.139866,
+        "best_candidate_id": "mut-6edea11b2954",
+        "best_mean_daily_excess_percent": 0.02541,
+        "observed_max_studentized_statistic": 0.160114,
+        "critical_value_5pct_consistent": 2.024926,
+        "required_mean_daily_excess_percent_at_5pct": 0.321355,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.295945,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
-      "stock_code": "2882",
+      "stock_code": "2330",
+      "pbo": {
+        "available": true,
+        "pass": true,
+        "probability_percent": 11.4286,
+        "candidate_count": 34,
+        "original_candidate_count": 64,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+        "studentization": "stationary_bootstrap_long_run_variance",
+        "p_value": 0.668885,
+        "p_values": {
+          "lower": 0.507488,
+          "consistent": 0.668885,
+          "upper": 0.668885
+        },
+        "candidate_count": 7,
+        "active_candidate_count": 7,
+        "observations": 258,
+        "best_candidate_id": "mut-0901203d4bdc",
+        "best_mean_daily_excess_percent": 0.019083,
+        "observed_max_studentized_statistic": 0.227932,
+        "critical_value_5pct_consistent": 2.16701,
+        "required_mean_daily_excess_percent_at_5pct": 0.181429,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.162346,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 6656
+    },
+    {
+      "stock_code": "2345",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 55.7143,
-        "candidate_count": 27,
+        "probability_percent": 52.8571,
+        "candidate_count": 51,
+        "original_candidate_count": 64,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+        "studentization": "stationary_bootstrap_long_run_variance",
+        "p_value": 1.0,
+        "p_values": {
+          "lower": 1.0,
+          "consistent": 1.0,
+          "upper": 1.0
+        },
+        "candidate_count": 8,
+        "active_candidate_count": 8,
+        "observations": 258,
+        "best_candidate_id": "alpha-parameter-381bbb7944380279",
+        "best_mean_daily_excess_percent": -0.100385,
+        "observed_max_studentized_statistic": 0.0,
+        "critical_value_5pct_consistent": 1.695327,
+        "required_mean_daily_excess_percent_at_5pct": 0.240054,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.340438,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 6656
+    },
+    {
+      "stock_code": "2379",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 70.0,
+        "candidate_count": 49,
+        "original_candidate_count": 64,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+        "studentization": "stationary_bootstrap_long_run_variance",
+        "p_value": 0.638935,
+        "p_values": {
+          "lower": 0.499168,
+          "consistent": 0.638935,
+          "upper": 0.638935
+        },
+        "candidate_count": 8,
+        "active_candidate_count": 8,
+        "observations": 258,
+        "best_candidate_id": "mut-5b41228a2571",
+        "best_mean_daily_excess_percent": 0.017905,
+        "observed_max_studentized_statistic": 0.155158,
+        "critical_value_5pct_consistent": 2.197291,
+        "required_mean_daily_excess_percent_at_5pct": 0.253559,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.235654,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 6656
+    },
+    {
+      "stock_code": "2382",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 51.4286,
+        "candidate_count": 45,
+        "original_candidate_count": 64,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+        "studentization": "stationary_bootstrap_long_run_variance",
+        "p_value": 1.0,
+        "p_values": {
+          "lower": 1.0,
+          "consistent": 1.0,
+          "upper": 1.0
+        },
+        "candidate_count": 6,
+        "active_candidate_count": 6,
+        "observations": 258,
+        "best_candidate_id": "mut-8545b47a6345",
+        "best_mean_daily_excess_percent": -0.031678,
+        "observed_max_studentized_statistic": 0.0,
+        "critical_value_5pct_consistent": 1.758769,
+        "required_mean_daily_excess_percent_at_5pct": 0.265631,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.297309,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 6656
+    },
+    {
+      "stock_code": "2454",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 25.7143,
+        "candidate_count": 45,
+        "original_candidate_count": 64,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+        "studentization": "stationary_bootstrap_long_run_variance",
+        "p_value": 1.0,
+        "p_values": {
+          "lower": 1.0,
+          "consistent": 1.0,
+          "upper": 1.0
+        },
+        "candidate_count": 8,
+        "active_candidate_count": 8,
+        "observations": 258,
+        "best_candidate_id": "mut-1dc20066c4aa",
+        "best_mean_daily_excess_percent": -0.090846,
+        "observed_max_studentized_statistic": 0.0,
+        "critical_value_5pct_consistent": 2.164804,
+        "required_mean_daily_excess_percent_at_5pct": 0.330196,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.421041,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 6656
+    },
+    {
+      "stock_code": "2603",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 41.4286,
+        "candidate_count": 45,
         "original_candidate_count": 64,
         "reason": null
       },
@@ -893,22 +791,22 @@
         "candidate_count": 7,
         "active_candidate_count": 7,
         "observations": 258,
-        "best_candidate_id": "mut-85123d5f05be",
-        "best_mean_daily_excess_percent": -0.024154,
+        "best_candidate_id": "alpha-parameter-1f4283703dc06801",
+        "best_mean_daily_excess_percent": -0.148763,
         "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 1.947708,
-        "required_mean_daily_excess_percent_at_5pct": 0.208251,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.232405,
+        "critical_value_5pct_consistent": 1.780783,
+        "required_mean_daily_excess_percent_at_5pct": 0.225612,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.374375,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 4224
     },
     {
-      "stock_code": "2891",
+      "stock_code": "2615",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 50.0,
+        "probability_percent": 44.2857,
         "candidate_count": 50,
         "original_candidate_count": 64,
         "reason": null
@@ -924,26 +822,26 @@
           "consistent": 1.0,
           "upper": 1.0
         },
-        "candidate_count": 3,
-        "active_candidate_count": 3,
+        "candidate_count": 6,
+        "active_candidate_count": 1,
         "observations": 258,
-        "best_candidate_id": "mut-e3d7c31b562c",
-        "best_mean_daily_excess_percent": -0.012719,
+        "best_candidate_id": "alpha-parameter-b5bc9a16b9bea7e9",
+        "best_mean_daily_excess_percent": -0.24503,
         "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 1.668814,
-        "required_mean_daily_excess_percent_at_5pct": 0.060287,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.073006,
+        "critical_value_5pct_consistent": 1.641949,
+        "required_mean_daily_excess_percent_at_5pct": 0.213226,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.458256,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
-      "stock_code": "3037",
+      "stock_code": "2881",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 60.0,
-        "candidate_count": 50,
+        "probability_percent": 45.7143,
+        "candidate_count": 37,
         "original_candidate_count": 64,
         "reason": null
       },
@@ -952,31 +850,65 @@
         "pass": false,
         "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
         "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.329451,
+        "p_value": 0.477537,
         "p_values": {
-          "lower": 0.329451,
-          "consistent": 0.329451,
-          "upper": 0.329451
+          "lower": 0.419301,
+          "consistent": 0.477537,
+          "upper": 0.477537
         },
-        "candidate_count": 8,
-        "active_candidate_count": 8,
+        "candidate_count": 7,
+        "active_candidate_count": 7,
         "observations": 258,
-        "best_candidate_id": "alpha-parameter-0309c3d3e435424d",
-        "best_mean_daily_excess_percent": 0.110726,
-        "observed_max_studentized_statistic": 0.661944,
-        "critical_value_5pct_consistent": 1.775162,
-        "required_mean_daily_excess_percent_at_5pct": 0.296939,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.186212,
+        "best_candidate_id": "mut-ec045ab8d826",
+        "best_mean_daily_excess_percent": 0.043623,
+        "observed_max_studentized_statistic": 0.522801,
+        "critical_value_5pct_consistent": 1.993788,
+        "required_mean_daily_excess_percent_at_5pct": 0.166362,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.12274,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6360
+      "deflated_sharpe_trial_count": 6656
     },
     {
-      "stock_code": "3231",
+      "stock_code": "2882",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 42.8571,
+        "probability_percent": 48.5714,
+        "candidate_count": 46,
+        "original_candidate_count": 64,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+        "studentization": "stationary_bootstrap_long_run_variance",
+        "p_value": 1.0,
+        "p_values": {
+          "lower": 1.0,
+          "consistent": 1.0,
+          "upper": 1.0
+        },
+        "candidate_count": 7,
+        "active_candidate_count": 7,
+        "observations": 258,
+        "best_candidate_id": "mut-b708be6b6635",
+        "best_mean_daily_excess_percent": -0.008262,
+        "observed_max_studentized_statistic": 0.0,
+        "critical_value_5pct_consistent": 2.021761,
+        "required_mean_daily_excess_percent_at_5pct": 0.196146,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.204408,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 6656
+    },
+    {
+      "stock_code": "2891",
+      "pbo": {
+        "available": true,
+        "pass": true,
+        "probability_percent": 7.1429,
         "candidate_count": 18,
         "original_candidate_count": 64,
         "reason": null
@@ -986,6 +918,74 @@
         "pass": false,
         "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
         "studentization": "stationary_bootstrap_long_run_variance",
+        "p_value": 0.90183,
+        "p_values": {
+          "lower": 0.733777,
+          "consistent": 0.90183,
+          "upper": 0.90183
+        },
+        "candidate_count": 7,
+        "active_candidate_count": 7,
+        "observations": 258,
+        "best_candidate_id": "mut-45d5905adb7b",
+        "best_mean_daily_excess_percent": 0.002873,
+        "observed_max_studentized_statistic": 0.035154,
+        "critical_value_5pct_consistent": 2.31538,
+        "required_mean_daily_excess_percent_at_5pct": 0.189254,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.186381,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 6656
+    },
+    {
+      "stock_code": "3037",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 51.4286,
+        "candidate_count": 54,
+        "original_candidate_count": 64,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+        "studentization": "stationary_bootstrap_long_run_variance",
+        "p_value": 0.347754,
+        "p_values": {
+          "lower": 0.347754,
+          "consistent": 0.347754,
+          "upper": 0.347754
+        },
+        "candidate_count": 6,
+        "active_candidate_count": 6,
+        "observations": 258,
+        "best_candidate_id": "alpha-parameter-8bc2f6d5dac91392",
+        "best_mean_daily_excess_percent": 0.122695,
+        "observed_max_studentized_statistic": 0.652648,
+        "critical_value_5pct_consistent": 1.706961,
+        "required_mean_daily_excess_percent_at_5pct": 0.320901,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.198206,
+        "reason": null
+      },
+      "deflated_sharpe_trial_count": 6424
+    },
+    {
+      "stock_code": "3231",
+      "pbo": {
+        "available": true,
+        "pass": false,
+        "probability_percent": 40.0,
+        "candidate_count": 20,
+        "original_candidate_count": 64,
+        "reason": null
+      },
+      "spa": {
+        "available": true,
+        "pass": false,
+        "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
+        "studentization": "stationary_bootstrap_long_run_variance",
         "p_value": 1.0,
         "p_values": {
           "lower": 1.0,
@@ -995,23 +995,23 @@
         "candidate_count": 3,
         "active_candidate_count": 3,
         "observations": 258,
-        "best_candidate_id": "mut-c077d6a5955f",
-        "best_mean_daily_excess_percent": -0.018203,
+        "best_candidate_id": "mut-e9e42b5c4fed",
+        "best_mean_daily_excess_percent": -0.094141,
         "observed_max_studentized_statistic": 0.0,
-        "critical_value_5pct_consistent": 1.948795,
-        "required_mean_daily_excess_percent_at_5pct": 0.340361,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.358564,
+        "critical_value_5pct_consistent": 1.881981,
+        "required_mean_daily_excess_percent_at_5pct": 0.285407,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.379548,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     },
     {
       "stock_code": "3711",
       "pbo": {
         "available": true,
         "pass": false,
-        "probability_percent": 94.2857,
-        "candidate_count": 45,
+        "probability_percent": 61.4286,
+        "candidate_count": 26,
         "original_candidate_count": 64,
         "reason": null
       },
@@ -1020,24 +1020,24 @@
         "pass": false,
         "method": "Hansen_SPA_consistent_stationary_bootstrap_v3_adaptive_lrv",
         "studentization": "stationary_bootstrap_long_run_variance",
-        "p_value": 0.672213,
+        "p_value": 0.642263,
         "p_values": {
-          "lower": 0.584027,
-          "consistent": 0.672213,
-          "upper": 0.672213
+          "lower": 0.582363,
+          "consistent": 0.642263,
+          "upper": 0.642263
         },
-        "candidate_count": 6,
-        "active_candidate_count": 6,
+        "candidate_count": 7,
+        "active_candidate_count": 7,
         "observations": 258,
-        "best_candidate_id": "mut-16dc0d174de4",
-        "best_mean_daily_excess_percent": 0.006195,
-        "observed_max_studentized_statistic": 0.037733,
-        "critical_value_5pct_consistent": 2.129906,
-        "required_mean_daily_excess_percent_at_5pct": 0.349717,
-        "additional_mean_daily_excess_percent_needed_at_5pct": 0.343522,
+        "best_candidate_id": "mut-4c1f4df96fa6",
+        "best_mean_daily_excess_percent": 0.004902,
+        "observed_max_studentized_statistic": 0.029108,
+        "critical_value_5pct_consistent": 1.981709,
+        "required_mean_daily_excess_percent_at_5pct": 0.333718,
+        "additional_mean_daily_excess_percent_needed_at_5pct": 0.328817,
         "reason": null
       },
-      "deflated_sharpe_trial_count": 6592
+      "deflated_sharpe_trial_count": 6656
     }
   ]
 }
